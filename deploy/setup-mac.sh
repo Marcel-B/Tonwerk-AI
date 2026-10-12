@@ -342,8 +342,8 @@ fi
 
 if [ "$ACE" = true ]; then
   step "ACE-Step"
-  # install-ace.sh pins acestep.cpp; an update runs it only when the script (and with it the pin) changed.
-  ACE_RECIPE="$(cksum < "$REPO/deploy/install-ace.sh")"
+  # install-ace.sh pins acestep.cpp; an update runs it only when the script (and with it the pin) or its patch changed.
+  ACE_RECIPE="$(cat "$REPO/deploy/install-ace.sh" "$REPO/deploy/ace/request-utf8.patch" | cksum)"
   if [ "$UPDATE" = true ] && [ "$(cat "$DATA/ace/recipe" 2>/dev/null)" = "$ACE_RECIPE" ]; then
     echo "Unchanged."
   else

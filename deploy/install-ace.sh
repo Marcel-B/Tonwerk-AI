@@ -9,13 +9,18 @@
 #
 # The default set: the 4B LM (writes lyrics, picks tempo and key, composes the 5 Hz codes), the turbo DiT, the text
 # encoder and the VAE, all Q8_0 but the VAE. Models are MIT licensed. Running it again skips what is there; a new
-# ACE_REF rebuilds. Run it on the Mac as the user Tonwerk runs as, after deploy/install.sh.
+# ACE_REF or patch rebuilds. Run it on the Mac as the user Tonwerk runs as, after deploy/install.sh.
 set -eu
 
 URL="${YUEUI_URL:-http://127.0.0.1:5090}"
 # Pinned, so an update arrives through a commit rather than whenever the Mac happens to install.
 ACE_REF=6013134c136d9fb4e970cf690e76925be9553da0
 REPOSITORY=https://github.com/ServeurpersoCom/acestep.cpp.git
+# Applied after the checkout: ace-lm wrote an empty request file when the LM's text held invalid UTF-8, and ace-synth
+# then failed on it ("cannot read request0.json"). The stamp next to the binaries names commit and patch, so a changed
+# patch rebuilds too.
+PATCH="$(cd "$(dirname "$0")" && pwd)/ace/request-utf8.patch"
+STAMP="$ACE_REF $(cksum < "$PATCH")"
 MODELS_URL=https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF/resolve/main
 
 LM=acestep-5Hz-lm-4B-Q8_0.gguf
@@ -46,17 +51,20 @@ echo "Models: $MODELS"
 
 command -v cmake >/dev/null 2>&1 || brew install cmake
 
-if [ "$(git -C "$SOURCE" rev-parse HEAD 2>/dev/null || true)" != "$ACE_REF" ] || [ ! -x "$BINARIES/ace-synth" ]; then
+if [ "$(cat "$BINARIES/tonwerk-stamp" 2>/dev/null || true)" != "$STAMP" ] || [ ! -x "$BINARIES/ace-synth" ]; then
   if [ ! -d "$SOURCE/.git" ]; then
     mkdir -p "$(dirname "$SOURCE")"
     git clone "$REPOSITORY" "$SOURCE"
   fi
   git -C "$SOURCE" fetch --quiet origin
   git -C "$SOURCE" checkout --quiet "$ACE_REF"
+  git -C "$SOURCE" reset --quiet --hard
   git -C "$SOURCE" submodule update --init --recursive --quiet
+  git -C "$SOURCE" apply "$PATCH"
   # Metal comes on by itself on Apple Silicon.
   cmake -S "$SOURCE" -B "$BINARIES" -DCMAKE_BUILD_TYPE=Release
   cmake --build "$BINARIES" --config Release -j "$(sysctl -n hw.ncpu)"
+  echo "$STAMP" > "$BINARIES/tonwerk-stamp"
 fi
 for tool in ace-lm ace-synth; do
   [ -x "$BINARIES/$tool" ] || { echo "$tool was not built in $BINARIES." >&2; exit 1; }

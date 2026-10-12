@@ -401,6 +401,56 @@ export interface StorageInfo {
   totalBytes: number
 }
 
+/** Where the disk space goes; Storage/StorageScanner.cs. */
+export interface StorageOverview {
+  volumes: StorageVolume[]
+  categories: StorageCategory[]
+}
+
+/** `/` is the Mac's own disk, `/Volumes/…` another one (an external SSD after deploy/move-to-volume.sh). */
+export interface StorageVolume {
+  mount: string
+  free: number
+  total: number
+}
+
+export type StorageGroup = 'work' | 'app' | 'models'
+
+export type StorageItemKind =
+  'song' | 'version' | 'stems' | 'swap' | 'video' | 'cover' | 'image' | 'transcription' | 'take'
+
+export interface StorageCategory {
+  key: string
+  group: StorageGroup
+  bytes: number
+  /** How many entries it has, where it has entries. */
+  count: number
+  volume: string | null
+  /** Files without a database entry, older than a day; `cleanupStorage('orphans')` removes them. */
+  orphaned: number
+  /** Its largest entries, at most 30. */
+  largest: StorageItem[]
+}
+
+export interface StorageItem {
+  kind: StorageItemKind
+  /** The entry's own id; for a song and a cover the song id. */
+  id: string
+  songId: string | null
+  title: string
+  /** Untranslated: a voice, a video format, a model, a file name. */
+  detail: string | null
+  bytes: number
+  createdAt: string | null
+}
+
+export type StorageCleanupTarget = 'stream' | 'images' | 'videos' | 'orphans'
+
+export interface StorageCleanup {
+  bytes: number
+  removed: number
+}
+
 /** Whether voices can be managed (Seed-VC or ChangeMyVoice) and songs sung with them (the separator as well); VoiceEndpoints.cs. */
 export interface VoiceInfo {
   voicesConfigured: boolean

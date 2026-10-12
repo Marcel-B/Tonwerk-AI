@@ -67,6 +67,7 @@ const InstrumentsPage = defineAsyncComponent(() => import('./components/Instrume
 const SpeechLab = defineAsyncComponent(() => import('./components/SpeechLab.vue'))
 // The log, likewise.
 const LogPage = defineAsyncComponent(() => import('./components/LogPage.vue'))
+const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.vue'))
 const TemplatesPage = defineAsyncComponent(() => import('./components/TemplatesPage.vue'))
 
 const logCapacity = 300
@@ -273,7 +274,7 @@ onBeforeUnmount(unsubscribe)
 
 /**
  * The pages used day to day stand in the bar; the tools around a song (transcribing, voices and stems, Logic, backing vocals, the
- * speech lab, the log) share one submenu, so the bar fits one line on a laptop. The queue concerns every page and has its
+ * speech lab, the storage, the log) share one submenu, so the bar fits one line on a laptop. The queue concerns every page and has its
  * hourglass at the bar's end instead of an entry.
  */
 type Page = { view: View; label: MessageKey; icon: string }
@@ -290,6 +291,7 @@ const tools: Page[] = [
   { view: 'harmony', label: 'menuHarmony', icon: 'pi pi-align-center' },
   { view: 'instruments', label: 'menuInstruments', icon: 'pi pi-sliders-h' },
   { view: 'lab', label: 'menuLab', icon: 'pi pi-comments' },
+  { view: 'storage', label: 'menuStorage', icon: 'pi pi-database' },
   { view: 'logs', label: 'menuLogs', icon: 'pi pi-file' },
 ]
 
@@ -345,6 +347,7 @@ getVoiceInfo()
 const logicOpened = ref(view.value === 'logic')
 const labOpened = ref(view.value === 'lab')
 const logsOpened = ref(view.value === 'logs')
+const storageOpened = ref(view.value === 'storage')
 const templatesOpened = ref(view.value === 'templates')
 const instrumentsOpened = ref(view.value === 'instruments')
 const harmonyOpened = ref(view.value === 'harmony')
@@ -363,6 +366,9 @@ watch(view, (value) => {
   }
   if (value === 'logs') {
     logsOpened.value = true
+  }
+  if (value === 'storage') {
+    storageOpened.value = true
   }
   if (value === 'templates') {
     templatesOpened.value = true
@@ -766,7 +772,7 @@ async function useAsNewSong(songId: string): Promise<void> {
       <template #title>
         <div class="flex justify-between items-center">
           <h2>{{ t('library') }}</h2>
-          <span v-if="storageLabel" class="muted text-sm font-normal ml-auto mr-2">{{ storageLabel }}</span>
+          <a v-if="storageLabel" href="#/storage" class="muted text-sm font-normal ml-auto mr-2">{{ storageLabel }}</a>
           <Button
             icon="pi pi-refresh"
             :disabled="libraryLoading"
@@ -858,6 +864,9 @@ async function useAsNewSong(songId: string): Promise<void> {
   </main>
   <main v-if="logsOpened" v-show="view === 'logs'">
     <LogPage :active="view === 'logs'" />
+  </main>
+  <main v-if="storageOpened" v-show="view === 'storage'">
+    <StoragePage :active="view === 'storage'" :runs="runs" @notice="show($event)" @error="show($event, true)" />
   </main>
 
   <main v-if="templatesOpened" v-show="view === 'templates'">

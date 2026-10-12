@@ -90,6 +90,48 @@ public sealed class StreamCopies(
         }
     });
 
+    /// <summary>
+    /// Deletes every copy, of songs and versions; the player makes them again on the next play. Copies in the making
+    /// (their temporary names start with a dot) are left alone.
+    /// </summary>
+    /// <returns>The bytes and files freed.</returns>
+    public (long Bytes, int Files) ForgetAll()
+    {
+        long bytes = 0;
+        var files = 0;
+        foreach (var (folder, recurse) in new[] { (Root, true), (Path.Combine(database.Directory, "versions"), false) })
+        {
+            if (!Directory.Exists(folder))
+            {
+                continue;
+            }
+            var options = new EnumerationOptions { RecurseSubdirectories = recurse, IgnoreInaccessible = true, AttributesToSkip = 0 };
+            foreach (var file in new DirectoryInfo(folder).EnumerateFiles("*", options))
+            {
+                if (file.Name.StartsWith('.') || !(file.Name.EndsWith(".m4a", StringComparison.Ordinal) || file.Name.EndsWith(".m4a.tags", StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+                var length = file.Length;
+                Delete(() =>
+                {
+                    file.Delete();
+                    bytes += length;
+                    files++;
+                });
+            }
+        }
+        if (Directory.Exists(Root))
+        {
+            foreach (var run in new DirectoryInfo(Root).EnumerateDirectories())
+            {
+                // Empty now, unless a copy is being made in it this moment.
+                Delete(() => run.Delete(recursive: false));
+            }
+        }
+        return (bytes, files);
+    }
+
     private async Task<string?> GetAsync(string source, string target, StreamTags tags)
     {
         if (!File.Exists(source))

@@ -22,7 +22,10 @@ import type {
   SpeechTake,
   SpeechVoice,
   StatusSnapshot,
+  StorageCleanup,
+  StorageCleanupTarget,
   StorageInfo,
+  StorageOverview,
   TranscriptionList,
   TranscriptionState,
   TranscriptionTask,
@@ -230,6 +233,16 @@ export async function startBackup(): Promise<BackupStatus> {
 
 export async function getStorage(): Promise<StorageInfo> {
   return (await send('/api/storage')).json() as Promise<StorageInfo>
+}
+
+/** Every part of what the app and its models take on disk, measured anew on each call. */
+export async function getStorageOverview(): Promise<StorageOverview> {
+  return (await send('/api/storage/overview')).json() as Promise<StorageOverview>
+}
+
+/** Removes what can be made again (streaming copies, painted proposals, videos) or what nothing refers to any more. */
+export async function cleanupStorage(target: StorageCleanupTarget): Promise<StorageCleanup> {
+  return (await send(`/api/storage/cleanup/${target}`, { method: 'POST' })).json() as Promise<StorageCleanup>
 }
 
 /** The song's own cover; the time it was chosen makes a changed cover a new address, past every cache. */

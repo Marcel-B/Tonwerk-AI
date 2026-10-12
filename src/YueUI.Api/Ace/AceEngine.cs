@@ -139,6 +139,12 @@ public sealed partial class AceCppEngine(IOptions<AceOptions> options, ILogger<A
             {
                 throw new AceException($"ace-lm wrote no {Path.GetFileName(missing)}.");
             }
+            // acestep.cpp before Tonwerk's patch (deploy/ace/request-utf8.patch) left an empty file when the LM's text
+            // held invalid UTF-8, exited 0 and let ace-synth fail on it with a message that points nowhere.
+            if (synthRequests.FirstOrDefault(r => new FileInfo(r).Length == 0) is { } empty)
+            {
+                throw new AceException($"ace-lm wrote an empty {Path.GetFileName(empty)} (invalid UTF-8 in the LM's text?); run deploy/install-ace.sh again.");
+            }
         }
         else
         {

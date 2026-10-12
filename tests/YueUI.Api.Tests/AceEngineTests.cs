@@ -153,6 +153,31 @@ public sealed class AceEngineTests : IDisposable
         Assert.Equal("[Ace-LM] FATAL: no LM models found under /x", failure.Message);
     }
 
+    [Fact]
+    public async Task An_empty_request_from_the_lm_stops_before_synth()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        var binaries = Path.Combine(_root, "build");
+        // Unpatched acestep.cpp: yyjson refuses invalid UTF-8, request_write leaves an empty file and ace-lm exits 0.
+        Script(Path.Combine(binaries, "ace-lm"), """
+            while [ $# -gt 0 ]; do case "$1" in --request) request="$2"; shift ;; esac; shift; done
+            : > "${request%.json}0.json"
+            """);
+        Script(Path.Combine(binaries, "ace-synth"), """touch "$(dirname "$0")/synth-ran"; exit 1""");
+        var engine = new AceCppEngine(
+            Microsoft.Extensions.Options.Options.Create(new AceOptions { Root = _root, Binaries = binaries }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AceCppEngine>.Instance);
+
+        var failure = await Assert.ThrowsAsync<AceException>(() =>
+            engine.GenerateAsync(new AceRun(_root, new System.Text.Json.Nodes.JsonObject { ["caption"] = "pop" }, true, null), (_, _) => { }, CancellationToken.None));
+
+        Assert.StartsWith("ace-lm wrote an empty request0.json", failure.Message);
+        Assert.False(File.Exists(Path.Combine(binaries, "synth-ran")));
+    }
+
     private static void Script(string path, string body)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

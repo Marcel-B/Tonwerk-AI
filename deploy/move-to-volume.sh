@@ -7,6 +7,9 @@
 #   deploy/move-to-volume.sh /Volumes/SSD yue2 songs  move these parts to /Volumes/SSD/Tonwerk/<part>
 #   deploy/move-to-volume.sh --back yue2              bring a part back to the internal disk
 #
+# A part that is not there yet (a feature installed later, whose models download on first use) is made empty on
+# the volume and linked, so its downloads land there from the start.
+#
 # Add --yes to skip the question. Tonwerk (and its update agent) is stopped while files move and started again
 # afterwards; the script refuses while Tonwerk works on something.
 #
@@ -24,7 +27,7 @@ URL="${YUEUI_URL:-http://127.0.0.1:5090}"
 SETTINGS="$HOME/Library/Application Support/YueUI/app/appsettings.Production.json"
 LMS="$HOME/.lmstudio/bin/lms"
 DOMAIN="gui/$(id -u)"
-PARTS="yue2 ane songs lmstudio speech images separator seedvc versions stems videos"
+PARTS="yue2 ane songs lmstudio speech images montage separator seedvc versions stems videos"
 SUFFIX=tonwerk-move
 
 fail() { echo "$1" >&2; exit 1; }
@@ -37,7 +40,7 @@ setting() {
   echo "$value"
 }
 
-# The same defaults the server uses (YuePaths, DataOptions, SpeechOptions, ImageOptions, VoiceOptions).
+# The same defaults the server uses (YuePaths, DataOptions, SpeechOptions, ImageOptions, MontageOptions, VoiceOptions).
 or_default() { if [ -n "$1" ]; then echo "$1"; else echo "$2"; fi; }
 YUE_ROOT="$(or_default "$(setting Yue.InstallRoot)" "$HOME/Library/Application Support/YuE Studio")"
 DATA_PATH="$(setting Data.Path)"
@@ -53,6 +56,7 @@ path_of() {
     lmstudio) echo "$HOME/.lmstudio/models" ;;
     speech) or_default "$(setting Speech.ModelCache)" "$(or_default "$(setting Speech.Root)" "$APP_DATA/speech")/models" ;;
     images) or_default "$(setting Images.ModelCache)" "$(or_default "$(setting Images.Root)" "$APP_DATA/images")/models" ;;
+    montage) or_default "$(setting Montage.ModelCache)" "$(or_default "$(setting Montage.Root)" "$APP_DATA/montage")/models" ;;
     separator) or_default "$(setting Voice.SeparatorModels)" "$ENGINES/separator/models" ;;
     seedvc) or_default "$(setting Voice.SeedVcModels)" "$ENGINES/seed-vc/models" ;;
     versions | stems | videos) echo "$DATA/$1" ;;
@@ -68,6 +72,7 @@ describe() {
     lmstudio) echo "LM Studio's models" ;;
     speech) echo "speech lab models" ;;
     images) echo "FLUX.2 Klein models for painted covers" ;;
+    montage) echo "CLIP models for photo videos with a motif" ;;
     separator) echo "stem separation models" ;;
     seedvc) echo "Seed-VC checkpoints" ;;
     versions) echo "songs sung with another voice" ;;
@@ -100,7 +105,7 @@ list() {
     elif [ -d "$path" ]; then
       printf '%-10s %8s  %s\n' "$part" "$(size_of "$path")" "$path"
     else
-      printf '%-10s %8s  %s (not there)\n' "$part" "-" "$path"
+      printf '%-10s %8s  %s (not there yet; moving it puts later downloads on the volume)\n' "$part" "-" "$path"
     fi
     printf '%-10s %8s  %s\n' "" "" "$(describe "$part")"
   done
@@ -196,9 +201,9 @@ move_out() {
   for part in "$@"; do
     path="$(path_of "$part")" || fail "Unknown part $part; there are: $PARTS"
     [ ! -L "$path" ] || fail "$part already lies at $(readlink "$path")."
-    [ -d "$path" ] || fail "$part is not there ($path)."
+    [ -d "$path" ] || [ ! -e "$path" ] || fail "$part is no folder ($path)."
     [ ! -e "$volume/Tonwerk/$part" ] || fail "$volume/Tonwerk/$part exists already; move it aside first."
-    need=$((need + $(du -sk "$path/" | cut -f1)))
+    [ ! -d "$path" ] || need=$((need + $(du -sk "$path/" | cut -f1)))
   done
   free="$(df -k "$volume" | awk 'NR == 2 { print $4 }')"
   [ "$free" -gt $((need + need / 20)) ] || fail "$volume has $((free / 1048576)) GB free, the parts need $((need / 1048576)) GB."
@@ -211,6 +216,13 @@ move_out() {
   for part in "$@"; do
     path="$(path_of "$part")"
     dest="$volume/Tonwerk/$part"
+    if [ ! -e "$path" ]; then
+      # Nothing to copy yet: an empty folder on the volume, so the first download goes there.
+      mkdir -p "$dest" "$(dirname "$path")"
+      ln -s "$dest" "$path"
+      echo "$part does not exist yet; it will be made at $dest."
+      continue
+    fi
     copy_checked "$path" "$dest"
     # The original goes only once the link is in place; until then a failure leaves everything as it was.
     mv "$path" "$path.$SUFFIX"

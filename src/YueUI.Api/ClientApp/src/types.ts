@@ -401,6 +401,87 @@ export interface StorageInfo {
   totalBytes: number
 }
 
+/** How the disk is shared among the parts; Storage/StorageSurvey.cs. */
+export interface StorageReport {
+  volumes: StorageVolume[]
+  groups: StorageGroup[]
+  suggestions: StorageSuggestion[]
+}
+
+export interface StorageVolume {
+  /** Where it is mounted: `/`, `/Volumes/SSD`. */
+  name: string
+  freeBytes: number
+  totalBytes: number
+}
+
+export type StorageSection = 'data' | 'models'
+
+export type StorageGroupKey =
+  | 'songs'
+  | 'versions'
+  | 'stems'
+  | 'videos'
+  | 'covers'
+  | 'images'
+  | 'swaps'
+  | 'takes'
+  | 'transcriptions'
+  | 'loras'
+  | 'streams'
+  | 'database'
+  | 'logs'
+  | 'yue2'
+  | 'ane'
+  | 'lmstudio'
+  | 'speechModels'
+  | 'imageModels'
+  | 'separator'
+  | 'seedvc'
+  | 'montageModels'
+
+export interface StorageGroup {
+  key: StorageGroupKey
+  section: StorageSection
+  bytes: number
+  /** How many entries; null for a folder that is not made of entries (models, the database). */
+  count: number | null
+  volume: string | null
+  /** Where the folder really lies, when move-to-volume.sh left a link in its place. */
+  moved: string | null
+  /** The link points to a volume that is not mounted. */
+  missing: boolean
+  /** The biggest entries, biggest first. */
+  largest: StorageItem[]
+}
+
+export type StorageItemKind =
+  'song' | 'version' | 'stems' | 'video' | 'cover' | 'image' | 'swap' | 'take' | 'transcription' | 'lora'
+
+export interface StorageItem {
+  kind: StorageItemKind
+  /** What its delete endpoint takes; a song's or cover's `run/songN`. */
+  id: string
+  songId: string | null
+  title: string
+  /** The voice, the video's format, the model. */
+  detail: string | null
+  /** What deleting it frees; for a song everything that goes with it. */
+  bytes: number
+  createdAt: string | null
+  rating?: number | null
+  /** Only for what failed or was cancelled. */
+  stage?: 'failed' | 'cancelled' | null
+}
+
+export type StorageSuggestionKey = 'paintedCovers' | 'failed' | 'oneStar'
+
+export interface StorageSuggestion {
+  key: StorageSuggestionKey
+  bytes: number
+  items: StorageItem[]
+}
+
 /** Whether voices can be managed (Seed-VC or ChangeMyVoice) and songs sung with them (the separator as well); VoiceEndpoints.cs. */
 export interface VoiceInfo {
   voicesConfigured: boolean

@@ -23,6 +23,7 @@ import type {
   SpeechVoice,
   StatusSnapshot,
   StorageInfo,
+  StorageReport,
   TranscriptionList,
   TranscriptionState,
   TranscriptionTask,
@@ -230,6 +231,16 @@ export async function startBackup(): Promise<BackupStatus> {
 
 export async function getStorage(): Promise<StorageInfo> {
   return (await send('/api/storage')).json() as Promise<StorageInfo>
+}
+
+/** What each part takes (songs, videos, models, …) with its biggest entries; measured anew on every call. */
+export async function getStorageReport(): Promise<StorageReport> {
+  return (await send('/api/storage/usage')).json() as Promise<StorageReport>
+}
+
+/** Deletes a LoRA file from the loras folder. */
+export async function deleteLora(name: string): Promise<void> {
+  await send(`/api/loras/${encodeURIComponent(name)}`, { method: 'DELETE' })
 }
 
 /** The song's own cover; the time it was chosen makes a changed cover a new address, past every cache. */

@@ -68,6 +68,7 @@ const SpeechLab = defineAsyncComponent(() => import('./components/SpeechLab.vue'
 // The log, likewise.
 const LogPage = defineAsyncComponent(() => import('./components/LogPage.vue'))
 const TemplatesPage = defineAsyncComponent(() => import('./components/TemplatesPage.vue'))
+const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.vue'))
 
 const logCapacity = 300
 const form = ref(loadFormState())
@@ -291,6 +292,7 @@ const tools: Page[] = [
   { view: 'instruments', label: 'menuInstruments', icon: 'pi pi-sliders-h' },
   { view: 'lab', label: 'menuLab', icon: 'pi pi-comments' },
   { view: 'logs', label: 'menuLogs', icon: 'pi pi-file' },
+  { view: 'storage', label: 'menuStorage', icon: 'pi pi-database' },
 ]
 
 /**
@@ -346,6 +348,7 @@ const logicOpened = ref(view.value === 'logic')
 const labOpened = ref(view.value === 'lab')
 const logsOpened = ref(view.value === 'logs')
 const templatesOpened = ref(view.value === 'templates')
+const storageOpened = ref(view.value === 'storage')
 const instrumentsOpened = ref(view.value === 'instruments')
 const harmonyOpened = ref(view.value === 'harmony')
 watch(view, (value) => {
@@ -366,6 +369,9 @@ watch(view, (value) => {
   }
   if (value === 'templates') {
     templatesOpened.value = true
+  }
+  if (value === 'storage') {
+    storageOpened.value = true
   }
 })
 
@@ -766,7 +772,10 @@ async function useAsNewSong(songId: string): Promise<void> {
       <template #title>
         <div class="flex justify-between items-center">
           <h2>{{ t('library') }}</h2>
-          <span v-if="storageLabel" class="muted text-sm font-normal ml-auto mr-2">{{ storageLabel }}</span>
+          <!-- Leads to the storage page, which says what else takes the disk and offers to clean up. -->
+          <a v-if="storageLabel" href="#/storage" class="storage-link muted text-sm font-normal ml-auto mr-2">{{
+            storageLabel
+          }}</a>
           <Button
             icon="pi pi-refresh"
             :disabled="libraryLoading"
@@ -877,6 +886,18 @@ async function useAsNewSong(songId: string): Promise<void> {
     </Card>
   </main>
 
+  <main v-if="storageOpened" v-show="view === 'storage'">
+    <Card>
+      <template #title>
+        <h2>{{ t('storageTitle') }}</h2>
+      </template>
+      <template #content>
+        <p class="muted mt-0">{{ t('storageIntro') }}</p>
+        <StoragePage :active="view === 'storage'" @notice="show($event)" @error="show($event, true)" />
+      </template>
+    </Card>
+  </main>
+
   <!-- Outside the pages, so switching between them does not stop the song. The spacer keeps it off the page's end. -->
   <div v-if="current" class="h-28" />
   <PlayerBar
@@ -889,6 +910,12 @@ async function useAsNewSong(songId: string): Promise<void> {
 </template>
 
 <style scoped>
+.storage-link {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}
+
 /* Negative margins undo #app's side padding (style.css), so the header is as wide as the player (72rem at most). */
 .app-header {
   position: sticky;

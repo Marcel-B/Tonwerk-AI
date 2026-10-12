@@ -24,7 +24,7 @@ URL="${YUEUI_URL:-http://127.0.0.1:5090}"
 SETTINGS="$HOME/Library/Application Support/YueUI/app/appsettings.Production.json"
 LMS="$HOME/.lmstudio/bin/lms"
 DOMAIN="gui/$(id -u)"
-PARTS="yue2 ane songs lmstudio speech images separator seedvc versions stems videos"
+PARTS="yue2 ane songs lmstudio speech images acestep acesongs separator seedvc versions stems videos"
 SUFFIX=tonwerk-move
 
 fail() { echo "$1" >&2; exit 1; }
@@ -37,7 +37,7 @@ setting() {
   echo "$value"
 }
 
-# The same defaults the server uses (YuePaths, DataOptions, SpeechOptions, ImageOptions, VoiceOptions).
+# The same defaults the server uses (YuePaths, DataOptions, SpeechOptions, ImageOptions, AceOptions, VoiceOptions).
 or_default() { if [ -n "$1" ]; then echo "$1"; else echo "$2"; fi; }
 YUE_ROOT="$(or_default "$(setting Yue.InstallRoot)" "$HOME/Library/Application Support/YuE Studio")"
 DATA_PATH="$(setting Data.Path)"
@@ -53,6 +53,8 @@ path_of() {
     lmstudio) echo "$HOME/.lmstudio/models" ;;
     speech) or_default "$(setting Speech.ModelCache)" "$(or_default "$(setting Speech.Root)" "$APP_DATA/speech")/models" ;;
     images) or_default "$(setting Images.ModelCache)" "$(or_default "$(setting Images.Root)" "$APP_DATA/images")/models" ;;
+    acestep) or_default "$(setting Ace.Models)" "$(or_default "$(setting Ace.Root)" "$APP_DATA/ace")/models" ;;
+    acesongs) or_default "$(setting Ace.Songs)" "$DATA/ace-songs" ;;
     separator) or_default "$(setting Voice.SeparatorModels)" "$ENGINES/separator/models" ;;
     seedvc) or_default "$(setting Voice.SeedVcModels)" "$ENGINES/seed-vc/models" ;;
     versions | stems | videos) echo "$DATA/$1" ;;
@@ -68,6 +70,8 @@ describe() {
     lmstudio) echo "LM Studio's models" ;;
     speech) echo "speech lab models" ;;
     images) echo "FLUX.2 Klein models for painted covers" ;;
+    acestep) echo "ACE-Step models" ;;
+    acesongs) echo "songs made with ACE-Step" ;;
     separator) echo "stem separation models" ;;
     seedvc) echo "Seed-VC checkpoints" ;;
     versions) echo "songs sung with another voice" ;;

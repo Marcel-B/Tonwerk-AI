@@ -83,6 +83,7 @@ public sealed class StorageScanner(
     IOptions<MontageOptions> montageOptions,
     IOptions<AudioMidiOptions> midiOptions,
     IOptions<LogOptions> logOptions,
+    IOptions<Ace.AceOptions> aceOptions,
     TimeProvider time)
 {
     /// <summary>How many entries a category lists; the page shows the first few and the rest on request.</summary>
@@ -112,7 +113,9 @@ public sealed class StorageScanner(
 
         // ---- What was made ----
         var songs = runs.SelectMany(r => r.Songs.Select(s => new StorageItem("song", s.Id, s.Id, $"{r.Title} · {s.Index}", null, s.Bytes, r.CreatedAt))).ToList();
-        Add("songs", "work", Measure(paths.OutputDir, skip: [paths.TranscriptionsDir]).Bytes, songs.Count, [paths.OutputDir], items: songs);
+        // ACE-Step's songs lie in a folder of their own beside YuE Studio's, but are songs like them.
+        Add("songs", "work", Measure(paths.OutputDir, skip: [paths.TranscriptionsDir]).Bytes + Measure(library.AceDirectory).Bytes, songs.Count,
+            [paths.OutputDir], items: songs);
 
         var transcribed = (Safe(() => transcriptions.List().Items) ?? [])
             .Select(t => new StorageItem("transcription", t.Id, null, t.SourceName, t.Task, t.Bytes, t.CreatedAt)).ToList();
@@ -198,6 +201,7 @@ public sealed class StorageScanner(
         var speechRoot = speechOptions.Value;
         var imageRoot = imageOptions.Value;
         var montage = montageOptions.Value;
+        var ace = aceOptions.Value;
         var voice = voiceOptions.Value;
         var lmStudio = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".lmstudio", "models");
         AddModel("yue2", paths.ModelCache);
@@ -208,6 +212,7 @@ public sealed class StorageScanner(
         AddModel("separatorModels", voice.ResolvedSeparatorModels);
         AddModel("seedvcModels", voice.ResolvedSeedVcModels);
         AddModel("montageModels", montage.ResolvedModelCache);
+        AddModel("aceModels", ace.ResolvedModels);
 
         // The Python environments and sources: YuE Studio's installation without its models, the voice engines
         // without theirs, and each tool's env.
@@ -223,6 +228,7 @@ public sealed class StorageScanner(
             Measure(Path.Combine(imageRoot.ResolvedRoot, "env")),
             Measure(Path.Combine(montage.ResolvedRoot, "env")),
             Measure(midiOptions.Value.ResolvedRoot),
+            Measure(ace.ResolvedRoot, skip: [ace.ResolvedModels]),
         };
         Add("programs", "models", programs.Sum(p => p.Bytes), 0, [paths.InstallRoot]);
 

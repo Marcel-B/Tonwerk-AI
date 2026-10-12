@@ -28,7 +28,7 @@ public sealed class AudioMidiEndpointTests : IDisposable
         // Through ffmpeg first, whatever the phone recorded.
         Assert.Equal(["audio.wav"], _app.Mixer.Decoded);
         var job = Assert.Single(_app.AudioMidi.Jobs);
-        Assert.Equal(("Vocal", true, 92.0), (job.TrackName, job.Voice, job.Tempo));
+        Assert.Equal(("Vocal", AudioMidi.AudioMidiKind.Voice, 92.0), (job.TrackName, job.Kind, job.Tempo));
         Assert.Equal(new AudioMidi.AudioMidiSettings(Mono: true, Quantize: true, Bends: false, Tempo: 92), job.Settings);
         Assert.Equal("recording"u8.ToArray(), _app.AudioMidi.Audio.Single());
         // The upload's folder goes with the request.
@@ -80,7 +80,7 @@ public sealed class AudioMidiEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Neon Night-song2-vocals.mid", response.Content.Headers.ContentDisposition!.FileNameStar);
         var job = Assert.Single(_app.AudioMidi.Jobs);
-        Assert.Equal(("Vocal", true, 88.0), (job.TrackName, job.Voice, job.Tempo));
+        Assert.Equal(("Vocal", AudioMidi.AudioMidiKind.Voice, 88.0), (job.TrackName, job.Kind, job.Tempo));
         Assert.True(job.Settings.Quantize && job.Settings.Bends);
         // The stored stem itself, nothing decoded on the way.
         Assert.Equal(FakeMixer.Flac, _app.AudioMidi.Audio.Single());
@@ -98,7 +98,7 @@ public sealed class AudioMidiEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var job = Assert.Single(_app.AudioMidi.Jobs);
         // Eighths at 180 are quarters at 90.
-        Assert.Equal(("Drums", false, 90.0), (job.TrackName, job.Voice, job.Tempo));
+        Assert.Equal(("Drums", AudioMidi.AudioMidiKind.Drums, 90.0), (job.TrackName, job.Kind, job.Tempo));
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/songs/{Run}/song2/stems/{set.Id}/bass/midi", JsonContent.Create(new { }))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/songs/{Run}/song1/stems/{set.Id}/drums/midi", JsonContent.Create(new { }))).StatusCode);
     }
@@ -131,7 +131,7 @@ public sealed class AudioMidiEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Demo-bass.mid", response.Content.Headers.ContentDisposition!.FileNameStar);
         var job = Assert.Single(_app.AudioMidi.Jobs);
-        Assert.Equal(("Bass", false, 96.0), (job.TrackName, job.Voice, job.Tempo));
+        Assert.Equal(("Bass", AudioMidi.AudioMidiKind.Bass, 96.0), (job.TrackName, job.Kind, job.Tempo));
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync($"/api/stems/{set.Id}/drums/midi", new { })).StatusCode);
     }
 

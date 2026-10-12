@@ -39,6 +39,9 @@ public static class DiagnosticCodes
     /// <summary>No note lies in the sections the backing vocals were asked for.</summary>
     public const string HarmonySections = "YTL033";
 
+    /// <summary>A part heard in the recording (bass or drums from a stem) replaced the generated one, or could not be read.</summary>
+    public const string RecordedPart = "YTL034";
+
     // YTL060 and YTL061 belonged to the tempo fit, which was removed because it rarely matched the recording;
     // they stay unused so that old output is not misread.
 

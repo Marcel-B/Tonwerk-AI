@@ -375,6 +375,13 @@ const messages = {
     stemsRunning: 'Die Stems dieses Songs werden gerade getrennt.',
     stemsCreate: 'Stems erzeugen',
     stemsCreateTitle: 'Zur Stimmen-Seite, mit diesem Song ausgewählt',
+    stemPartsTitle: 'Aus den Stems als MIDI',
+    stemPartsBass: 'Bass aus dem Bass-Stem statt aus den Akkorden',
+    stemPartsDrums: 'Schlagzeug aus dem Drum-Stem (Kick, Snare, Hi-Hat)',
+    stemPartsHint:
+      'Ersetzt den erzeugten Bass bzw. das Schlagzeug in Vorschau, MIDI, MusicXML und Logic-Projekt. Beim ersten Mal dauert es ein paar Sekunden pro Stem. Das Schlagzeug ist eine Skizze des Grundbeats, keine genaue Abschrift.',
+    stemPartsMissing:
+      'Bass und Schlagzeug als MIDI gibt es nur mit Stems eines Modells, das sie trennt (z. B. htdemucs oder htdemucs-6s).',
     librarySongMissing: 'Diesen Song gibt es in der Bibliothek nicht (mehr).',
     untitled: 'Ohne Titel',
     songN: 'Song {n}',
@@ -748,6 +755,13 @@ const messages = {
     stemsRunning: "This song's stems are being separated.",
     stemsCreate: 'Create stems',
     stemsCreateTitle: 'To the voices page, with this song picked',
+    stemPartsTitle: 'From the stems as MIDI',
+    stemPartsBass: 'Bass from the bass stem instead of the chords',
+    stemPartsDrums: 'Drums from the drum stem (kick, snare, hi-hat)',
+    stemPartsHint:
+      'Replaces the generated bass or drums in the preview, MIDI, MusicXML and Logic project. The first time takes a few seconds per stem. The drums are a sketch of the basic beat, not an exact transcription.',
+    stemPartsMissing:
+      'Bass and drums as MIDI need stems from a model that separates them (htdemucs or htdemucs-6s, for example).',
     librarySongMissing: 'The library does not list this song (any more).',
     untitled: 'Untitled',
     songN: 'Song {n}',

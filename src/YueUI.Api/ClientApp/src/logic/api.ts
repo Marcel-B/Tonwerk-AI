@@ -32,6 +32,26 @@ export class ApiError extends Error {
  */
 export type ScoreSource = { song: string } | { file: File; audio: File | null }
 
+/**
+ * Stem sets of the library song whose bass or drums stand in for the generated ones: the server turns the stem into
+ * MIDI (Basic Pitch for the bass, its own onset detection for kick, snare and hi-hat) once and keeps it.
+ */
+export interface StemParts {
+  bass: string | null
+  drums: string | null
+}
+
+function appendParts(form: FormData, source: ScoreSource, parts: StemParts | null): void {
+  if (parts && 'song' in source) {
+    if (parts.bass) {
+      form.append('bassStems', parts.bass)
+    }
+    if (parts.drums) {
+      form.append('drumStems', parts.drums)
+    }
+  }
+}
+
 function appendSource(form: FormData, source: ScoreSource, withAudio: boolean): void {
   if ('song' in source) {
     form.append('song', source.song)
@@ -51,10 +71,12 @@ export async function convertScore(
   source: ScoreSource,
   options: ConversionOptions,
   signal?: AbortSignal,
+  parts: StemParts | null = null,
 ): Promise<ConversionResult> {
   const form = new FormData()
   appendSource(form, source, false)
   form.append('options', JSON.stringify(options))
+  appendParts(form, source, parts)
 
   const response = await post('/api/logic/convert', form, signal)
   if (response.ok || response.status === 422) {
@@ -67,11 +89,17 @@ export async function convertScore(
  * The score as MusicXML for a notation program, converted with the same options as the preview. The drums are left
  * out and the chord symbols stand above the first staff; a score that cannot be read rejects with its diagnostics.
  */
-export async function exportMusicXml(source: ScoreSource, options: ConversionOptions, name: string): Promise<Blob> {
+export async function exportMusicXml(
+  source: ScoreSource,
+  options: ConversionOptions,
+  name: string,
+  parts: StemParts | null = null,
+): Promise<Blob> {
   const form = new FormData()
   appendSource(form, source, false)
   form.append('options', JSON.stringify(options))
   form.append('name', name)
+  appendParts(form, source, parts)
 
   const response = await post('/api/logic/musicxml', form)
   if (response.status === 422) {
@@ -119,6 +147,7 @@ export async function exportLogicProject(
   /** A finished stem set of the library song, whose vocals go onto the project's vocal tracks. */
   stems: string | null = null,
   onProgress: (progress: LogicProgress) => void = () => {},
+  parts: StemParts | null = null,
 ): Promise<LogicExport> {
   const form = new FormData()
   appendSource(form, source, true)
@@ -131,6 +160,7 @@ export async function exportLogicProject(
   if (stems && 'song' in source) {
     form.append('stems', stems)
   }
+  appendParts(form, source, parts)
 
   const xhr = await new Promise<XMLHttpRequest>((resolve, reject) => {
     const request = new XMLHttpRequest()

@@ -6,6 +6,7 @@ using YueToLogic.Core.Diagnostics;
 using YueToLogic.Core.Logic;
 using YueToLogic.Core.MusicXml;
 using YueToLogic.Core.Serialization;
+using YueUI.Api.AudioMidi;
 using YueUI.Api.Data;
 using YueUI.Api.Library;
 using YueUI.Api.Logic;
@@ -111,9 +112,13 @@ public static class LogicEndpoints
         [FromForm] string? song,
         IFormFile? file,
         [FromForm] string? options,
+        [FromForm] string? bassStems,
+        [FromForm] string? drumStems,
         SongLibrary library,
         IScoreConverter converter,
         IMidiToAbcConverter midiConverter,
+        SqliteStemStore stemStore,
+        StemParts stemParts,
         CancellationToken cancellationToken)
     {
         if (ParseOptions(options) is not { } parsed)
@@ -125,6 +130,13 @@ public static class LogicEndpoints
         {
             return source.Problem;
         }
+        var recorded = await RecordedAsync(bassStems, drumStems, source, stemStore, stemParts, cancellationToken);
+        if (recorded.Problem is not null)
+        {
+            await source.Score!.DisposeAsync();
+            return recorded.Problem;
+        }
+        parsed.Recorded = recorded.Parts;
         ConversionResult result;
         await using (var score = source.Score!)
         {
@@ -146,10 +158,14 @@ public static class LogicEndpoints
         IFormFile? file,
         [FromForm] string? options,
         [FromForm] string? name,
+        [FromForm] string? bassStems,
+        [FromForm] string? drumStems,
         SongLibrary library,
         IScoreConverter converter,
         IMusicXmlWriter writer,
         IMidiToAbcConverter midiConverter,
+        SqliteStemStore stemStore,
+        StemParts stemParts,
         CancellationToken cancellationToken)
     {
         if (ParseOptions(options) is not { } parsed)
@@ -161,6 +177,13 @@ public static class LogicEndpoints
         {
             return source.Problem;
         }
+        var recorded = await RecordedAsync(bassStems, drumStems, source, stemStore, stemParts, cancellationToken);
+        if (recorded.Problem is not null)
+        {
+            await source.Score!.DisposeAsync();
+            return recorded.Problem;
+        }
+        parsed.Recorded = recorded.Parts;
         var fallbackName = source.Directory is { } directory
             ? $"{LibraryEndpoints.FileName(library.TitleOf(source.Run!, directory), source.Run!)}-{source.Song}"
             : Path.GetFileNameWithoutExtension(file!.FileName);
@@ -190,11 +213,14 @@ public static class LogicEndpoints
         [FromForm] bool? splitSections,
         [FromForm] string? instruments,
         [FromForm] string? stems,
+        [FromForm] string? bassStems,
+        [FromForm] string? drumStems,
         SongLibrary library,
         IScoreConverter converter,
         ILogicProjectWriter writer,
         IMidiToAbcConverter midiConverter,
         SqliteStemStore stemStore,
+        StemParts stemParts,
         IAudioMixer mixer,
         HttpContext context,
         CancellationToken cancellationToken)
@@ -217,6 +243,13 @@ public static class LogicEndpoints
         {
             return source.Problem;
         }
+        var recorded = await RecordedAsync(bassStems, drumStems, source, stemStore, stemParts, cancellationToken);
+        if (recorded.Problem is not null)
+        {
+            await source.Score!.DisposeAsync();
+            return recorded.Problem;
+        }
+        parsed.Recorded = recorded.Parts;
 
         // A song of the library brings its own recording; an uploaded score takes the uploaded one, if any.
         var fallbackName = source.Directory is { } directory
@@ -371,6 +404,57 @@ public static class LogicEndpoints
             context.Response.Headers[DiagnosticsHeader] = JsonSerializer.Serialize(warnings, CompactJson.DiagnosticArray);
         }
         return Results.File(zip, "application/zip", $"{name}.logicx.zip");
+    }
+
+    /// <summary>
+    /// The bass and drums of a library song's stem sets (form fields <c>bassStems</c>, <c>drumStems</c>: a set's id) as
+    /// MIDI, which take the place of the generated ones; none without either field.
+    /// </summary>
+    private static async Task<(RecordedParts? Parts, IResult? Problem)> RecordedAsync(
+        string? bassStems,
+        string? drumStems,
+        (Stream? Score, string? Directory, string? Run, string? Song, IResult? Problem, IReadOnlyList<Diagnostic> Read) source,
+        SqliteStemStore store,
+        StemParts parts,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(bassStems) && string.IsNullOrWhiteSpace(drumStems))
+        {
+            return (null, null);
+        }
+        if (source.Directory is null)
+        {
+            return (null, BadRequest("Stems need a song", "Bass and drums from stems can only come from a song of the library."));
+        }
+        var tempo = AudioMidiEndpoints.SongTempo(source.Directory);
+        try
+        {
+            async Task<byte[]?> PartAsync(string? id, string stem)
+            {
+                if (string.IsNullOrWhiteSpace(id))
+                {
+                    return null;
+                }
+                var set = store.Get(id);
+                if (set is null || set.SongId != $"{source.Run}/{source.Song}" || set.Stage != "done" || set.Stems.All(s => s.Name != stem))
+                {
+                    throw new AudioMidiException($"These stems do not exist, are not finished for this song or have no {stem}.", StatusCodes.Status404NotFound);
+                }
+                if (!parts.Installed)
+                {
+                    throw new AudioMidiException("Basic Pitch is not installed: run deploy/install-midi.sh on the Mac (or deploy/setup-mac.sh with --midi).", StatusCodes.Status501NotImplemented);
+                }
+                return await parts.MidiAsync(set, stem, tempo, cancellationToken);
+            }
+
+            var bass = await PartAsync(bassStems, StemParts.BassStem);
+            var drums = await PartAsync(drumStems, StemParts.DrumStem);
+            return (new RecordedParts(bass, drums), null);
+        }
+        catch (AudioMidiException exception)
+        {
+            return (null, Results.Problem(title: exception.Message, statusCode: exception.Status));
+        }
     }
 
     /// <summary>

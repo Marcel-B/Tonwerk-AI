@@ -8,8 +8,23 @@ namespace YueUI.Api.AudioMidi;
 /// <param name="Audio">A WAV or FLAC.</param>
 /// <param name="Output">Where the MIDI file is written.</param>
 /// <param name="TrackName">The track's name in the file: <c>Vocal</c> makes the Logic page and the backing vocals read it as the melody.</param>
-/// <param name="Voice">A singing voice: notes outside its range (hiss, rumble) are left out.</param>
-public sealed record AudioMidiJob(string Audio, string Output, string TrackName, AudioMidiSettings Settings, double Tempo, bool Voice);
+/// <param name="Kind">What the track is: a voice or a bass keeps to its range, drums are found by band instead of pitch.</param>
+public sealed record AudioMidiJob(string Audio, string Output, string TrackName, AudioMidiSettings Settings, double Tempo, AudioMidiKind Kind);
+
+public enum AudioMidiKind
+{
+    /// <summary>An instrument of no known range: Basic Pitch hears the whole spectrum.</summary>
+    Other,
+
+    /// <summary>A singing voice: notes outside its range (hiss, rumble) are left out.</summary>
+    Voice,
+
+    /// <summary>A bass: one note at a time, and only in a bass's range, since its overtones are heard as notes too.</summary>
+    Bass,
+
+    /// <summary>A drum kit: kick, snare and hi-hat on General MIDI's drum notes, found by their bands.</summary>
+    Drums,
+}
 
 public sealed record AudioMidiResult(int Notes, double Seconds);
 
@@ -42,6 +57,11 @@ public sealed class BasicPitchEngine(IOptions<AudioMidiOptions> options, ILogger
 
     private const double VoiceMaxHz = 1400;
 
+    /// <summary>B0 (a five-string bass's low string) to G4, the highest fundamental a bass line plays.</summary>
+    private const double BassMinHz = 30;
+
+    private const double BassMaxHz = 400;
+
     private readonly SemaphoreSlim _one = new(1, 1);
 
     public static string Script => Path.Combine(AppContext.BaseDirectory, "AudioMidi", "yueui_basicpitch.py");
@@ -60,12 +80,13 @@ public sealed class BasicPitchEngine(IOptions<AudioMidiOptions> options, ILogger
             ["audio"] = job.Audio,
             ["output"] = job.Output,
             ["name"] = job.TrackName,
-            ["mono"] = job.Settings.Mono,
+            ["mono"] = job.Settings.Mono || job.Kind == AudioMidiKind.Bass,
             ["quantize"] = job.Settings.Quantize,
             ["bends"] = job.Settings.Bends,
             ["tempo"] = job.Tempo,
-            ["minHz"] = job.Voice ? VoiceMinHz : null,
-            ["maxHz"] = job.Voice ? VoiceMaxHz : null,
+            ["drums"] = job.Kind == AudioMidiKind.Drums,
+            ["minHz"] = job.Kind switch { AudioMidiKind.Voice => VoiceMinHz, AudioMidiKind.Bass => BassMinHz, _ => null },
+            ["maxHz"] = job.Kind switch { AudioMidiKind.Voice => VoiceMaxHz, AudioMidiKind.Bass => BassMaxHz, _ => null },
         };
         AudioMidiResult? result = null;
         ToolResult run;

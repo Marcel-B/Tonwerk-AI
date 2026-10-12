@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
+using Melanchall.DryWetMidi.Common;
+using Melanchall.DryWetMidi.Core;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using YueUI.Api.Data;
@@ -370,6 +372,73 @@ public sealed class LogicPageTests : IDisposable
     }
 
     [Fact]
+    public async Task Bass_and_drums_from_stems_take_the_place_of_the_generated_ones()
+    {
+        AddSong("song1");
+        var set = AddStems($"{Run}/song1", "vocals", "bass", "drums", "other");
+        // As Basic Pitch writes them: at the song's tempo, time zero the recording's start.
+        _app.AudioMidi.Output = job => job.Kind == AudioMidi.AudioMidiKind.Drums
+            ? StemMidi(88, (0, 36), (480, 38), (480, 36), (960, 42))
+            : StemMidi(88, (0, 40), (480, 43));
+        MultipartFormDataContent Form() => new()
+        {
+            { new StringContent($"{Run}/song1"), "song" },
+            { new StringContent("""{"arrangement":{"bass":{"pattern":"Walking"},"drums":{"separateTracks":true}}}"""), "options" },
+            { new StringContent(set), "bassStems" },
+            { new StringContent(set), "drumStems" },
+        };
+
+        var response = await _client.PostAsync("/api/logic/convert", Form());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var voices = (await Json(response))["score"]!["voices"]!.AsArray();
+        int[] Notes(string id) => [.. voices.Single(v => (string?)v!["id"] == id)!["notes"]!.AsArray().Select(n => (int)n!["noteNumber"]!)];
+        Assert.Equal([40, 43], Notes("Bass"));
+        Assert.Equal([36, 36], Notes("Kick"));
+        Assert.Equal([38], Notes("Snare"));
+        Assert.Equal([42], Notes("HiHat"));
+        Assert.Equal(
+            [(AudioMidi.AudioMidiKind.Bass, 88.0, true), (AudioMidi.AudioMidiKind.Drums, 88.0, true)],
+            _app.AudioMidi.Jobs.Select(job => (job.Kind, job.Tempo, job.Settings.Quantize)));
+
+        // Made once per stem: the preview converts again on every change of an option.
+        Assert.Equal(HttpStatusCode.OK, (await _client.PostAsync("/api/logic/convert", Form())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _client.PostAsync("/api/logic/musicxml", Form())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _client.PostAsync("/api/logic/export", Form())).StatusCode);
+        Assert.Equal(2, _app.AudioMidi.Jobs.Count);
+    }
+
+    [Fact]
+    public async Task Bass_from_stems_needs_a_bass_stem_of_the_song_and_basic_pitch()
+    {
+        AddSong("song1");
+        var vocalsOnly = AddStems($"{Run}/song1", "vocals", "instrumental");
+        var bass = AddStems($"{Run}/song1", "vocals", "bass");
+
+        var noBass = await _client.PostAsync("/api/logic/convert", new MultipartFormDataContent
+        {
+            { new StringContent($"{Run}/song1"), "song" },
+            { new StringContent(vocalsOnly), "bassStems" },
+        });
+        var upload = await _client.PostAsync("/api/logic/convert", new MultipartFormDataContent
+        {
+            { new ByteArrayContent(Encoding.UTF8.GetBytes(LogicEndpointTests.SampleScore)), "file", "My Song.abc" },
+            { new StringContent(bass), "bassStems" },
+        });
+        _app.AudioMidi.Installed = false;
+        var notInstalled = await _client.PostAsync("/api/logic/convert", new MultipartFormDataContent
+        {
+            { new StringContent($"{Run}/song1"), "song" },
+            { new StringContent(bass), "bassStems" },
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, noBass.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, upload.StatusCode);
+        Assert.Equal(HttpStatusCode.NotImplemented, notInstalled.StatusCode);
+        Assert.Empty(_app.AudioMidi.Jobs);
+    }
+
+    [Fact]
     public async Task An_uploaded_score_is_exported_without_audio()
     {
         var response = await _client.PostAsync("/api/logic/export", new MultipartFormDataContent
@@ -439,6 +508,32 @@ public sealed class LogicPageTests : IDisposable
         }
         store.Add(set);
         return set.Id;
+    }
+
+    /// <summary>A one-track MIDI file at 480 ticks per quarter, each note an eighth long.</summary>
+    private static byte[] StemMidi(double bpm, params (long Tick, int Note)[] notes)
+    {
+        var timed = notes
+            .SelectMany(n => new (long Tick, MidiEvent Event)[]
+            {
+                (n.Tick, new NoteOnEvent((SevenBitNumber)n.Note, (SevenBitNumber)100)),
+                (n.Tick + 240, new NoteOffEvent((SevenBitNumber)n.Note, (SevenBitNumber)0)),
+            })
+            .OrderBy(e => e.Tick)
+            .ThenBy(e => e.Event is NoteOnEvent ? 1 : 0)
+            .ToList();
+        var events = new List<MidiEvent> { new SetTempoEvent((long)(60_000_000 / bpm)) };
+        var last = 0L;
+        foreach (var (tick, midiEvent) in timed)
+        {
+            midiEvent.DeltaTime = tick - last;
+            last = tick;
+            events.Add(midiEvent);
+        }
+        var file = new MidiFile(new TrackChunk(events)) { TimeDivision = new TicksPerQuarterNoteTimeDivision(480) };
+        using var stream = new MemoryStream();
+        file.Write(stream);
+        return stream.ToArray();
     }
 
     private static async Task<JsonNode> Json(HttpResponseMessage response) =>

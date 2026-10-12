@@ -1,4 +1,5 @@
 using System.Globalization;
+using YueToLogic.Core.Conversion;
 using YueToLogic.Core.Diagnostics;
 using YueToLogic.Core.Model;
 
@@ -6,7 +7,8 @@ namespace YueToLogic.Core.Arrangement;
 
 public interface IScoreArranger
 {
-    ArrangementResult Arrange(ScoreDocument score, ArrangementOptions? options = null);
+    /// <param name="recorded">Bass and drums heard in the recording, which take the place of the generated ones.</param>
+    ArrangementResult Arrange(ScoreDocument score, ArrangementOptions? options = null, RecordedParts? recorded = null);
 }
 
 public sealed record ArrangementResult(ScoreDocument Score, IReadOnlyList<Diagnostic> Diagnostics);
@@ -19,7 +21,7 @@ public sealed record ArrangementResult(ScoreDocument Score, IReadOnlyList<Diagno
 /// </summary>
 public sealed class ScoreArranger : IScoreArranger
 {
-    public ArrangementResult Arrange(ScoreDocument score, ArrangementOptions? options = null)
+    public ArrangementResult Arrange(ScoreDocument score, ArrangementOptions? options = null, RecordedParts? recorded = null)
     {
         ArgumentNullException.ThrowIfNull(score);
         options ??= new ArrangementOptions();
@@ -43,12 +45,22 @@ public sealed class ScoreArranger : IScoreArranger
             tracks.Add(ChordTrackGenerator.Generate(score, chords));
         }
 
-        if (options.Bass is { } bass)
+        // A part heard in the recording wins over the generated one; one that cannot be read leaves the generated
+        // one in place (or none, if none was asked for), with a warning.
+        if ((recorded?.Bass is { } recordedBass ? RecordedPartReader.Bass(score, recordedBass, diagnostics) : null) is { } heardBass)
+        {
+            tracks.Add(heardBass);
+        }
+        else if (options.Bass is { } bass)
         {
             tracks.Add(BassLineGenerator.Generate(score, bass));
         }
 
-        if (options.Drums is { } drums)
+        if ((recorded?.Drums is { } recordedDrums ? RecordedPartReader.Drums(score, recordedDrums, diagnostics) : null) is { } heardDrums)
+        {
+            tracks.AddRange(DrumPatternGenerator.Tracks(heardDrums, options.Drums ?? new DrumOptions()));
+        }
+        else if (options.Drums is { } drums)
         {
             tracks.AddRange(DrumPatternGenerator.GenerateTracks(score, drums));
         }

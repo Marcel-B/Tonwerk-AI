@@ -86,7 +86,7 @@ public static partial class AudioMidiEndpoints
                 return Results.Problem(title: "The recording could not be read.", detail: exception.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
             }
             var name = Path.GetFileNameWithoutExtension(file.FileName);
-            return await ConvertAsync(engine, response, audio, folder, "Vocal", settings, voice: true, $"{LibraryEndpoints.FileName(name, "recording")}.mid", cancellationToken);
+            return await ConvertAsync(engine, response, audio, folder, "Vocal", settings, AudioMidiKind.Voice, $"{LibraryEndpoints.FileName(name, "recording")}.mid", cancellationToken);
         }
         finally
         {
@@ -133,7 +133,7 @@ public static partial class AudioMidiEndpoints
         {
             var fileName = $"{StemEndpoints.DownloadPrefix(set, library)}-{LibraryEndpoints.FileName(name, "stem")}.mid";
             return await ConvertAsync(
-                engine, response, path, folder, TrackName(name), settings with { Tempo = settings.Tempo ?? songTempo }, IsVoice(name), fileName, cancellationToken);
+                engine, response, path, folder, TrackName(name), settings with { Tempo = settings.Tempo ?? songTempo }, KindOf(name), fileName, cancellationToken);
         }
         finally
         {
@@ -142,12 +142,12 @@ public static partial class AudioMidiEndpoints
     }
 
     private static async Task<IResult> ConvertAsync(
-        IAudioMidiEngine engine, HttpResponse response, string audio, string folder, string trackName, AudioMidiSettings settings, bool voice, string fileName, CancellationToken cancellationToken)
+        IAudioMidiEngine engine, HttpResponse response, string audio, string folder, string trackName, AudioMidiSettings settings, AudioMidiKind kind, string fileName, CancellationToken cancellationToken)
     {
         var output = Path.Combine(folder, "track.mid");
         try
         {
-            var result = await engine.ConvertAsync(new AudioMidiJob(audio, output, trackName, settings, settings.Tempo ?? 120, voice), cancellationToken);
+            var result = await engine.ConvertAsync(new AudioMidiJob(audio, output, trackName, settings, settings.Tempo ?? 120, kind), cancellationToken);
             if (result.Notes == 0)
             {
                 return Results.Problem(title: "No notes were heard in this track.", statusCode: StatusCodes.Status422UnprocessableEntity);
@@ -201,6 +201,16 @@ public static partial class AudioMidiEndpoints
 
     /// <summary>Every vocal stem the separators make (vocals, vocals_dry, …) is sung; the rest are instruments.</summary>
     internal static bool IsVoice(string stem) => stem.Contains("vocal", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What a stem is by its name: the separators call them <c>vocals</c>, <c>vocals_dry</c>, <c>bass</c>, <c>drums</c>
+    /// (and a drum separator <c>kick</c>, <c>snare</c>, … which are left to Basic Pitch, since each holds one drum).
+    /// </summary>
+    internal static AudioMidiKind KindOf(string stem) =>
+        IsVoice(stem) ? AudioMidiKind.Voice
+        : stem.Equals("bass", StringComparison.OrdinalIgnoreCase) ? AudioMidiKind.Bass
+        : stem.Equals("drums", StringComparison.OrdinalIgnoreCase) ? AudioMidiKind.Drums
+        : AudioMidiKind.Other;
 
     /// <summary>
     /// Named as the Logic page names its tracks, so a vocal stem comes back as the melody (<c>Vocal</c>) and a bass stem

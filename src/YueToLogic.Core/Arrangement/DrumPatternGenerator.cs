@@ -33,7 +33,7 @@ internal static class DrumPatternGenerator
     private const int OpenHiHatVelocity = 75;
 
     /// <summary>A hit of the pattern, still named by its drum so a split kit sorts by drum and not by note number.</summary>
-    private readonly record struct Hit(Drum Drum, long StartTicks, long DurationTicks, int Velocity);
+    internal readonly record struct Hit(Drum Drum, long StartTicks, long DurationTicks, int Velocity);
 
     /// <summary>Every hi-hat position of the segment: each beat opens one, the offsets fill it.</summary>
     private static IEnumerable<long> HiHatTicks(long start, long end, long beatTicks, int beatsPerBar, long[] offsets)
@@ -61,8 +61,16 @@ internal static class DrumPatternGenerator
     /// </summary>
     public static IEnumerable<VoiceTrack> GenerateTracks(ScoreDocument score, DrumOptions options)
     {
+        return Tracks(Hits(score, options), options);
+    }
+
+    /// <summary>
+    /// Hits as tracks, one or one per drum, on the notes the options name: the pattern's, or those heard in a drum stem
+    /// (<see cref="RecordedPartReader"/>), so a recorded groove reaches a drum machine and a split kit the same way.
+    /// </summary>
+    public static IEnumerable<VoiceTrack> Tracks(IReadOnlyList<Hit> hits, DrumOptions options)
+    {
         var notes = options.Notes ?? new DrumNotes();
-        var hits = Hits(score, options);
         if (!options.SeparateTracks)
         {
             return [new VoiceTrack(TrackId, TrackId, [.. hits.Select(hit => ToNote(hit, notes))], TrackKind.Drums)];

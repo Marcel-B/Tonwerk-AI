@@ -140,6 +140,8 @@ builder.Services.AddSingleton<LogStore>();
 builder.Services.AddSingleton<ILoggerProvider, LogStoreProvider>();
 builder.Services.AddSingleton<LogReport>();
 
+builder.Services.AddSingleton<YueUI.Api.Storage.StorageScanner>();
+
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
 builder.Services.AddProblemDetails();
@@ -182,6 +184,7 @@ api.MapImageEndpoints();
 api.MapAudioMidiEndpoints();
 api.MapBackupEndpoints();
 api.MapLogEndpoints();
+api.MapStorageEndpoints();
 
 app.MapClientApp();
 

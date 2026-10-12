@@ -107,6 +107,30 @@ const review = computed(() => {
   return { count: songs.length, bytes: songs.reduce((sum, song) => sum + song.bytes, 0) }
 })
 
+/** Songs given one star: rated as not worth keeping, so they are offered for deletion as a whole. */
+const oneStar = computed(() => {
+  const songs = props.runs.flatMap((run) => run.songs.filter((song) => ratings.value[song.id] === 1))
+  return { ids: songs.map((song) => song.id), bytes: songs.reduce((sum, song) => sum + song.bytes, 0) }
+})
+
+function askOneStar(): void {
+  const { ids, bytes } = oneStar.value
+  confirm.require({
+    header: t('confirmDelete'),
+    message: t('storageConfirmOneStar', { count: ids.length, size: formatBytes(bytes) }),
+    acceptProps: { label: t('storageDelete'), severity: 'danger' },
+    rejectProps: { label: t('cancel'), severity: 'secondary', outlined: true },
+    // One after another through the library's own endpoint, which refuses a song the worker is on.
+    accept: () =>
+      run('oneStar', async () => {
+        for (const id of ids) {
+          await deleteSong(id)
+        }
+        emit('notice', t('storageCleaned', { size: formatBytes(bytes) }))
+      }),
+  })
+}
+
 type Suggestion = { target: StorageCleanupTarget; label: MessageKey; hint: MessageKey; bytes: number }
 const suggestions = computed<Suggestion[]>(() =>
   (
@@ -128,6 +152,12 @@ const suggestions = computed<Suggestion[]>(() =>
         label: 'storageCleanupVideos',
         hint: 'storageCleanupVideosHint',
         bytes: category('videos')?.bytes ?? 0,
+      },
+      {
+        target: 'failed',
+        label: 'storageCleanupFailed',
+        hint: 'storageCleanupFailedHint',
+        bytes: overview.value?.failed ?? 0,
       },
       {
         target: 'orphans',
@@ -271,7 +301,7 @@ async function run(key: string, action: () => Promise<void>): Promise<void> {
 
       <div class="flex flex-col gap-2">
         <h3 class="m-0 text-base">{{ t('storageCleanup') }}</h3>
-        <p v-if="suggestions.length === 0 && review.count === 0" class="muted m-0 text-sm">
+        <p v-if="suggestions.length === 0 && review.count === 0 && oneStar.ids.length === 0" class="muted m-0 text-sm">
           {{ t('storageNothingToClean') }}
         </p>
         <div v-for="s in suggestions" :key="s.target" class="suggestion">
@@ -290,6 +320,30 @@ async function run(key: string, action: () => Promise<void>): Promise<void> {
             :disabled="busy !== null"
             :aria-label="t('storageDelete')"
             @click="askCleanup(s)"
+          />
+        </div>
+        <div v-if="oneStar.ids.length > 0" class="suggestion">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-baseline justify-between gap-2">
+              <span>{{ t('storageCleanupOneStar') }}</span>
+              <span class="tabular-nums">{{ formatBytes(oneStar.bytes) }}</span>
+            </div>
+            <div class="muted text-xs">
+              {{
+                t(oneStar.ids.length === 1 ? 'storageCleanupOneStarHintOne' : 'storageCleanupOneStarHint', {
+                  count: oneStar.ids.length,
+                })
+              }}
+            </div>
+          </div>
+          <Button
+            icon="pi pi-trash"
+            severity="danger"
+            text
+            :loading="busy === 'oneStar'"
+            :disabled="busy !== null"
+            :aria-label="t('storageDelete')"
+            @click="askOneStar"
           />
         </div>
         <div v-if="review.count > 0" class="suggestion">

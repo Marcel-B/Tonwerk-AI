@@ -93,6 +93,24 @@ public sealed class StorageEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Failed_work_that_left_files_is_cleaned_up()
+    {
+        _app.AddSong(Run, "song1");
+        var failed = AddStems($"{Run}/song1", "failed");
+        var done = AddStems($"{Run}/song1");
+
+        var overview = (await _client.GetFromJsonAsync<StorageOverview>("/api/storage/overview", TestApp.Json))!;
+        Assert.Equal(FakeMixer.Flac.Length * 2, overview.Failed);
+
+        var cleaned = await (await _client.PostAsync("/api/storage/cleanup/failed", null)).Content.ReadFromJsonAsync<StorageCleanup>(TestApp.Json);
+        Assert.Equal(new StorageCleanup(FakeMixer.Flac.Length * 2, 1), cleaned);
+        var store = _app.Services.GetRequiredService<SqliteStemStore>();
+        Assert.Null(store.Get(failed));
+        Assert.False(Directory.Exists(store.Folder(failed)));
+        Assert.NotNull(store.Get(done));
+    }
+
+    [Fact]
     public void A_moved_part_is_measured_through_its_link_but_links_inside_count_once()
     {
         var root = Directory.CreateTempSubdirectory("yueui-storage-").FullName;
@@ -117,7 +135,7 @@ public sealed class StorageEndpointTests : IDisposable
 
     private static StorageCategory Category(StorageOverview overview, string key) => Assert.Single(overview.Categories, c => c.Key == key);
 
-    private string AddStems(string songId)
+    private string AddStems(string songId, string stage = "done")
     {
         var store = _app.Services.GetRequiredService<SqliteStemStore>();
         var set = new StemSetState
@@ -125,7 +143,7 @@ public sealed class StorageEndpointTests : IDisposable
             Id = Guid.NewGuid().ToString("N"),
             SongId = songId,
             Model = "htdemucs",
-            Stage = "done",
+            Stage = stage,
             Stems = [new StemFile("vocals", "vocals.flac", 1, null), new StemFile("drums", "drums.flac", 1, null)],
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

@@ -545,6 +545,14 @@ const messages = {
     storageCleanupVideosHint: 'Lassen sich im Song-Menü neu erstellen.',
     storageCleanupOrphans: 'Verwaiste Dateien',
     storageCleanupOrphansHint: 'Ohne Eintrag in der Datenbank und älter als ein Tag, etwa nach einem Absturz.',
+    storageCleanupFailed: 'Abgebrochenes mit Resten',
+    storageCleanupFailedHint:
+      'Fehlgeschlagene oder abgebrochene Stimmenversionen, Stems, Stimmentausche und Videos, die noch Dateien belegen.',
+    storageCleanupOneStar: 'Songs mit einem Stern',
+    storageCleanupOneStarHintOne: 'Ein Song, mit allem, was dazugehört (Versionen, Stems, Cover, Videos).',
+    storageCleanupOneStarHint: '{count} Songs, mit allem, was dazugehört (Versionen, Stems, Cover, Videos).',
+    storageConfirmOneStar:
+      '{count} Songs mit einem Stern ({size}) samt Versionen, Stems, Cover und Videos endgültig löschen?',
     storageCleanupReview: 'Unbewertete Songs',
     storageCleanupReviewHint:
       '{count} Songs ohne Sterne sind älter als {n} Tage. In der Bibliothek anhören, bewerten oder löschen.',
@@ -1441,6 +1449,14 @@ const messages = {
     storageCleanupVideosHint: 'Can be made again from the song menu.',
     storageCleanupOrphans: 'Orphaned files',
     storageCleanupOrphansHint: 'Without an entry in the database and older than a day, left by a crash for instance.',
+    storageCleanupFailed: 'Cancelled work with leftovers',
+    storageCleanupFailedHint:
+      'Failed or cancelled voice versions, stems, voice swaps and videos that still take files.',
+    storageCleanupOneStar: 'Songs with one star',
+    storageCleanupOneStarHintOne: 'One song, with everything that belongs to it (versions, stems, cover, videos).',
+    storageCleanupOneStarHint: '{count} songs, with everything that belongs to them (versions, stems, cover, videos).',
+    storageConfirmOneStar:
+      'Delete {count} songs with one star ({size}) with their versions, stems, cover and videos for good?',
     storageCleanupReview: 'Unrated songs',
     storageCleanupReviewHint:
       '{count} songs without stars are older than {n} days. Listen, rate or delete them in the library.',

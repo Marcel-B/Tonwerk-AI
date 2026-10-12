@@ -1,5 +1,5 @@
 import type { StorageCategory, StorageOverview } from '../src/types'
-import { expect, run, test } from './fakeApi'
+import { expect, run, song, test } from './fakeApi'
 
 const GB = 1e9
 const MB = 1e6
@@ -14,6 +14,7 @@ function part(
 }
 
 const overview: StorageOverview = {
+  failed: 85 * MB,
   volumes: [
     { mount: '/', free: 61 * GB, total: 494 * GB },
     { mount: '/Volumes/SSD', free: 1650 * GB, total: 2000 * GB },
@@ -73,7 +74,10 @@ const overview: StorageOverview = {
 }
 
 test.beforeEach(({ api }) => {
-  api.runs = [run('run-1', { title: 'Mein Hund' })]
+  api.runs = [
+    run('run-1', { title: 'Mein Hund' }),
+    run('run-2', { title: 'Fehlversuch', songs: [song('run-2/song1', { rating: 1, bytes: 30 * MB })] }),
+  ]
   api.answers.set('GET /api/storage/overview', () => overview)
   api.answers.set('POST /api/storage/cleanup/stream', () => ({ bytes: 1.4 * GB, removed: 380 }))
   api.answers.set('DELETE /api/videos/v1', () => 204)
@@ -83,6 +87,8 @@ test('the storage page shows the parts and cleans up what can be made again', as
   await page.goto('#/storage')
 
   await expect(page.getByText('Deine Werke')).toBeVisible()
+  await expect(page.getByText('Abgebrochenes mit Resten')).toBeVisible()
+  await expect(page.getByText('Songs mit einem Stern')).toBeVisible()
   await expect(page.getByText(/Tonwerk 69\sGB · 1\.650\sGB von 2\.000\sGB frei/)).toBeVisible()
   await expect(page.getByText('auf SSD').first()).toBeVisible()
   await page.screenshot({

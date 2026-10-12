@@ -405,6 +405,8 @@ export interface StorageInfo {
 export interface StorageOverview {
   volumes: StorageVolume[]
   categories: StorageCategory[]
+  /** What failed or cancelled versions, stems, swaps and videos still take; `cleanupStorage('failed')` removes them. */
+  failed: number
 }
 
 /** `/` is the Mac's own disk, `/Volumes/…` another one (an external SSD after deploy/move-to-volume.sh). */
@@ -444,7 +446,7 @@ export interface StorageItem {
   createdAt: string | null
 }
 
-export type StorageCleanupTarget = 'stream' | 'images' | 'videos' | 'orphans'
+export type StorageCleanupTarget = 'stream' | 'images' | 'videos' | 'orphans' | 'failed'
 
 export interface StorageCleanup {
   bytes: number

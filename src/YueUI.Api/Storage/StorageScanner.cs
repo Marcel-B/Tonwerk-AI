@@ -15,7 +15,8 @@ namespace YueUI.Api.Storage;
 
 /// <summary>Where the disk space goes: what this app made, what it keeps for itself, and the models it runs.</summary>
 /// <param name="Volumes">The volumes the categories lie on (an external SSD after <c>deploy/move-to-volume.sh</c>).</param>
-public sealed record StorageOverview(IReadOnlyList<StorageVolume> Volumes, IReadOnlyList<StorageCategory> Categories);
+/// <param name="Failed">What failed or cancelled versions, stems, swaps and videos still take; cleanup <c>failed</c>.</param>
+public sealed record StorageOverview(IReadOnlyList<StorageVolume> Volumes, IReadOnlyList<StorageCategory> Categories, long Failed);
 
 /// <param name="Mount">Where the volume is mounted: <c>/</c> for the Mac's own disk, <c>/Volumes/…</c> for another.</param>
 public sealed record StorageVolume(string Mount, long Free, long Total);
@@ -73,6 +74,7 @@ public sealed class StorageScanner(
     ImageMaker images,
     LoraLibrary loras,
     StreamCopies streams,
+    VoiceConverter converter,
     VideoMaker videoMaker,
     Status.StatusHub hub,
     IOptions<SpeechOptions> speechOptions,
@@ -90,7 +92,7 @@ public sealed class StorageScanner(
     public static readonly TimeSpan OrphanAge = TimeSpan.FromDays(1);
 
     /// <summary>What <see cref="Cleanup"/> takes.</summary>
-    public static readonly IReadOnlyList<string> CleanupTargets = ["stream", "images", "videos", "orphans"];
+    public static readonly IReadOnlyList<string> CleanupTargets = ["stream", "images", "videos", "orphans", "failed"];
 
     private string Data => database.Directory;
 
@@ -233,7 +235,8 @@ public sealed class StorageScanner(
         var used = categories.Select(c => c.Volume).OfType<string>().Append(MountOf(mounts, RealPath(Data) ?? Data)).ToHashSet();
         return new StorageOverview(
             [.. mounts.Where(m => used.Contains(m.Mount)).OrderBy(m => m.Mount, StringComparer.Ordinal)],
-            [.. categories]);
+            [.. categories],
+            FailedWork().Sum(f => f.Bytes));
     }
 
     /// <summary>Removes what can be made again or what nothing refers to any more.</summary>
@@ -274,9 +277,54 @@ public sealed class StorageScanner(
             }
             case "orphans":
                 return RemoveOrphans();
+            case "failed":
+            {
+                var failed = FailedWork();
+                foreach (var work in failed)
+                {
+                    work.Delete();
+                }
+                return new StorageCleanup(failed.Sum(f => f.Bytes), failed.Count);
+            }
             default:
                 throw new ArgumentOutOfRangeException(nameof(target), target, null);
         }
+    }
+
+    /// <summary>Versions, stems, swaps and videos that failed or were cancelled but still have files.</summary>
+    private List<(long Bytes, Action Delete)> FailedWork()
+    {
+        static bool Failed(string stage) => stage is "failed" or "cancelled";
+        var work = new List<(long Bytes, Action Delete)>();
+        foreach (var version in (Safe(versions.All) ?? []).Where(v => Failed(v.Stage)))
+        {
+            if (Length(versions.FilePath(version.Id)) is > 0 and var bytes)
+            {
+                work.Add((bytes, () => converter.Delete(version)));
+            }
+        }
+        foreach (var set in (Safe(stems.All) ?? []).Where(s => Failed(s.Stage)))
+        {
+            if (Measure(stems.Folder(set.Id)).Bytes is > 0 and var bytes)
+            {
+                work.Add((bytes, () => converter.DeleteStems(set)));
+            }
+        }
+        foreach (var swap in (Safe(swaps.All) ?? []).Where(s => Failed(s.Stage)))
+        {
+            if (Measure(swaps.Folder(swap.Id)).Bytes is > 0 and var bytes)
+            {
+                work.Add((bytes, () => converter.DeleteSwap(swap)));
+            }
+        }
+        foreach (var folder in Directories(Path.Combine(Data, "videos")))
+        {
+            if (Safe(() => videos.Get(folder.Name)) is { } video && Failed(video.Stage) && Measure(folder.FullName).Bytes is > 0 and var bytes)
+            {
+                work.Add((bytes, () => videoMaker.Delete(video)));
+            }
+        }
+        return work;
     }
 
     private StorageCleanup RemoveOrphans()

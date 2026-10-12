@@ -67,6 +67,18 @@ public sealed class StatusHub(Func<IWorkerStatus> worker, IOptions<QueueOptions>
         }
     }
 
+    /// <summary>The jobs waiting in <see cref="JobQueue"/>, without a whole snapshot (<c>/metrics</c>).</summary>
+    public IReadOnlyList<QueuedJob> Queue
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _queue;
+            }
+        }
+    }
+
     /// <summary>A snapshot and every change after it, with nothing lost in between. Dispose to unsubscribe.</summary>
     /// <param name="checkStudio">
     /// False for subscribers that do not show whether YuE Studio runs (push notifications): the snapshot then carries

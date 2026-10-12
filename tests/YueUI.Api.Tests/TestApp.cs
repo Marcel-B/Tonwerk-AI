@@ -82,6 +82,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeNextcloud Nextcloud { get; } = new();
 
+    public FakeLoki Loki { get; } = new();
+
+    /// <summary>Where the fake Loki is expected; null (the default) leaves shipping the log off.</summary>
+    public string? LokiUrl { get; set; }
+
     /// <summary>The backup folder in the fake Nextcloud; null (the default) leaves the backup off.</summary>
     public string? NextcloudUrl { get; set; }
 
@@ -232,6 +237,13 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.TransientRetryDelay = TimeSpan.Zero;
             });
             services.AddHttpClient(WebDavClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeNextcloud.Handler(Nextcloud));
+            services.Configure<Monitoring.MonitoringOptions>(options =>
+            {
+                options.Loki.Url = LokiUrl;
+                options.Loki.Host = "mini";
+                options.Loki.BatchDelay = TimeSpan.FromMilliseconds(10);
+            });
+            services.AddHttpClient(Monitoring.LokiShipper.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeLoki.Handler(Loki));
             if (_fakeWorker)
             {
                 services.AddSingleton<IWorkerLauncher>(Launcher);
@@ -1181,5 +1193,46 @@ public sealed class FakeAudioMidi : AudioMidi.IAudioMidiEngine
         }
         await File.WriteAllBytesAsync(job.Output, Output?.Invoke(job) ?? Midi, cancellationToken);
         return new AudioMidi.AudioMidiResult(Notes, 1.5);
+    }
+}
+
+/// <summary>Loki's push endpoint: keeps every body it is sent.</summary>
+public sealed class FakeLoki
+{
+    private readonly Lock _gate = new();
+    private readonly List<(string Path, JsonObject Body)> _pushes = [];
+
+    /// <summary>Answers the next pushes with this status before taking them, e.g. 503 while Loki starts.</summary>
+    public Queue<HttpStatusCode> Refusals { get; } = new();
+
+    public (string Path, JsonObject Body)[] Pushes()
+    {
+        lock (_gate)
+        {
+            return [.. _pushes];
+        }
+    }
+
+    /// <summary>Every line pushed so far with its labels.</summary>
+    public (JsonObject Labels, string Line)[] Lines() =>
+        [.. Pushes().SelectMany(push => push.Body["streams"]!.AsArray()
+            .SelectMany(stream => stream!["values"]!.AsArray()
+                .Select(value => (stream["stream"]!.AsObject(), value![1]!.GetValue<string>()))))];
+
+    public sealed class Handler(FakeLoki loki) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
+            lock (loki._gate)
+            {
+                if (loki.Refusals.TryDequeue(out var refusal))
+                {
+                    return new HttpResponseMessage(refusal);
+                }
+                loki._pushes.Add((request.RequestUri!.AbsolutePath, body));
+            }
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        }
     }
 }

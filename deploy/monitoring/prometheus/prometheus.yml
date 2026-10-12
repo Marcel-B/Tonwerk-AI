@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  # Every app is one file in targets/ (copy tonwerk.yml.example); Prometheus reads new and changed files on its own.
+  # Each file names the address and the label app, and may set __scheme__ and __metrics_path__ per target.
+  - job_name: apps
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/*.yml]
+        refresh_interval: 1m
+
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]

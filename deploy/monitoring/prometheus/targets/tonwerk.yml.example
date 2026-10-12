@@ -1,0 +1,7 @@
+# Copy to tonwerk.yml (this file is not read: only *.yml) and put in the Mac's Tailscale name. Tonwerk binds to 127.0.0.1 only; `tailscale serve
+# --https=8443` makes it reachable in the tailnet, with a certificate for that name.
+- targets: [mac-mini.example.ts.net:8443]
+  labels:
+    app: tonwerk
+    __scheme__: https
+    __metrics_path__: /metrics

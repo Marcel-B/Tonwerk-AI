@@ -8,6 +8,7 @@ using YueUI.Api.Library;
 using YueUI.Api.Logs;
 using YueUI.Api.Loras;
 using YueUI.Api.Logic;
+using YueUI.Api.Monitoring;
 using YueUI.Api.Lyrics;
 using YueUI.Api.Push;
 using YueUI.Api.Queue;
@@ -143,11 +144,21 @@ builder.Services.AddHostedService(services => services.GetRequiredService<CloudB
 
 // Every log message, the worker's output and the updater's log in daily files, read on the log page.
 builder.Services.Configure<LogOptions>(builder.Configuration.GetSection(LogOptions.Section));
+builder.Services.AddSingleton<LogFeed>();
 builder.Services.AddSingleton<LogStore>();
 builder.Services.AddSingleton<ILoggerProvider, LogStoreProvider>();
 builder.Services.AddSingleton<LogReport>();
 
 builder.Services.AddSingleton<YueUI.Api.Storage.StorageScanner>();
+
+// Metrics for Prometheus (GET /metrics) and the log for Loki, collected by a monitoring stack on another machine
+// (deploy/monitoring/); shipping to Loki is off until Monitoring:Loki:Url is set.
+builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection(MonitoringOptions.Section));
+builder.Services.AddSingleton<JobMetrics>();
+builder.Services.AddHostedService(services => services.GetRequiredService<JobMetrics>());
+builder.Services.AddHostedService<LokiShipper>();
+// Without its loggers: each push would log four lines of its own, which the next push would send, forever.
+builder.Services.AddHttpClient(LokiShipper.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30)).RemoveAllLoggers();
 
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
@@ -194,6 +205,7 @@ api.MapBackupEndpoints();
 api.MapLogEndpoints();
 api.MapStorageEndpoints();
 
+app.MapMetrics();
 app.MapClientApp();
 
 app.Run();

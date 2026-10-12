@@ -16,8 +16,14 @@ public sealed class SqliteVideoStore(SqliteDatabase database)
 
     public string VideoPath(string id) => Path.Combine(Folder(id), VideoFile);
 
+    /// <summary>A photo video's pictures cut to the song (<see cref="MontageBuilder"/>), made just before the video.</summary>
+    public string MontagePath(string id) => Path.Combine(Folder(id), "montage.mp4");
+
+    /// <summary>The planner's stills and shots; deleted once the video is done.</summary>
+    public string WorkFolder(string id) => Path.Combine(Folder(id), "work");
+
     public VideoLayers Layers(VideoState video) => new(
-        Path.Combine(Folder(video.Id), "background.png"),
+        video.Media is null ? Path.Combine(Folder(video.Id), "background.png") : MontagePath(video.Id),
         video.ShowCover ? Path.Combine(Folder(video.Id), "cover.png") : null,
         video.ShowTitle ? Path.Combine(Folder(video.Id), "title.png") : null,
         video.Motion switch
@@ -25,7 +31,8 @@ public sealed class SqliteVideoStore(SqliteDatabase database)
             VideoMotions.Particles => [Path.Combine(Folder(video.Id), "particles.png")],
             VideoMotions.Plasma => [.. Enumerable.Range(0, VideoLayout.PlasmaFrames).Select(i => Path.Combine(Folder(video.Id), $"plasma{i}.png"))],
             _ => [],
-        });
+        },
+        video.Media is not null && File.Exists(Path.Combine(Folder(video.Id), "shade.png")) ? Path.Combine(Folder(video.Id), "shade.png") : null);
 
     /// <summary>The song's videos, newest first, as the dialog lists them.</summary>
     public IReadOnlyList<VideoState> ForSong(string songId) =>
@@ -49,8 +56,8 @@ public sealed class SqliteVideoStore(SqliteDatabase database)
             connection,
             null,
             """
-            INSERT INTO song_videos (id, song_id, title, format, effect, color, motion, show_cover, show_title, stage, message, bytes, created_at, updated_at)
-            VALUES ($id, $song, $title, $format, $effect, $color, $motion, $showCover, $showTitle, $stage, $message, $bytes, $created, $updated)
+            INSERT INTO song_videos (id, song_id, title, format, effect, color, motion, show_cover, show_title, media, motif, stage, message, bytes, created_at, updated_at)
+            VALUES ($id, $song, $title, $format, $effect, $color, $motion, $showCover, $showTitle, $media, $motif, $stage, $message, $bytes, $created, $updated)
             """,
             ("$id", video.Id),
             ("$song", video.SongId),
@@ -61,6 +68,8 @@ public sealed class SqliteVideoStore(SqliteDatabase database)
             ("$motion", video.Motion),
             ("$showCover", video.ShowCover ? 1 : 0),
             ("$showTitle", video.ShowTitle ? 1 : 0),
+            ("$media", (object?)video.Media ?? DBNull.Value),
+            ("$motif", (object?)video.Motif ?? DBNull.Value),
             ("$stage", video.Stage),
             ("$message", (object?)video.Message ?? DBNull.Value),
             ("$bytes", (object?)video.Bytes ?? DBNull.Value),
@@ -155,6 +164,8 @@ public sealed class SqliteVideoStore(SqliteDatabase database)
         Motion = reader.GetString(reader.GetOrdinal("motion")),
         ShowCover = reader.GetInt64(reader.GetOrdinal("show_cover")) != 0,
         ShowTitle = reader.GetInt64(reader.GetOrdinal("show_title")) != 0,
+        Media = reader.IsDBNull(reader.GetOrdinal("media")) ? null : reader.GetString(reader.GetOrdinal("media")),
+        Motif = reader.IsDBNull(reader.GetOrdinal("motif")) ? null : reader.GetString(reader.GetOrdinal("motif")),
         Stage = reader.GetString(reader.GetOrdinal("stage")),
         Message = reader.IsDBNull(reader.GetOrdinal("message")) ? null : reader.GetString(reader.GetOrdinal("message")),
         Bytes = reader.IsDBNull(reader.GetOrdinal("bytes")) ? null : reader.GetInt64(reader.GetOrdinal("bytes")),

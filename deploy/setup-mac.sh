@@ -9,7 +9,8 @@
 #   deploy/setup-mac.sh --speech           plus the speech lab's environment (deploy/install-speech.sh)
 #   deploy/setup-mac.sh --images           plus FLUX.2 Klein for painted covers (deploy/install-images.sh)
 #   deploy/setup-mac.sh --midi             plus Basic Pitch for audio to MIDI (deploy/install-midi.sh)
-#   deploy/setup-mac.sh --all              all five
+#   deploy/setup-mac.sh --montage          plus photo videos cut to the beat (deploy/install-montage.sh)
+#   deploy/setup-mac.sh --all              all six
 #   deploy/setup-mac.sh --engine-from-source
 #                                          replace an engine the YuE Studio app installed by a git checkout
 #   deploy/setup-mac.sh --update           again with the options of the last run, without asking (deploy/update.sh)
@@ -53,6 +54,7 @@ VOICES=false
 SPEECH=false
 IMAGES=false
 MIDI=false
+MONTAGE=false
 FROM_SOURCE=false
 UPDATE=false
 AUTO_UPDATE=true
@@ -70,11 +72,12 @@ for argument in "$@"; do
     --speech) SPEECH=true ;;
     --images) IMAGES=true ;;
     --midi) MIDI=true ;;
-    --all) TRANSCRIPTION=true; VOICES=true; SPEECH=true; IMAGES=true; MIDI=true ;;
+    --montage) MONTAGE=true ;;
+    --all) TRANSCRIPTION=true; VOICES=true; SPEECH=true; IMAGES=true; MIDI=true; MONTAGE=true ;;
     --engine-from-source) FROM_SOURCE=true ;;
     --no-auto-update) AUTO_UPDATE=false ;;
     --update) echo "--update comes first." >&2; exit 2 ;;
-    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown argument: $argument" >&2; exit 2 ;;
   esac
 done
@@ -331,6 +334,19 @@ if [ "$MIDI" = true ]; then
     "$REPO/deploy/install-midi.sh"
     mkdir -p "$DATA/midi"
     echo "$MIDI_RECIPE" > "$DATA/midi/recipe"
+  fi
+fi
+
+if [ "$MONTAGE" = true ]; then
+  step "Photo videos"
+  # install-montage.sh pins librosa, Pillow, PyTorch and open_clip; an update runs it only when the script changed.
+  MONTAGE_RECIPE="$(cksum < "$REPO/deploy/install-montage.sh")"
+  if [ "$UPDATE" = true ] && [ "$(cat "$DATA/montage/recipe" 2>/dev/null)" = "$MONTAGE_RECIPE" ]; then
+    echo "Unchanged."
+  else
+    "$REPO/deploy/install-montage.sh"
+    mkdir -p "$DATA/montage"
+    echo "$MONTAGE_RECIPE" > "$DATA/montage/recipe"
   fi
 fi
 

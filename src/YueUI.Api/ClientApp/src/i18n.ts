@@ -412,6 +412,23 @@ const messages = {
     videoShowTitle: 'Titel einblenden',
     videoHint:
       'Der Mac rechnet das Video im Hintergrund (1080p, 30 fps, H.264 mit AAC 320 kbit/s) und meldet sich, wenn es fertig ist. Die Vorschau zeigt Balken und Welle nur angedeutet, im Video tanzen sie zur Musik. Ist es fertig, ersetzt es das bisherige Video des Songs im selben Format.',
+    videoSource: 'Bild',
+    videoSource_cover: 'Cover',
+    videoSource_photos: 'Fotos & Videos',
+    videoFolder: 'Ordner',
+    videoFolderCounts: '{name} · {photos} Fotos, {videos} Videos',
+    videoFoldersReload: 'Ordner neu einlesen',
+    videoFolderHint:
+      'Ein Ordner je Video unter {root} auf dem Mac, mit Fotos (auch HEIC) und Clips (MP4, MOV). Aus der Fotos-App: Album auswählen, Ablage → Exportieren → Unbearbeitetes Original.',
+    videoMotif: 'Motiv',
+    videoMotifPlaceholder: 'Motiv, z. B. Hund am Strand (optional)',
+    videoMotifHint:
+      'Mit Motiv nimmt der Mac die Bilder, die am besten dazu passen (CLIP, beim ersten Mal etwa 1,5 GB Download). Ohne Motiv die schärfsten und am besten belichteten.',
+    videoPhotosMissing:
+      'Fotovideos sind auf dem Mac noch nicht eingerichtet: deploy/setup-mac.sh mit --montage ausführen.',
+    videoPhotosHint:
+      'Der Mac schneidet die Bilder auf die Beats des Songs, im Refrain schneller, in ruhigen Teilen langsamer, und zeigt sie in der Reihenfolge, in der sie aufgenommen wurden. Fotos zoomen langsam. Die Vorschau zeigt Platzhalter statt der Fotos.',
+    videoFromFolder: 'Fotos: {name}',
     videoStart: 'Video erstellen',
     videoList: 'Videos dieses Songs',
     videoFailed: 'Fehlgeschlagen: {message}',
@@ -1232,6 +1249,22 @@ const messages = {
     videoShowTitle: 'Show title',
     videoHint:
       "The Mac renders the video in the background (1080p, 30 fps, H.264 with AAC 320 kbit/s) and lets you know when it is done. The preview only hints at the bars and the wave; in the video they move to the music. Once done, it replaces the song's earlier video in the same format.",
+    videoSource: 'Picture',
+    videoSource_cover: 'Cover',
+    videoSource_photos: 'Photos & videos',
+    videoFolder: 'Folder',
+    videoFolderCounts: '{name} · {photos} photos, {videos} videos',
+    videoFoldersReload: 'Read folders again',
+    videoFolderHint:
+      'One folder per video under {root} on the Mac, with photos (HEIC too) and clips (MP4, MOV). From the Photos app: select an album, File → Export → Export Unmodified Original.',
+    videoMotif: 'Motif',
+    videoMotifPlaceholder: 'Motif, e.g. dog on the beach (optional)',
+    videoMotifHint:
+      'With a motif the Mac takes the pictures that fit it best (CLIP, about 1.5 GB to download the first time). Without one, the sharpest and best exposed.',
+    videoPhotosMissing: 'Photo videos are not set up on the Mac yet: run deploy/setup-mac.sh with --montage.',
+    videoPhotosHint:
+      "The Mac cuts the pictures to the song's beats, faster in the chorus, slower in quiet parts, and shows them in the order they were taken. Photos zoom slowly. The preview shows placeholders instead of the photos.",
+    videoFromFolder: 'Photos: {name}',
     videoStart: 'Make video',
     videoList: "This song's videos",
     videoFailed: 'Failed: {message}',

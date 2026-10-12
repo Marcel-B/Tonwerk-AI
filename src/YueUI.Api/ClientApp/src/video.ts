@@ -6,7 +6,9 @@ import type { VideoEffect, VideoFormat, VideoMotion } from './types'
 /**
  * A music video of a song: the browser draws the still layers (blurred background, cover, title, a field of particles
  * or the frames of a plasma ball) as PNGs, the server animates them with ffmpeg (Video/FfmpegVideoRenderer.cs) and encodes the
- * MP4. `VideoDialog.vue` (one, in App.vue) asks for the settings; the library and the song menu open it.
+ * MP4. `VideoDialog.vue` (one, in App.vue) asks for the settings; the library and the song menu open it. A photo video
+ * takes a folder of the Mac's photos and clips instead of the blurred cover, cut to the song's beats on the server
+ * (Video/MontageBuilder.cs); the browser then only draws a shade over them, the cover if wanted and the title.
  */
 export const videoTarget = ref<ExportTarget | null>(null)
 
@@ -17,6 +19,10 @@ export function openVideo(target: ExportTarget): void {
 export const videoFormats: VideoFormat[] = ['landscape', 'portrait']
 export const videoEffects: VideoEffect[] = ['bars', 'wave', 'none']
 export const videoMotions: VideoMotion[] = ['particles', 'plasma', 'none']
+
+/** What fills the picture: the song's cover, blurred, or a folder of photos and clips cut to the beat. */
+export type VideoSource = 'cover' | 'photos'
+export const videoSources: VideoSource[] = ['cover', 'photos']
 
 /** The server's `VideoLayout.PlasmaFrames`: the plasma ball comes as this many pictures, which it flickers between. */
 const plasmaFrames = 8
@@ -80,9 +86,15 @@ export const videoLayouts: Record<VideoFormat, Layout> = {
 export interface VideoSettings {
   format: VideoFormat
   effect: VideoEffect
+  /** Only for a cover video; the photos move themselves. */
   motion: VideoMotion
   showCover: boolean
   showTitle: boolean
+  source: VideoSource
+  /** The photo video's folder, by name. */
+  media: string
+  /** What its pictures should show, for CLIP; empty takes the sharpest and best exposed. */
+  motif: string
 }
 
 const storageKey = 'yue-ui.video'
@@ -95,6 +107,9 @@ export function loadVideoSettings(): VideoSettings {
     motion: 'particles',
     showCover: true,
     showTitle: true,
+    source: 'cover',
+    media: '',
+    motif: '',
   }
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Partial<VideoSettings> & {
@@ -108,6 +123,9 @@ export function loadVideoSettings(): VideoSettings {
       motion: videoMotions.includes(motion as VideoMotion) ? (motion as VideoMotion) : defaults.motion,
       showCover: typeof stored.showCover === 'boolean' ? stored.showCover : defaults.showCover,
       showTitle: typeof stored.showTitle === 'boolean' ? stored.showTitle : defaults.showTitle,
+      source: videoSources.includes(stored.source as VideoSource) ? (stored.source as VideoSource) : defaults.source,
+      media: typeof stored.media === 'string' ? stored.media : defaults.media,
+      motif: typeof stored.motif === 'string' ? stored.motif : defaults.motif,
     }
   } catch {
     return defaults
@@ -126,6 +144,8 @@ export function saveVideoSettings(settings: VideoSettings): void {
 export interface VideoLayers {
   /** The analyzer's colour, picked from the cover (`#rrggbb`). */
   color: string
+  /** A photo video: `background` is only the shade laid over its pictures. */
+  photos: boolean
   background: HTMLCanvasElement
   cover: HTMLCanvasElement | null
   title: HTMLCanvasElement | null
@@ -145,21 +165,26 @@ export async function drawVideoLayers(
 ): Promise<VideoLayers> {
   const layout = videoLayouts[settings.format]
   const image = await coverImage(target)
+  const photos = settings.source === 'photos'
   return {
     color: coverColour(image),
-    background: drawBackground(layout, image),
+    photos,
+    background: photos ? drawShade(layout) : drawBackground(layout, image),
     cover: settings.showCover ? drawCoverLayer(layout, image) : null,
     title: settings.showTitle ? drawTitle(layout, target.title || 'Tonwerk', subtitle) : null,
-    particles: settings.motion === 'particles' ? drawParticles(layout, target.songId) : null,
-    plasma: settings.motion === 'plasma' ? drawPlasma(layout, target.songId, settings.showCover) : null,
+    particles: !photos && settings.motion === 'particles' ? drawParticles(layout, target.songId) : null,
+    plasma: !photos && settings.motion === 'plasma' ? drawPlasma(layout, target.songId, settings.showCover) : null,
   }
 }
 
 export async function toPngs(layers: VideoLayers): Promise<VideoLayerImages> {
   const images: VideoLayerImages = {
-    background: await png(layers.background),
+    background: layers.photos ? null : await png(layers.background),
     cover: layers.cover ? await png(layers.cover) : null,
     title: layers.title ? await png(layers.title) : null,
+  }
+  if (layers.photos) {
+    images.shade = await png(layers.background)
   }
   if (layers.particles) {
     images.particles = await png(layers.particles)
@@ -180,6 +205,9 @@ export function drawPreview(layers: VideoLayers, settings: VideoSettings): strin
   const scale = 0.3
   const { canvas, context } = frame(layout.width * scale, layout.height * scale)
   context.scale(scale, scale)
+  if (layers.photos) {
+    drawPhotoPlaceholder(context, layout)
+  }
   context.drawImage(layers.background, 0, 0)
   if (layers.particles) {
     context.drawImage(layers.particles, 0, 0)
@@ -319,6 +347,52 @@ function drawBackground(layout: Layout, image: HTMLImageElement): HTMLCanvasElem
   context.fillStyle = vignette
   context.fillRect(0, 0, layout.width, layout.height)
   return canvas
+}
+
+/**
+ * A photo video's shade: the cover background's darkening without the cover, lighter in the middle so the photos keep
+ * their colours, darker at the bottom where the band and the title sit.
+ */
+function drawShade(layout: Layout): HTMLCanvasElement {
+  const { canvas, context } = frame(layout.width, layout.height)
+  const shade = context.createLinearGradient(0, 0, 0, layout.height)
+  shade.addColorStop(0, 'rgb(0 0 0 / 0.15)')
+  shade.addColorStop(0.5, 'rgb(0 0 0 / 0)')
+  shade.addColorStop(0.75, 'rgb(0 0 0 / 0.25)')
+  shade.addColorStop(1, 'rgb(0 0 0 / 0.6)')
+  context.fillStyle = shade
+  context.fillRect(0, 0, layout.width, layout.height)
+  const vignette = context.createRadialGradient(
+    layout.width / 2,
+    layout.height / 2,
+    Math.min(layout.width, layout.height) * 0.4,
+    layout.width / 2,
+    layout.height / 2,
+    Math.max(layout.width, layout.height) * 0.75,
+  )
+  vignette.addColorStop(0, 'rgb(0 0 0 / 0)')
+  vignette.addColorStop(1, 'rgb(0 0 0 / 0.35)')
+  context.fillStyle = vignette
+  context.fillRect(0, 0, layout.width, layout.height)
+  return canvas
+}
+
+/**
+ * Where the preview cannot show the photos (they are on the Mac and picked only while the video is made): a few
+ * tiles in muted colours that stand for them.
+ */
+function drawPhotoPlaceholder(context: CanvasRenderingContext2D, layout: Layout): void {
+  const columns = layout.width > layout.height ? 4 : 2
+  const rows = layout.width > layout.height ? 2 : 4
+  const tileWidth = layout.width / columns
+  const tileHeight = layout.height / rows
+  const random = seeded(11)
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      context.fillStyle = `hsl(${Math.round(random() * 360)} 25% ${Math.round(28 + random() * 22)}%)`
+      context.fillRect(column * tileWidth, row * tileHeight, tileWidth + 1, tileHeight + 1)
+    }
+  }
 }
 
 function drawCoverLayer(layout: Layout, image: HTMLImageElement): HTMLCanvasElement {

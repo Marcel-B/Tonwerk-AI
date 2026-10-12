@@ -36,6 +36,7 @@ import type {
   VideoFormat,
   VideoMotion,
   VideoState,
+  MediaInfo,
   ImageInfo,
   ImageState,
   MemoryInfo,
@@ -480,7 +481,9 @@ export async function addSwap(file: File, request: SwapRequest): Promise<SwapSta
   const form = new FormData()
   form.append('file', file)
   for (const [key, value] of Object.entries(request)) {
-    form.append(key, String(value))
+    if (value !== undefined) {
+      form.append(key, String(value))
+    }
   }
   return (await send('/api/swaps', { method: 'POST', body: form })).json() as Promise<SwapState>
 }
@@ -500,6 +503,11 @@ export function swapSourceUrl(id: string): string {
   return `${apiBase}/api/swaps/${id}/source`
 }
 
+/** The folders a photo video can take its pictures from. */
+export async function fetchMediaFolders(): Promise<MediaInfo> {
+  return (await send('/api/videos/media')).json() as Promise<MediaInfo>
+}
+
 /** The song's music videos, newest first. */
 export async function listVideos(songId: string): Promise<VideoState[]> {
   return (await send(`/api/songs/${songId}/videos`)).json() as Promise<VideoState[]>
@@ -513,6 +521,9 @@ export interface VideoRequest {
   showTitle: boolean
   /** The analyzer's colour, `#rrggbb`. */
   color: string
+  /** A photo video's folder; its pictures take the background's place. */
+  media?: string
+  motif?: string
 }
 
 /**
@@ -520,7 +531,9 @@ export interface VideoRequest {
  * the background only when asked for. Each goes under its name, the moving one under the motion's.
  */
 export interface VideoLayerImages {
-  background: Blob
+  /** A photo video has its pictures instead, darkened by its `shade`. */
+  background: Blob | null
+  shade?: Blob
   cover: Blob | null
   title: Blob | null
   particles?: Blob

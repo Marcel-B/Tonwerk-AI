@@ -30,6 +30,7 @@
     <None Update="Speech\yueui_speech.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Images\yueui_image.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="AudioMidi\yueui_basicpitch.py" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Video\yueui_montage.py" CopyToOutputDirectory="PreserveNewest" />
     <!-- Seed-VC's conversion, run with its own Python (SeedVcEngine.Script). -->
     <None Update="Voices\yueui_seedvc.py" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="Voices\stem-models.json" LogicalName="stem-models.json" />

@@ -122,9 +122,9 @@ const messages = {
     qualityMore:
       'Beide komponieren denselben Song; der Unterschied liegt in der Synthese des Klangs.\n• Entwurf: 8 Solver-Schritte, auf der GPU.\n• Voll: 32 Schritte, standardmäßig auf der Neural Engine, dauert deutlich länger.\n\n„Voll rendern“ in der Bibliothek synthetisiert einen Entwurf mit denselben Tokens und demselben Seed neu. Bewährt: mehrere Entwürfe erzeugen und nur den besten voll rendern. Die Schrittzahl beider lässt sich unter „Erweiterte Parameter“ ändern.\n\nOriginal: quality, draft oder full; Standard draft.',
     batch: 'Anzahl',
-    batchHint: 'Mehrere Varianten desselben Songs, jede mit eigenem Seed.',
+    batchHint: 'Mehrere Varianten desselben Songs, jede mit eigenem Seed, nacheinander erstellt.',
     batchMore:
-      'Song 1 bekommt den Seed, Song 2 den Seed + 1 usw. – gleicher Stil und Text, verschiedene Interpretationen. Bis zu vier Songs (zwei auf Macs mit weniger als 24 GB) werden gemeinsam komponiert und kosten dabei kaum mehr Zeit als einer; die Synthese läuft danach Song für Song.\n\nOriginal: batch, hier 1–3 (die API nimmt bis 8); Standard 1. Pro Durchgang komponiert der Worker höchstens 4 (YUE2_MAX_BATCH).',
+      'Song 1 bekommt den Seed, Song 2 den Seed + 1 usw. – gleicher Stil und Text, verschiedene Interpretationen. Bis zu vier Songs (zwei auf Macs mit weniger als 24 GB) werden gemeinsam komponiert und kosten dabei kaum mehr Zeit als einer; die Synthese läuft danach Song für Song.\n\nMehr als vier komponiert der Worker in weiteren Durchgängen, die Songs laufen also nacheinander durch.\n\nOriginal: batch, hier 1–10; Standard 1. Pro Durchgang komponiert der Worker höchstens 4 (YUE2_MAX_BATCH).',
     advanced: 'Erweiterte Parameter',
     advancedChanged: 'angepasst',
     advancedIntro:
@@ -1115,9 +1115,9 @@ const messages = {
     qualityMore:
       'Both compose the same song; the difference is in how the sound is synthesized.\n• Draft: 8 solver steps, on the GPU.\n• Full: 32 steps, on the Neural Engine by default, takes considerably longer.\n\n“Render full” in the library synthesizes a draft again from the same tokens and seed. A good habit: generate several drafts and render only the best one at full quality. Both step counts can be changed under “Advanced parameters”.\n\nOriginal: quality, draft or full; default draft.',
     batch: 'Songs',
-    batchHint: 'Several variations of the same song, each with its own seed.',
+    batchHint: 'Several variations of the same song, each with its own seed, made one after another.',
     batchMore:
-      'Song 1 gets the seed, song 2 the seed + 1 and so on – same style and lyrics, different interpretations. Up to four songs (two on Macs with less than 24 GB) are composed together at hardly more cost than one; synthesis then runs song by song.\n\nOriginal: batch, 1–3 here (the API takes up to 8); default 1. The worker composes at most 4 per pass (YUE2_MAX_BATCH).',
+      'Song 1 gets the seed, song 2 the seed + 1 and so on – same style and lyrics, different interpretations. Up to four songs (two on Macs with less than 24 GB) are composed together at hardly more cost than one; synthesis then runs song by song.\n\nMore than four are composed in further passes, so the songs simply run one after another.\n\nOriginal: batch, 1–10 here; default 1. The worker composes at most 4 per pass (YUE2_MAX_BATCH).',
     advanced: 'Advanced parameters',
     advancedChanged: 'changed',
     advancedIntro:

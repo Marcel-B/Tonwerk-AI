@@ -351,14 +351,8 @@ const qualityOptions = [
     label: t('qualityFull'),
   },
 ]
-const batchOptions = [
-  { value: 1, label: '1' },
-  {
-    value: 2,
-    label: '2',
-  },
-  { value: 3, label: '3' },
-]
+// Up to the API's MaxBatch; the worker composes four at a time and works through the rest one after another.
+const batchOptions = Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label: String(i + 1) }))
 </script>
 
 <template>

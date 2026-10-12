@@ -3,7 +3,8 @@ using System.Text.Json.Nodes;
 namespace YueUI.Api;
 
 /// <summary>A new run: what the web form sends. Maps onto the worker's <c>generate</c> command.</summary>
-/// <param name="Batch">Songs with consecutive seeds; the worker tokenizes up to four together at the cost of one.</param>
+/// <param name="Batch">Songs with consecutive seeds; the worker tokenizes up to four together at the cost of one and queues
+/// the rest, so a larger batch simply runs through song after song.</param>
 /// <param name="Quality">"draft" (few synthesis steps, minutes) or "full".</param>
 /// <param name="Cot">How the model plans before the audio: "full" (melody and structure), "melody" or "off".</param>
 /// <param name="Seed">Null for a random one; YuE2 takes 0 to 2^63 - 1 for every song of the batch.</param>
@@ -38,7 +39,7 @@ public sealed record GenerateRequest(
     string? Lora = null,
     double? LoraStrength = null)
 {
-    public const int MaxBatch = 8;
+    public const int MaxBatch = 10;
     // The worker's semantic sampling insists on at least 200 tokens (min_tokens). The worker caps at 9000; the
     // extension allows 15000, the longest limit that fits the 24576-token context beside prompt and score.
     public const int MinTokens = 200;

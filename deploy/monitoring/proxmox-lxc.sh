@@ -2,8 +2,7 @@
 # Sets up the monitoring stack (Prometheus, Loki, Grafana; this folder) in a Debian LXC on a Proxmox host, with Docker
 # and Tailscale inside. Run it as root on the Proxmox host, from a copy of this folder:
 #
-#   scp -r ~/repos/YueUI/deploy/monitoring root@proxmox:/root/
-#   ssh root@proxmox
+#   curl -fsSL https://codeload.github.com/Marcel-B/YuE-UI/tar.gz/main | tar -xz --strip-components=2 -C /root YuE-UI-main/deploy/monitoring
 #   /root/monitoring/proxmox-lxc.sh
 #
 # Settings through the environment, all optional:

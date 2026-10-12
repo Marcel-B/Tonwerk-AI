@@ -12,11 +12,10 @@ Mac mini (Tonwerk)                          Proxmox (dieser Ordner)
 
 ## Einrichten mit dem Skript
 
-`proxmox-lxc.sh` erledigt alles auf dem Proxmox-Host: Es legt einen Debian-12-LXC an (2 GB RAM, 2 Kerne, 20 GB, unprivilegiert, mit Nesting und TUN für Docker und Tailscale), installiert darin Docker und Tailscale, kopiert diesen Ordner nach `/opt/monitoring`, erzeugt ein Grafana-Passwort und startet den Stack.
+`proxmox-lxc.sh` erledigt alles auf dem Proxmox-Host (als root in dessen Shell; der erste Befehl holt diesen Ordner von GitHub nach `/root/monitoring`): Es legt einen Debian-12-LXC an (2 GB RAM, 2 Kerne, 20 GB, unprivilegiert, mit Nesting und TUN für Docker und Tailscale), installiert darin Docker und Tailscale, kopiert diesen Ordner nach `/opt/monitoring`, erzeugt ein Grafana-Passwort und startet den Stack.
 
 ```sh
-scp -r ~/repos/YueUI/deploy/monitoring root@proxmox:/root/
-ssh root@proxmox
+curl -fsSL https://codeload.github.com/Marcel-B/YuE-UI/tar.gz/main | tar -xz --strip-components=2 -C /root YuE-UI-main/deploy/monitoring
 TONWERK_TARGET=mac-mini.tail1234.ts.net:8443 /root/monitoring/proxmox-lxc.sh
 ```
 

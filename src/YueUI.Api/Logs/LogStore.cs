@@ -17,7 +17,7 @@ namespace YueUI.Api.Logs;
 /// crash loses nothing. Logging is a few lines a minute, a worker's stderr in bursts; a write is cheap next to either.
 /// Writing must never fail what logs, so an unwritable folder only loses the lines.
 /// </remarks>
-public sealed partial class LogStore(IOptions<LogOptions> options, TimeProvider time) : IDisposable
+public sealed partial class LogStore(IOptions<LogOptions> options, TimeProvider time, Monitoring.LogFeed feed) : IDisposable
 {
     private const string Prefix = "tonwerk-";
     private const string Extension = ".jsonl";
@@ -41,6 +41,8 @@ public sealed partial class LogStore(IOptions<LogOptions> options, TimeProvider 
     public void Add(string source, string level, string message, string? exception = null)
     {
         var line = new LogLine(time.GetUtcNow(), source, level, message, exception);
+        // Counted for /metrics and passed on to Loki even when the disk refuses the line.
+        feed.Add(line);
         lock (_gate)
         {
             if (_disposed)

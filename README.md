@@ -325,6 +325,25 @@ Danach zeigt das Zahnrad-Menü, wann zuletzt gesichert wurde, und **Jetzt in die
 
 Die Zeilen liegen als JSON, eine Datei pro Tag (`tonwerk-JJJJ-MM-TT.jsonl`), unter `~/Library/Application Support/YuE UI/logs` und werden nach 14 Tagen gelöscht. Wird eine Tagesdatei größer als 50 MB, kommen nur noch Warnungen und Fehler hinein. Das Update-Log bleibt, wo `update.sh` es schreibt, und wird mitgelesen. `yueui.log` (die Konsole des LaunchAgents) gibt es weiterhin.
 
+## Monitoring mit Grafana
+
+Für Verläufe über Tage und Wochen (wie lange ein Song dauert, was fehlschlägt, wer den Speicher hält, wie voll die Platte wird) liefert Tonwerk Messwerte und Protokoll an einen Monitoring-Stack aus Prometheus, Loki und Grafana. Der läuft **nicht auf dem Mac**, dessen Speicher den Modellen gehört, sondern in einem Container auf einer anderen Maschine, etwa einem LXC auf dem Proxmox, über Tailscale verbunden. Vorlage und Anleitung: [`deploy/monitoring/`](deploy/monitoring/README.md).
+
+- **Messwerte:** `GET /metrics` im Format von Prometheus, ohne eigene Einrichtung (ab `Monitoring:Metrics` = `false` aus). Prometheus holt sie über `tailscale serve` von `https://<Mac>.<tailnet>.ts.net:8443/metrics`. Darin: Zustand des Workers, welches Modell den Speicher hält, Warteschlange, laufende und wartende Aufträge je Art, fertige Aufträge nach Ergebnis (`done`, `failed`, `cancelled`) mit ihrer Arbeitszeit ohne die Wartezeit, Protokollzeilen nach Quelle und Stufe, freier Platz und der Speicher des Server-Prozesses. Die Zähler beginnen nach jedem Neustart bei null; Prometheus rechnet das heraus.
+- **Protokoll:** Mit `Monitoring:Loki:Url` schickt Tonwerk jede Zeile des Protokolls (ab `info`, siehe `Monitoring:Loki:MinLevel`) gebündelt an Loki, mit den Labels `app`, `host`, `source` und `level`. Ist Loki nicht erreichbar, wartet Tonwerk ein paar Versuche lang und verwirft dann; auf dem Mac bleibt alles in den Tagesdateien. Das Log von `update.sh` geht nicht mit.
+
+In `~/Library/Application Support/YueUI/app/appsettings.Production.json` auf dem Mac (Tailscale-Name oder 100.x-Adresse; eine Adresse im Heimnetz erreicht der LaunchAgent nicht):
+
+```json
+{
+  "Monitoring": {
+    "Loki": { "Url": "http://monitoring:3100", "Host": "mac-mini" }
+  }
+}
+```
+
+Danach Tonwerk neu starten (`launchctl kickstart -k gui/$(id -u)/de.bvelop.yueui`).
+
 ## Cover malen mit FLUX.2 Klein
 
 In den Songs malt **Cover malen** (im „…“-Menü des Songs) ein Cover mit [FLUX.2 Klein](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) auf dem Mac, ohne ComfyUI, über [mflux](https://github.com/filipstrand/mflux) (MLX):
@@ -430,6 +449,11 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `Logs:Directory` (`Logs__Directory`) | `~/Library/Application Support/YuE UI/logs` | Tagesdateien des Protokolls |
 | `Logs:RetentionDays` (`Logs__RetentionDays`) | `14` | So viele Tage bleiben sie liegen |
 | `Logs:UpdateLog` (`Logs__UpdateLog`) | `~/Library/Logs/tonwerk-update.log` | Das Log von `deploy/update.sh`, das die Seite mitliest |
+| `Monitoring:Metrics` (`Monitoring__Metrics`) | `true` | `GET /metrics` für Prometheus |
+| `Monitoring:Loki:Url` (`Monitoring__Loki__Url`) | – | Loki, z. B. `http://monitoring:3100`; leer schickt kein Protokoll |
+| `Monitoring:Loki:Host` (`Monitoring__Loki__Host`) | Name des Rechners | Label `host` |
+| `Monitoring:Loki:MinLevel` (`Monitoring__Loki__MinLevel`) | `info` | Zeilen darunter bleiben auf dem Mac |
+| `Monitoring:Loki:Username` / `Monitoring:Loki:Password` | – | Basic Auth, falls Loki hinter einem Proxy das verlangt |
 | `Push:Subject` (`Push__Subject`) | `https://github.com/Marcel-B/YuE-UI` | Kontaktadresse (`mailto:` oder `https:`) für die Push-Dienste; Apple lehnt Adressen wie `mailto:ich@localhost` ab |
 | `Backup:EnvFile` (`Backup__EnvFile`) | `~/.config/tonwerk/nextcloud.env` | `.env`-Datei mit `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME` und `NEXTCLOUD_APP_PASSWORD` für die Datensicherung; fehlt eins davon, ist sie aus |
 | `Backup:At` (`Backup__At`) | `03:00` | Uhrzeit der nächtlichen Sicherung; leer heißt nur von Hand |
@@ -443,6 +467,7 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `GET` | `/api/status` | Worker-Zustand, Songs in Arbeit, Protokoll |
 | `GET` | `/api/busy` | `{ busy, reasons }`: ob ein Neustart laufende Arbeit abbräche (`songs`, `transcription`, `lyrics`, `voices`, `speech`); für `deploy/update.sh` |
 | `GET` | `/api/logs` | Gesammeltes Protokoll, neueste Zeilen zuerst: `source` (kommagetrennt: `server`, `worker`, `queue`, `lyrics`, `voices`, `speech`, `video`, `export`, `logic`, `backup`, `push`, `update`), `level` (Mindeststufe `debug`/`info`/`warning`/`error`), `q` (Text), `before` (Zeit der letzten Zeile, für die nächste Seite), `limit` (Standard 200) → `{ entries, more }` |
+| `GET` | `/metrics` | Messwerte im Textformat von Prometheus (`404`, wenn `Monitoring:Metrics` aus ist) |
 | `GET` | `/api/logs/report` | Bericht als Text für einen Chat: Version, Engines, Zustand, Warnungen und Fehler der letzten `hours` Stunden (Standard 24) mit Kontext |
 | `GET` | `/api/events` | dasselbe live als Server-Sent Events (`snapshot`, `song`, `worker`, `log`, `library`, `transcription`, `lyrics`, `version`, `speech`, `queue`, `ping`) |
 | `POST` | `/api/generate` | neuer Lauf: `{ style, lyrics, title?, batch?, quality?: "draft"\|"full", cot?, seed?, instrumental?, engines?, draftSteps?, maxTokens?: 200–15000, abc?, fullSteps?: 1–64, abcSampling?, semanticSampling?, voice?, lora?, loraStrength?: 0–3 }`; `lora` ist der Name einer LoRA aus `/api/loras` (`400`, wenn es sie nicht gibt), `voice` ist `{ voiceId, semiToneShift?, strength?, diffusionSteps?, keepReverb? }` wie bei den Fassungen und singt jeden fertigen Song danach mit dieser Stimme (`400` für eine unbekannte Stimme, `501` ohne Einrichtung); `abc` braucht `cot` "full" oder "melody", Sampling ist `{ temperature?, topP?, topK?, repetitionPenalty?, penaltyWindow? }`, über 9000 Tokens, `fullSteps` und Sampling nur mit der Worker-Erweiterung; antwortet `202`, ohne Inhalt, wenn der Lauf an den Worker ging, sonst mit dem wartenden Auftrag `{ id, kind, title, createdAt, songId, batch, quality, revision, voiceLabel }` |
@@ -567,6 +592,7 @@ Ideen und geplante Änderungen, ohne feste Reihenfolge. Erledigtes abhaken oder 
 - [x] Spektrum-Analyzer im Player und in der Vorschau, Hintergrund zur Musik
 - [x] Player über den ganzen Bildschirm mit Songtext, Analyzer und Effekten
 - [x] Stimme schon im Formular wählen; die Fassung entsteht dann von selbst, sobald der Song fertig ist
+- [x] Messwerte für Prometheus, Protokoll an Loki, Grafana-Vorlage
 - [ ] Eine Fassung statt der Originalstimme ins Logic-Projekt
 - [x] PrimeVue-Importe optimieren (nur benötigte Komponenten, kleineres Bundle)
 - [x] Restliche Oberfläche auf PrimeVue umstellen (`.button`, `.card`, `.link` und Eingabefelder aus `style.css` ablösen)

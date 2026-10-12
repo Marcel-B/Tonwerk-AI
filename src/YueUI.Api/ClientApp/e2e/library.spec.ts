@@ -30,7 +30,10 @@ test('the search filters title and style, or the lyrics', async ({ page }) => {
 test('a rating goes to the server', async ({ page, api }) => {
   await page.goto('#/songs')
   const first = page.getByRole('group').filter({ hasText: 'Nachtzug' })
-  await first.getByRole('radio').nth(3).check({ force: true })
+  // The visible star, as a finger taps it. Checking the hidden radio underneath fails since the fixture's songs are a
+  // week old: the review hint then shows above the list and can move it between scrolling and the forced click, and a
+  // click on the radio itself reaches both of the rating's handlers, which set the stars and take them back.
+  await first.locator('.p-rating-option').nth(3).click()
 
   await expect
     .poll(() => api.callsTo('PUT', '/api/songs/run-1/song1/rating').map((call) => call.body))

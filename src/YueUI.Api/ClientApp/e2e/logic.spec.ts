@@ -82,6 +82,6 @@ test('without bass or drum stems the page says which models make them', async ({
   api.answers.set('GET /api/stems', () => [stems('new', '2026-10-02T10:00:00Z', ['vocals', 'instrumental'])])
   await page.goto('#/logic/run-1/song1')
 
-  await expect(page.getByText(/z\. B\. htdemucs/)).toBeVisible()
+  await expect(page.getByText(/z\. B\. BS-RoFormer-SW/)).toBeVisible()
   await expect(page.getByText('Aus den Stems als MIDI')).toHaveCount(0)
 })

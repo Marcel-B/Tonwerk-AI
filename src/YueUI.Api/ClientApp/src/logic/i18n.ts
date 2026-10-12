@@ -381,7 +381,7 @@ const messages = {
     stemPartsHint:
       'Ersetzt den erzeugten Bass bzw. das Schlagzeug in Vorschau, MIDI, MusicXML und Logic-Projekt. Beim ersten Mal dauert es ein paar Sekunden pro Stem. Das Schlagzeug ist eine Skizze des Grundbeats, keine genaue Abschrift.',
     stemPartsMissing:
-      'Bass und Schlagzeug als MIDI gibt es nur mit Stems eines Modells, das sie trennt (z. B. htdemucs oder htdemucs-6s).',
+      'Bass und Schlagzeug als MIDI gibt es nur mit Stems eines Modells, das sie trennt (z. B. BS-RoFormer-SW, htdemucs oder htdemucs-6s).',
     librarySongMissing: 'Diesen Song gibt es in der Bibliothek nicht (mehr).',
     untitled: 'Ohne Titel',
     songN: 'Song {n}',
@@ -761,7 +761,7 @@ const messages = {
     stemPartsHint:
       'Replaces the generated bass or drums in the preview, MIDI, MusicXML and Logic project. The first time takes a few seconds per stem. The drums are a sketch of the basic beat, not an exact transcription.',
     stemPartsMissing:
-      'Bass and drums as MIDI need stems from a model that separates them (htdemucs or htdemucs-6s, for example).',
+      'Bass and drums as MIDI need stems from a model that separates them (BS-RoFormer-SW, htdemucs or htdemucs-6s, for example).',
     librarySongMissing: 'The library does not list this song (any more).',
     untitled: 'Untitled',
     songN: 'Song {n}',

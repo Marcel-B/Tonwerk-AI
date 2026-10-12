@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using YueUI.Api.Data;
 using YueUI.Api.Library;
 using YueUI.Api.Video;
@@ -7,17 +8,24 @@ namespace YueUI.Api;
 
 /// <summary>
 /// Music videos of a song (<see cref="VideoMaker"/>): the browser sends the still layers it drew as PNGs of the
-/// frame's size, the server animates and encodes them in the background and keeps the MP4 to download or share.
+/// frame's size, the server animates and encodes them in the background and keeps the MP4 to download or share. A
+/// photo video takes a folder of the Mac's pictures instead of the blurred cover (<see cref="MontageBuilder"/>).
 /// </summary>
 public static class VideoEndpoints
 {
     /// <summary>A full-frame PNG of a photo is a few megabytes; this only guards against anything else.</summary>
     public const long MaxLayerBytes = 20 * 1024 * 1024;
 
+    /// <summary>A motif is a few words for CLIP, whose text half reads 77 tokens at most.</summary>
+    public const int MaxMotifLength = 200;
+
     public static RouteGroupBuilder MapVideoEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/songs/{run}/{song}/videos", (string run, string song, SongLibrary library, SqliteVideoStore store) =>
             library.SongDirectory(run, song) is null ? Results.NotFound() : Results.Ok(store.ForSong($"{run}/{song}")));
+        // The folders a photo video can take its pictures from, and whether the planner is installed at all.
+        api.MapGet("/videos/media", (IMontageBuilder montage, IOptions<MontageOptions> options) =>
+            new MediaInfo(montage.Installed, options.Value.ResolvedMediaRoot, MediaFolders.List(options.Value.ResolvedMediaRoot)));
         api.MapPost("/songs/{run}/{song}/videos", AddAsync)
             // Posted from a plain form; there is no login and no cookie that a forged request could use.
             .DisableAntiforgery()
@@ -57,10 +65,14 @@ public static class VideoEndpoints
         [FromForm] string? color,
         [FromForm] bool? showCover,
         [FromForm] bool? showTitle,
+        [FromForm] string? media,
+        [FromForm] string? motif,
         IFormFileCollection files,
         SongLibrary library,
         SqliteVideoStore store,
         VideoMaker maker,
+        IMontageBuilder montage,
+        IOptions<MontageOptions> montageOptions,
         TimeProvider time,
         CancellationToken cancellationToken)
     {
@@ -91,12 +103,46 @@ public static class VideoEndpoints
         {
             errors["motion"] = [$"One of {string.Join(", ", VideoMotions.All)}."];
         }
+        media = string.IsNullOrWhiteSpace(media) ? null : media.Trim();
+        motif = string.IsNullOrWhiteSpace(motif) ? null : motif.Trim();
+        if (media is not null)
+        {
+            if (!montage.Installed)
+            {
+                return Results.Problem(title: "Photo videos are not installed; run deploy/install-montage.sh.", statusCode: StatusCodes.Status501NotImplemented);
+            }
+            if (MediaFolders.Resolve(montageOptions.Value.ResolvedMediaRoot, media) is null)
+            {
+                errors["media"] = ["One of the folders GET /api/videos/media lists."];
+            }
+            // The photos move themselves; particles or lightning over them would only clutter the picture.
+            if (motion != VideoMotions.None)
+            {
+                errors["motion"] = ["A photo video has no motion layer."];
+            }
+            if (motif?.Length > MaxMotifLength)
+            {
+                errors["motif"] = [$"At most {MaxMotifLength} characters."];
+            }
+        }
+        else
+        {
+            motif = null;
+        }
         // Older pages sent no showCover; they always drew the cover.
         var withCover = showCover != false;
         var layout = VideoLayout.For(format ?? "");
         // The layers by their form name; each must be a PNG of exactly the size the renderer lays it out at, or
-        // nothing lines up.
-        var wanted = new List<(string Name, int Width, int Height)> { ("background", layout.Width, layout.Height) };
+        // nothing lines up. A photo video's background is its pictures.
+        var wanted = new List<(string Name, int Width, int Height)>();
+        if (media is null)
+        {
+            wanted.Add(("background", layout.Width, layout.Height));
+        }
+        else if (files.GetFile("shade") is not null)
+        {
+            wanted.Add(("shade", layout.Width, layout.Height));
+        }
         if (withCover)
         {
             wanted.Add(("cover", layout.Width, layout.Height));
@@ -146,6 +192,8 @@ public static class VideoEndpoints
             Motion = motion,
             ShowCover = withCover,
             ShowTitle = showTitle == true,
+            Media = media,
+            Motif = motif,
             CreatedAt = now,
             UpdatedAt = now,
         };

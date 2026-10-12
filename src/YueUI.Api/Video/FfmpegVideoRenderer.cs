@@ -92,7 +92,8 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
         var rate = VideoLayout.FrameRate.ToString(CultureInfo.InvariantCulture);
         List<string> arguments = ["-nostdin", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-y"];
         // Each picture is read once; the graph repeats its frame (loop), so a PNG is not decoded thirty times a second.
-        arguments.AddRange(["-framerate", rate, "-i", layers.Background]);
+        // A photo video's background is the montage, a video of its own.
+        arguments.AddRange(video.Media is null ? ["-framerate", rate, "-i", layers.Background] : ["-i", layers.Background]);
         arguments.AddRange(["-i", flac]);
         foreach (var layer in new[] { layers.Cover, layers.Title }.OfType<string>().Concat(layers.Motion))
         {
@@ -103,7 +104,11 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
             var bars = VideoLayout.For(video.Format).Bars;
             arguments.AddRange(["-f", "rawvideo", "-pix_fmt", "gray", "-video_size", $"{bars}x1", "-framerate", rate, "-i", spectrum]);
         }
-        arguments.AddRange(["-filter_complex", Graph(video, seconds, layers.Cover is not null, layers.Title is not null, layers.Motion.Count)]);
+        if (layers.Shade is not null)
+        {
+            arguments.AddRange(["-framerate", rate, "-i", layers.Shade]);
+        }
+        arguments.AddRange(["-filter_complex", Graph(video, seconds, layers.Cover is not null, layers.Title is not null, layers.Motion.Count, layers.Shade is not null)]);
         arguments.AddRange(["-map", "[v]", "-map", "[a]"]);
         if (seconds is > 0)
         {
@@ -123,9 +128,9 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
     /// <summary>
     /// Background, then particles or the plasma ball, then the analyzer or waveform in its band, then the cover, then
     /// the title fading in; the whole fades in from and out to black. Inputs: 0 background, 1 audio, then cover and
-    /// title when there are, then the moving layer's pictures.
+    /// title when there are, then the moving layer's pictures, the bars' heights and a photo video's shade.
     /// </summary>
-    public static string Graph(VideoState video, double? seconds, bool cover, bool title, int motion)
+    public static string Graph(VideoState video, double? seconds, bool cover, bool title, int motion, bool shade = false)
     {
         var layout = VideoLayout.For(video.Format);
         var (w, h, bandY, bandH) = (layout.Width, layout.Height, layout.BandY, layout.BandHeight);
@@ -148,8 +153,16 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
             audio.Add("ap");
         }
         chains.Add(audio.Count == 1 ? "[1:a]anull[a]" : $"[1:a]asplit={audio.Count}{string.Concat(audio.Select(a => $"[{a}]"))}");
-        chains.Add("[0:v]format=rgba,loop=loop=-1:size=1[bg]");
+        // The montage ends with the song; tpad holds its last frame should it be a frame short.
+        chains.Add(video.Media is null ? "[0:v]format=rgba,loop=loop=-1:size=1[bg]" : "[0:v]format=rgba,tpad=stop_mode=clone:stop=-1[bg]");
         var current = "bg";
+        if (shade)
+        {
+            var shadeInput = motionInput + motion + (video.Effect == VideoEffects.Bars ? 1 : 0);
+            chains.Add($"[{shadeInput}:v]format=rgba,loop=loop=-1:size=1[shade]");
+            chains.Add($"[{current}][shade]overlay=0:0:format=auto[shaded]");
+            current = "shaded";
+        }
 
         if (particles)
         {

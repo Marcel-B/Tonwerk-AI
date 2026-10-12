@@ -37,6 +37,15 @@ public sealed record VideoState
     /// <summary>The title fades in under the cover.</summary>
     public bool ShowTitle { get; init; }
 
+    /// <summary>
+    /// A photo video: the subfolder of <see cref="MontageOptions.MediaRoot"/> whose photos and clips are cut to the
+    /// song's beats (<see cref="MontageBuilder"/>) and take the blurred cover's place. Null for a cover video.
+    /// </summary>
+    public string? Media { get; init; }
+
+    /// <summary>What the pictures should show ("Hund am Strand"); with it CLIP picks the ones that fit best.</summary>
+    public string? Motif { get; init; }
+
     public string Stage { get; init; } = "queued";
 
     /// <summary>How much of the song is rendered, 0 to 1.</summary>
@@ -138,11 +147,16 @@ public sealed record VideoLayout(int Width, int Height, int BandY, int BandHeigh
 }
 
 /// <summary>
-/// The still layers the browser drew, as PNGs of the frame's size (the plasma ball's of its area, see
+/// The still layers the browser drew, as PNGs of the frame's size (a photo video's <see cref="Background"/> is the
+/// montage instead, a silent MP4 of the frame's size and the song's length) (the plasma ball's of its area, see
 /// <see cref="VideoLayout.PlasmaArea"/>); all but the background only when asked for. <see cref="Motion"/>: one
 /// picture of particles, <see cref="VideoLayout.PlasmaFrames"/> of the plasma ball, none without motion.
 /// </summary>
-public sealed record VideoLayers(string Background, string? Cover, string? Title, IReadOnlyList<string> Motion);
+/// <param name="Shade">
+/// A photo video's darkening over its pictures, towards the bottom and the edges as the cover video's background has it,
+/// so the band and the title stay readable on a bright photo.
+/// </param>
+public sealed record VideoLayers(string Background, string? Cover, string? Title, IReadOnlyList<string> Motion, string? Shade = null);
 
 /// <summary>Makes the video from a song's FLAC and the layers. Tests replace it.</summary>
 public interface IVideoRenderer

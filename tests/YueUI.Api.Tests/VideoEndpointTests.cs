@@ -205,7 +205,118 @@ public sealed class VideoEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/videos/{done.Id}/file")).StatusCode);
     }
 
-    private static MultipartFormDataContent Form(string format, string effect, string motion, bool showTitle, bool showCover = true, string? color = null)
+    [Fact]
+    public async Task The_folders_under_the_media_root_are_listed_with_what_they_hold()
+    {
+        var dog = Directory.CreateDirectory(Path.Combine(_app.MediaRoot, "Hund")).FullName;
+        File.WriteAllText(Path.Combine(dog, "a.JPG"), "");
+        File.WriteAllText(Path.Combine(dog, "b.heic"), "");
+        File.WriteAllText(Path.Combine(dog, "walk.mov"), "");
+        File.WriteAllText(Path.Combine(dog, "notes.txt"), "");
+        File.WriteAllText(Path.Combine(dog, ".DS_Store"), "");
+        Directory.CreateDirectory(Path.Combine(dog, "Strand"));
+        File.WriteAllText(Path.Combine(dog, "Strand", "c.jpeg"), "");
+        Directory.CreateDirectory(Path.Combine(_app.MediaRoot, "Urlaub"));
+        Directory.CreateDirectory(Path.Combine(_app.MediaRoot, ".hidden"));
+
+        var info = await _app.CreateClient().GetFromJsonAsync<MediaInfo>("/api/videos/media", TestApp.Json);
+
+        Assert.True(info!.Installed);
+        Assert.Equal(_app.MediaRoot, info.Root);
+        Assert.Equal([new MediaFolder("Hund", 3, 1), new MediaFolder("Urlaub", 0, 0)], info.Folders);
+    }
+
+    [Fact]
+    public async Task A_photo_video_cuts_the_folder_to_the_song_and_keeps_the_cover_video_beside_it()
+    {
+        _app.AddSong("20260101-120000-neon", "song2");
+        var folder = Directory.CreateDirectory(Path.Combine(_app.MediaRoot, "Hund")).FullName;
+        var client = _app.CreateClient();
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync(
+            "/api/songs/20260101-120000-neon/song2/videos",
+            Form(VideoFormats.Landscape, VideoEffects.Bars, VideoMotions.None, showTitle: false))).StatusCode);
+        var cover = await WaitForVideo(client, "20260101-120000-neon/song2", v => v.Finished);
+
+        var form = Form(VideoFormats.Landscape, VideoEffects.Bars, VideoMotions.None, showTitle: true, showCover: false, media: "Hund");
+        form.Add(new StringContent("  Hund am Strand "), "motif");
+        var response = await client.PostAsync("/api/songs/20260101-120000-neon/song2/videos", form);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var queued = (await response.Content.ReadFromJsonAsync<VideoState>(TestApp.Json))!;
+        Assert.Equal(("Hund", "Hund am Strand"), (queued.Media, queued.Motif));
+        var done = await WaitForVideo(client, "20260101-120000-neon/song2", v => v.Id == queued.Id && v.Finished);
+        Assert.Equal("done", done.Stage);
+        Assert.Equal((folder, "Hund am Strand"), (_app.Montage.Built!.Value.Folder, _app.Montage.Built.Value.Motif));
+        var layers = _app.Videos.Layers!;
+        Assert.Equal(Path.Combine(_app.Root, "videos", done.Id, "montage.mp4"), layers.Background);
+        Assert.Null(layers.Cover);
+        Assert.True(File.Exists(layers.Title!));
+        Assert.True(File.Exists(layers.Shade!));
+        // The stills and the montage are big and made again on a retry; only the video stays.
+        Assert.False(Directory.Exists(_app.Montage.Built.Value.Work));
+        Assert.False(File.Exists(layers.Background));
+
+        var videos = (await client.GetFromJsonAsync<VideoState[]>("/api/songs/20260101-120000-neon/song2/videos", TestApp.Json))!;
+        Assert.Equal([done.Id, cover.Id], videos.Select(v => v.Id));
+    }
+
+    [Fact]
+    public async Task A_failing_montage_fails_the_video_with_its_reason()
+    {
+        _app.AddSong("20260101-120000-neon", "song2");
+        Directory.CreateDirectory(Path.Combine(_app.MediaRoot, "Hund"));
+        _app.Montage.Failure = "Error: the folder has no photos or videos Tonwerk can read.";
+        var client = _app.CreateClient();
+
+        var response = await client.PostAsync(
+            "/api/songs/20260101-120000-neon/song2/videos",
+            Form(VideoFormats.Portrait, VideoEffects.None, VideoMotions.None, showTitle: false, showCover: false, media: "Hund"));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var failed = await WaitForVideo(client, "20260101-120000-neon/song2", v => v.Finished);
+        Assert.Equal(("failed", _app.Montage.Failure), (failed.Stage, failed.Message));
+        Assert.False(Directory.Exists(_app.Montage.Built!.Value.Work));
+    }
+
+    [Theory]
+    [InlineData("Urlaub", VideoMotions.None, "media")]
+    [InlineData("../songs", VideoMotions.None, "media")]
+    [InlineData(".", VideoMotions.None, "media")]
+    [InlineData("Hund", VideoMotions.Particles, "motion")]
+    public async Task A_photo_video_needs_one_of_the_folders_and_no_motion_layer(string media, string motion, string field)
+    {
+        _app.AddSong("20260101-120000-neon", "song2");
+        Directory.CreateDirectory(Path.Combine(_app.MediaRoot, "Hund"));
+
+        var response = await _app.CreateClient().PostAsync(
+            "/api/songs/20260101-120000-neon/song2/videos",
+            Form(VideoFormats.Landscape, VideoEffects.Bars, motion, showTitle: false, showCover: false, media: media));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains($"\"{field}\"", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Without_the_planner_a_photo_video_is_refused_and_a_cover_video_still_made()
+    {
+        _app.AddSong("20260101-120000-neon", "song2");
+        Directory.CreateDirectory(Path.Combine(_app.MediaRoot, "Hund"));
+        _app.Montage.Installed = false;
+        var client = _app.CreateClient();
+
+        var refused = await client.PostAsync(
+            "/api/songs/20260101-120000-neon/song2/videos",
+            Form(VideoFormats.Landscape, VideoEffects.Bars, VideoMotions.None, showTitle: false, showCover: false, media: "Hund"));
+        var cover = await client.PostAsync(
+            "/api/songs/20260101-120000-neon/song2/videos",
+            Form(VideoFormats.Landscape, VideoEffects.Bars, VideoMotions.None, showTitle: false));
+
+        Assert.Equal(HttpStatusCode.NotImplemented, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, cover.StatusCode);
+        Assert.False((await client.GetFromJsonAsync<MediaInfo>("/api/videos/media", TestApp.Json))!.Installed);
+    }
+
+    private static MultipartFormDataContent Form(string format, string effect, string motion, bool showTitle, bool showCover = true, string? color = null, string? media = null)
     {
         var layout = VideoLayout.For(format);
         var form = new MultipartFormDataContent
@@ -217,7 +328,12 @@ public sealed class VideoEndpointTests : IDisposable
             { new StringContent(showCover ? "true" : "false"), "showCover" },
             { new StringContent(showTitle ? "true" : "false"), "showTitle" },
         };
-        var names = new List<string> { "background" };
+        if (media is not null)
+        {
+            form.Add(new StringContent(media), "media");
+        }
+        // A photo video's background is its pictures, darkened by the shade.
+        var names = media is null ? new List<string> { "background" } : ["shade"];
         if (showCover)
         {
             names.Add("cover");

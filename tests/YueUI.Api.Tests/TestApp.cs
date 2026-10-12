@@ -69,6 +69,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeVideoRenderer Videos { get; } = new();
 
+    public FakeMontage Montage { get; } = new();
+
+    /// <summary>Where photo videos look for their folders (<c>Montage:MediaRoot</c>); empty until a test fills it.</summary>
+    public string MediaRoot => Path.Combine(Root, "media");
+
     public FakeImages Images { get; } = new();
 
     public FakeAudioMidi AudioMidi { get; } = new();
@@ -181,6 +186,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
             services.AddSingleton<ISpeechEngine>(Speech);
             services.AddSingleton<Video.IVideoRenderer>(Videos);
+            services.AddSingleton<Video.IMontageBuilder>(Montage);
+            services.Configure<Video.MontageOptions>(options => options.MediaRoot = MediaRoot);
             services.AddSingleton<Images.IImageEngine>(Images);
             services.AddSingleton<AudioMidi.IAudioMidiEngine>(AudioMidi);
             services.Configure<Images.ImageOptions>(options =>
@@ -985,6 +992,37 @@ public sealed class FakeVideoRenderer : Video.IVideoRenderer
             throw new Video.VideoException(failure);
         }
         await File.WriteAllBytesAsync(output, Mp4, cancellationToken);
+    }
+}
+
+/// <summary>Writes a few bytes as the montage instead of planning and cutting; records what it was asked for.</summary>
+public sealed class FakeMontage : Video.IMontageBuilder
+{
+    public bool Installed { get; set; } = true;
+
+    /// <summary>Set to make the montage fail like the planner would.</summary>
+    public string? Failure { get; set; }
+
+    public (string Folder, string? Motif, string Work)? Built { get; private set; }
+
+    public async Task BuildAsync(
+        Video.VideoState video,
+        string flac,
+        string folder,
+        string work,
+        string output,
+        Action<double> progress,
+        CancellationToken cancellationToken)
+    {
+        Built = (folder, video.Motif, work);
+        Directory.CreateDirectory(work);
+        await File.WriteAllTextAsync(Path.Combine(work, "still-0001.jpg"), "still", cancellationToken);
+        progress(0.5);
+        if (Failure is { } failure)
+        {
+            throw new Video.VideoException(failure);
+        }
+        await File.WriteAllBytesAsync(output, FakeVideoRenderer.Mp4, cancellationToken);
     }
 }
 

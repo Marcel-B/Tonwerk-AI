@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Checkbox from 'primevue/checkbox'
-import { addVideo, deleteVideo, fetchVideoFile, listVideos, saveBlob, videoUrl } from '../api'
+import { addVideo, deleteVideo, fetchMediaFolders, fetchVideoFile, listVideos, saveBlob, videoUrl } from '../api'
 import { loadExportSettings, type ExportTarget } from '../export'
 import { formatBytes, t } from '../i18n'
 import {
@@ -14,10 +14,11 @@ import {
   videoEffects,
   videoFormats,
   videoMotions,
+  videoSources,
   videoTarget,
   type VideoLayers,
 } from '../video'
-import type { VideoState } from '../types'
+import type { MediaInfo, VideoState } from '../types'
 
 /**
  * App.vue holds the one dialog for music videos; the library and the song menu open it through `openVideo`. The
@@ -37,12 +38,20 @@ const effect = ref(stored.effect)
 const motion = ref(stored.motion)
 const showCover = ref(stored.showCover)
 const showTitle = ref(stored.showTitle)
+const source = ref(stored.source)
+const media = ref(stored.media)
+const motif = ref(stored.motif)
+const photos = computed(() => source.value === 'photos')
+/** What the picture looks like; the motif only matters on the server, so typing it draws nothing again. */
 const settings = computed(() => ({
   format: format.value,
   effect: effect.value,
   motion: motion.value,
   showCover: showCover.value,
   showTitle: showTitle.value,
+  source: source.value,
+  media: media.value,
+  motif: '',
 }))
 
 /** The artist the export dialog remembers goes under the title. */
@@ -51,7 +60,49 @@ const subtitle = loadExportSettings().artist
 const formatOptions = computed(() => videoFormats.map((value) => ({ value, label: t(`videoFormat_${value}`) })))
 const effectOptions = computed(() => videoEffects.map((value) => ({ value, label: t(`videoEffect_${value}`) })))
 const motionOptions = computed(() => videoMotions.map((value) => ({ value, label: t(`videoMotion_${value}`) })))
+const sourceOptions = computed(() => videoSources.map((value) => ({ value, label: t(`videoSource_${value}`) })))
 
+/** The Mac's folders of pictures, asked for once photos are chosen and again on the refresh button. */
+const mediaInfo = ref<MediaInfo | null>(null)
+const loadingMedia = ref(false)
+const folderOptions = computed(() =>
+  (mediaInfo.value?.folders ?? []).map((folder) => ({
+    value: folder.name,
+    label: t('videoFolderCounts', { name: folder.name, photos: folder.photos, videos: folder.videos }),
+    disabled: folder.photos + folder.videos === 0,
+  })),
+)
+
+async function loadMedia(): Promise<void> {
+  loadingMedia.value = true
+  try {
+    mediaInfo.value = await fetchMediaFolders()
+    const usable = mediaInfo.value.folders.filter((folder) => folder.photos + folder.videos > 0)
+    if (!usable.some((folder) => folder.name === media.value)) {
+      media.value = usable[0]?.name ?? ''
+    }
+  } catch (caught) {
+    emit('error', caught instanceof Error ? caught.message : String(caught))
+  } finally {
+    loadingMedia.value = false
+  }
+}
+
+watch(
+  [photos, videoTarget],
+  ([wanted, target]) => {
+    if (wanted && target) {
+      void loadMedia()
+    }
+  },
+  { immediate: true },
+)
+
+watch(motif, () => saveVideoSettings({ ...settings.value, motif: motif.value }))
+
+const ready = computed(
+  () => !!layers.value && !drawing.value && (!photos.value || (!!mediaInfo.value?.installed && media.value !== '')),
+)
 const layers = ref<VideoLayers | null>(null)
 const preview = ref<string | null>(null)
 const drawing = ref(false)
@@ -114,7 +165,7 @@ watch(
 )
 
 watch(settings, () => {
-  saveVideoSettings(settings.value)
+  saveVideoSettings({ ...settings.value, motif: motif.value })
   if (videoTarget.value) {
     void redraw(videoTarget.value)
   }
@@ -138,14 +189,23 @@ const videos = computed(() => {
 
 async function start(): Promise<void> {
   const target = videoTarget.value
-  if (!target || !layers.value || sending.value) {
+  if (!target || !layers.value || sending.value || !ready.value) {
     return
   }
   sending.value = true
   try {
+    const { format, effect, motion, showCover, showTitle } = settings.value
     const video = await addVideo(
       target.songId,
-      { ...settings.value, color: layers.value.color },
+      {
+        format,
+        effect,
+        motion: photos.value ? 'none' : motion,
+        showCover,
+        showTitle,
+        color: layers.value.color,
+        ...(photos.value ? { media: media.value, motif: motif.value.trim() } : {}),
+      },
       await toPngs(layers.value),
     )
     if (videoTarget.value === target) {
@@ -169,10 +229,11 @@ async function remove(video: VideoState): Promise<void> {
 
 function describe(video: VideoState): string {
   return [
+    video.media ? t('videoFromFolder', { name: video.media }) : null,
     t(`videoFormat_${video.format}`),
     video.effect === 'none' ? null : t(`videoEffect_${video.effect}`),
     video.motion === 'none' ? null : t(`videoMotion_${video.motion}`),
-    video.showCover ? null : t('videoWithoutCover'),
+    video.showCover || video.media ? null : t('videoWithoutCover'),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -241,6 +302,46 @@ function close(): void {
         class="w-full"
         :pt="{ pcToggleButton: { root: { class: 'flex-1' } } }"
       />
+      <span class="caption">{{ t('videoSource') }}</span>
+      <SelectButton
+        v-model="source"
+        :options="sourceOptions"
+        option-label="label"
+        option-value="value"
+        :allow-empty="false"
+        :aria-label="t('videoSource')"
+        class="w-full"
+        :pt="{ pcToggleButton: { root: { class: 'flex-1' } } }"
+      />
+      <template v-if="photos">
+        <small v-if="mediaInfo && !mediaInfo.installed" class="danger">{{ t('videoPhotosMissing') }}</small>
+        <template v-else-if="mediaInfo">
+          <div class="flex items-center gap-2">
+            <Select
+              v-model="media"
+              :options="folderOptions"
+              option-label="label"
+              option-value="value"
+              option-disabled="disabled"
+              :placeholder="t('videoFolder')"
+              :aria-label="t('videoFolder')"
+              class="min-w-0 flex-1"
+            />
+            <Button
+              icon="pi pi-refresh"
+              text
+              rounded
+              :loading="loadingMedia"
+              :aria-label="t('videoFoldersReload')"
+              @click="loadMedia"
+            />
+          </div>
+          <small class="muted">{{ t('videoFolderHint', { root: mediaInfo.root }) }}</small>
+          <InputText v-model="motif" :placeholder="t('videoMotifPlaceholder')" :aria-label="t('videoMotif')" fluid />
+          <small class="muted">{{ t('videoMotifHint') }}</small>
+        </template>
+        <i v-else class="pi pi-spin pi-spinner text-muted-color" aria-hidden="true" />
+      </template>
       <span class="caption">{{ t('videoEffect') }}</span>
       <SelectButton
         v-model="effect"
@@ -252,8 +353,9 @@ function close(): void {
         class="w-full"
         :pt="{ pcToggleButton: { root: { class: 'flex-1' } } }"
       />
-      <span class="caption">{{ t('videoMotion') }}</span>
+      <span v-if="!photos" class="caption">{{ t('videoMotion') }}</span>
       <SelectButton
+        v-if="!photos"
         v-model="motion"
         :options="motionOptions"
         option-label="label"
@@ -273,15 +375,9 @@ function close(): void {
           <span>{{ t('videoShowTitle') }}</span>
         </label>
       </div>
-      <small class="muted">{{ t('videoHint') }}</small>
+      <small class="muted">{{ photos ? t('videoPhotosHint') : t('videoHint') }}</small>
       <div class="flex justify-end">
-        <Button
-          type="submit"
-          :label="t('videoStart')"
-          icon="pi pi-video"
-          :loading="sending"
-          :disabled="!layers || drawing"
-        />
+        <Button type="submit" :label="t('videoStart')" icon="pi pi-video" :loading="sending" :disabled="!ready" />
       </div>
     </form>
 

@@ -102,6 +102,8 @@ builder.Services.AddHostedService<AutoVersions>();
 
 // Music videos: the browser draws the still layers, ffmpeg animates and encodes them, one at a time.
 builder.Services.AddSingleton<IVideoRenderer, FfmpegVideoRenderer>();
+builder.Services.Configure<MontageOptions>(builder.Configuration.GetSection(MontageOptions.Section));
+builder.Services.AddSingleton<IMontageBuilder, MontageBuilder>();
 builder.Services.AddSingleton<VideoMaker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<VideoMaker>());
 

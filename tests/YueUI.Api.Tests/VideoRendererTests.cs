@@ -67,6 +67,33 @@ public sealed class VideoRendererTests : IDisposable
     }
 
     [Fact]
+    public async Task A_photo_videos_montage_moves_under_the_band_and_the_title()
+    {
+        if (AacEncoder.FindFfmpeg() is not { } ffmpeg)
+        {
+            return;
+        }
+        var layout = VideoLayout.For(VideoFormats.Landscape);
+        var flac = Path.Combine(_directory, "audio.flac");
+        await Run(ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=110:sample_rate=48000:duration=3", "-ac", "2", flac);
+        var montage = Path.Combine(_directory, "montage.mp4");
+        // A frame short of the song: the last one is held.
+        await Run(ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-f", "lavfi", "-i", $"testsrc2=s={layout.Width}x{layout.Height}:r=30", "-frames:v", "89",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", montage);
+        var title = await Picture(ffmpeg, "title.png", $"color=black@0:s={layout.Width}x{layout.Height},format=rgba,drawbox=x=100:y=600:w=800:h=60:color=white@1:t=fill");
+        var shade = await Picture(ffmpeg, "shade.png", $"color=black@0.4:s={layout.Width}x{layout.Height},format=rgba");
+        var video = new VideoState { Id = "v1", SongId = "run/song1", Title = "Hund", Format = VideoFormats.Landscape, Effect = VideoEffects.Bars, ShowCover = false, ShowTitle = true, Media = "Hund" };
+        var output = Path.Combine(_directory, "video.mp4");
+
+        await new FfmpegVideoRenderer(NullLogger<FfmpegVideoRenderer>.Instance)
+            .RenderAsync(video, flac, seconds: null, new VideoLayers(montage, null, title, [], shade), output, _ => { }, CancellationToken.None);
+
+        var probe = await Run(ffmpeg.Replace("ffmpeg", "ffprobe"), "-v", "error", "-count_frames", "-select_streams", "v", "-show_entries", "stream=width,nb_read_frames", "-of", "default=nw=1", output);
+        Assert.Contains($"width={layout.Width}", probe);
+        Assert.Matches("nb_read_frames=(89|90)", probe);
+    }
+
+    [Fact]
     public void The_band_takes_the_videos_colour_or_Tonwerks()
     {
         var video = new VideoState { Id = "v1", SongId = "run/song1", Title = "", Format = VideoFormats.Landscape, Effect = VideoEffects.Bars };

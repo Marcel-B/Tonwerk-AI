@@ -485,6 +485,10 @@ export interface VideoState {
   motion: VideoMotion
   showCover: boolean
   showTitle: boolean
+  /** A photo video's folder of pictures (under the server's `Montage:MediaRoot`); null for a cover video. */
+  media: string | null
+  /** What the pictures should show; CLIP picks the ones that fit best. */
+  motif: string | null
   stage: 'queued' | 'rendering' | 'done' | 'failed' | 'cancelled'
   /** How much is rendered, 0 to 1. */
   fraction: number
@@ -493,6 +497,20 @@ export interface VideoState {
   createdAt: string
   updatedAt: string
   finished: boolean
+}
+
+/** A folder a photo video can take its pictures from (Video/MontageBuilder.cs). */
+export interface MediaFolder {
+  name: string
+  photos: number
+  videos: number
+}
+
+/** `GET /api/videos/media`: whether photo videos are installed, and the folders under the root. */
+export interface MediaInfo {
+  installed: boolean
+  root: string
+  folders: MediaFolder[]
 }
 
 export type VersionStage = 'queued' | 'separating' | 'converting' | 'mixing' | 'done' | 'failed' | 'cancelled'

@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Microsoft.Extensions.Options;
 using YueUI.Api.Data;
 using YueUI.Api.Library;
 using YueUI.Api.Worker;
@@ -9,11 +10,14 @@ namespace YueUI.Api.Video;
 /// Renders music videos one at a time, in the order they were asked for. ffmpeg needs the CPU and a few hundred
 /// megabytes, not the memory the models fight over, so a video does not wait for YuE2, a draft or a voice; it only
 /// slows them down a little. Progress goes out through <see cref="Status.StatusHub.UpdateVideo"/>. After a restart the
-/// unfinished ones start over, since everything they need is on disk.
+/// unfinished ones start over, since everything they need is on disk. A photo video first has its pictures cut to the
+/// song (<see cref="IMontageBuilder"/>), which takes the first part of its progress.
 /// </summary>
 public sealed class VideoMaker(
     SqliteVideoStore store,
     IVideoRenderer renderer,
+    IMontageBuilder montage,
+    IOptions<MontageOptions> montageOptions,
     SongLibrary library,
     Status.StatusHub hub,
     TimeProvider time,
@@ -107,21 +111,40 @@ public sealed class VideoMaker(
             }
             var seconds = SongLibrary.SecondsOf(directory);
             var shown = 0.0;
+            void Report(double fraction)
+            {
+                // A step per per cent is enough for the ring and spares every browser thirty events a second.
+                if (fraction - shown >= 0.01)
+                {
+                    shown = fraction;
+                    current = Save(current with { Fraction = fraction }, persist: false);
+                }
+            }
+            // The montage is the photo video's slower half: planning, then a few seconds of ffmpeg per shot.
+            var rendered = 0.0;
+            if (video.Media is not null)
+            {
+                if (MediaFolders.Resolve(montageOptions.Value.ResolvedMediaRoot, video.Media) is not { } folder)
+                {
+                    throw new VideoException($"The folder {video.Media} is gone.");
+                }
+                rendered = 0.6;
+                await montage.BuildAsync(
+                    video,
+                    Path.Combine(directory, "audio.flac"),
+                    folder,
+                    store.WorkFolder(video.Id),
+                    store.MontagePath(video.Id),
+                    fraction => Report(rendered * fraction),
+                    cancel.Token);
+            }
             await renderer.RenderAsync(
                 video,
                 Path.Combine(directory, "audio.flac"),
                 seconds,
                 store.Layers(video),
                 store.VideoPath(video.Id),
-                fraction =>
-                {
-                    // A step per per cent is enough for the ring and spares every browser thirty events a second.
-                    if (fraction - shown >= 0.01)
-                    {
-                        shown = fraction;
-                        current = Save(current with { Fraction = fraction }, persist: false);
-                    }
-                },
+                fraction => Report(rendered + (1 - rendered) * fraction),
                 cancel.Token);
             Save(current with { Stage = "done", Fraction = 1, Bytes = new FileInfo(store.VideoPath(video.Id)).Length });
             ReplaceOlder(video);
@@ -149,19 +172,38 @@ public sealed class VideoMaker(
                 _running = null;
                 _cancel = null;
             }
+            // Stills, shots and the montage are hundreds of megabytes and made again on a retry.
+            DeleteMontage(video.Id);
+        }
+    }
+
+    private void DeleteMontage(string id)
+    {
+        try
+        {
+            if (Directory.Exists(store.WorkFolder(id)))
+            {
+                Directory.Delete(store.WorkFolder(id), recursive: true);
+            }
+            File.Delete(store.MontagePath(id));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning("Could not clean up photo video {Id}: {Message}", id, exception.Message);
         }
     }
 
     /// <summary>
     /// A video is reproducible from its song and settings, so a new one replaces the song's older ones in the same
     /// format, done or failed, once it is finished itself; until then the old one stays to be watched. The other
-    /// format is kept, since YouTube and Shorts want both. Ones still waiting or rendering are left alone.
+    /// format is kept, since YouTube and Shorts want both, and so are videos of the other kind: a photo video does not
+    /// replace the cover video, nor one of another folder. Ones still waiting or rendering are left alone.
     /// </summary>
     private void ReplaceOlder(VideoState video)
     {
         foreach (var older in store.ForSong(video.SongId))
         {
-            if (older.Id != video.Id && older.Format == video.Format && older.CreatedAt <= video.CreatedAt
+            if (older.Id != video.Id && older.Format == video.Format && older.Media == video.Media && older.CreatedAt <= video.CreatedAt
                 && older.Stage is "done" or "failed")
             {
                 store.Remove(older.Id);

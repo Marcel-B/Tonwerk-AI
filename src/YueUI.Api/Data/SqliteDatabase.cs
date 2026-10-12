@@ -459,6 +459,19 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 19;
                     """);
             }
+            if (current < 20)
+            {
+                // Photo videos: the folder of pictures cut to the song and the motif they were picked by; null for
+                // the cover videos made before.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    ALTER TABLE song_videos ADD COLUMN media TEXT NULL;
+                    ALTER TABLE song_videos ADD COLUMN motif TEXT NULL;
+                    PRAGMA user_version = 20;
+                    """);
+            }
             _ready = true;
         }
     }

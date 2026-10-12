@@ -567,9 +567,12 @@ export function videoUrl(id: string, download = false): string {
   return `${apiBase}/api/videos/${id}/file${download ? '?download=true' : ''}`
 }
 
-/** The MP4 as a file for the share sheet, fetched first since Safari wants the file within the tap. */
-export async function fetchVideoFile(id: string): Promise<File> {
-  const response = await send(`/api/videos/${id}/file?download=true`)
+/**
+ * The MP4 as a file for the share sheet, fetched first since Safari wants the file within the tap. With `small`, the
+ * 720p copy for a messenger, which the server makes on the first request.
+ */
+export async function fetchVideoFile(id: string, small = false): Promise<File> {
+  const response = await send(`/api/videos/${id}/file?download=true${small ? '&small=true' : ''}`)
   const name = fileName(response.headers.get('Content-Disposition')) ?? 'Tonwerk.mp4'
   return new File([await response.blob()], name, { type: 'video/mp4' })
 }

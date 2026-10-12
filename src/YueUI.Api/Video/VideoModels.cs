@@ -175,6 +175,13 @@ public interface IVideoRenderer
         string output,
         Action<double> progress,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A small copy of a finished video to send through a messenger (720p, a few Mbit/s): the video itself stays at
+    /// the quality YouTube gets, which encodes everything again anyway, but is hundreds of megabytes for a photo video.
+    /// </summary>
+    /// <exception cref="VideoException">ffmpeg failed; the message says why.</exception>
+    Task ShrinkAsync(string source, string format, string output, CancellationToken cancellationToken);
 }
 
 public sealed class VideoException(string message) : Exception(message);

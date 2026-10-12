@@ -993,6 +993,21 @@ public sealed class FakeVideoRenderer : Video.IVideoRenderer
         }
         await File.WriteAllBytesAsync(output, Mp4, cancellationToken);
     }
+
+    public static readonly byte[] SmallMp4 = [.. "ftypisom"u8, 9];
+
+    /// <summary>How often a small copy was made.</summary>
+    public int Shrunk { get; private set; }
+
+    public async Task ShrinkAsync(string source, string format, string output, CancellationToken cancellationToken)
+    {
+        Shrunk++;
+        if (Failure is { } failure)
+        {
+            throw new Video.VideoException(failure);
+        }
+        await File.WriteAllBytesAsync(output, SmallMp4, cancellationToken);
+    }
 }
 
 /// <summary>Writes a few bytes as the montage instead of planning and cutting; records what it was asked for.</summary>

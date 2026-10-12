@@ -244,8 +244,9 @@ const canShareFiles = typeof navigator.canShare === 'function'
 async function prepareShare(video: VideoState): Promise<void> {
   preparing.value = video.id
   try {
-    const file = await fetchVideoFile(video.id)
-    if (navigator.canShare({ files: [file] })) {
+    // The share sheet leads to messengers, so it gets the small copy; the download keeps the full quality for YouTube.
+    const file = await fetchVideoFile(video.id, true)
+    if (canShareFiles && navigator.canShare({ files: [file] })) {
       shareFile.value = { id: video.id, file }
     } else {
       saveBlob(file, file.name)
@@ -421,15 +422,16 @@ function close(): void {
                 text
                 rounded
                 :href="videoUrl(video.id, true)"
-                :aria-label="t('shareSave')"
+                :aria-label="t('videoSaveFull')"
+                :title="t('videoSaveFull')"
               />
               <Button
-                v-if="canShareFiles"
-                icon="pi pi-share-alt"
+                :icon="canShareFiles ? 'pi pi-share-alt' : 'pi pi-send'"
                 text
                 rounded
                 :loading="preparing === video.id"
-                :aria-label="t('share')"
+                :aria-label="t('videoShareSmall')"
+                :title="t('videoShareSmall')"
                 @click="prepareShare(video)"
               />
             </template>

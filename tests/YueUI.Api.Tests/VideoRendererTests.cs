@@ -94,6 +94,32 @@ public sealed class VideoRendererTests : IDisposable
     }
 
     [Fact]
+    public async Task The_small_copy_is_720p_with_the_same_length_and_far_fewer_bytes()
+    {
+        if (AacEncoder.FindFfmpeg() is not { } ffmpeg)
+        {
+            return;
+        }
+        // Noise is the worst case for an encoder, like a photo zooming on every beat.
+        var source = Path.Combine(_directory, "video.mp4");
+        await Run(ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "nullsrc=s=1080x1920:r=30:d=4,geq=random(1)*255:128:128",
+            "-f", "lavfi", "-i", "sine=frequency=220:sample_rate=48000:duration=4",
+            "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "320k", "-shortest", source);
+        var output = Path.Combine(_directory, "small.mp4");
+
+        await new FfmpegVideoRenderer(NullLogger<FfmpegVideoRenderer>.Instance).ShrinkAsync(source, VideoFormats.Portrait, output, CancellationToken.None);
+
+        var probe = await Run(ffmpeg.Replace("ffmpeg", "ffprobe"), "-v", "error", "-count_frames", "-show_entries", "stream=codec_type,width,height,nb_read_frames", "-of", "default=nw=1", output);
+        Assert.Contains("width=720", probe);
+        Assert.Contains("height=1280", probe);
+        Assert.Contains("nb_read_frames=120", probe);
+        Assert.Contains("codec_type=audio", probe);
+        // 2.5 Mbit/s and 128 kbit/s for four seconds, with room for the rate control's buffer.
+        Assert.InRange(new FileInfo(output).Length, 1, 2_000_000);
+        Assert.True(new FileInfo(output).Length < new FileInfo(source).Length / 3);
+    }
+
+    [Fact]
     public void The_band_takes_the_videos_colour_or_Tonwerks()
     {
         var video = new VideoState { Id = "v1", SongId = "run/song1", Title = "", Format = VideoFormats.Landscape, Effect = VideoEffects.Bars };

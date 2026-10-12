@@ -21,7 +21,7 @@ internal sealed record MidiContent(
 /// <param name="Texts">Text events of the track, which is where <see cref="MidiRenderer"/> writes the chord names.</param>
 internal sealed record MidiSource(string Name, int Channel, IReadOnlyList<MidiNote> Notes, IReadOnlyList<MidiText> Texts);
 
-internal readonly record struct MidiNote(long Start, long End, int Pitch);
+internal readonly record struct MidiNote(long Start, long End, int Pitch, int Velocity = 100);
 
 internal readonly record struct MidiTempo(long Tick, double Bpm);
 
@@ -78,7 +78,7 @@ internal static class MidiFileReader
             trackNumber++;
             string? name = null;
             var texts = new List<MidiText>();
-            var open = new Dictionary<(int Channel, int Pitch), Queue<long>>();
+            var open = new Dictionary<(int Channel, int Pitch), Queue<(long Start, int Velocity)>>();
             var notes = new Dictionary<int, List<MidiNote>>();
             var time = 0L;
             foreach (var midiEvent in chunk.Events)
@@ -111,16 +111,17 @@ internal static class MidiFileReader
                         var slot = ((int)on.Channel, (int)on.NoteNumber);
                         if (!open.TryGetValue(slot, out var starts))
                         {
-                            open[slot] = starts = new Queue<long>();
+                            open[slot] = starts = new Queue<(long Start, int Velocity)>();
                         }
 
-                        starts.Enqueue(time);
+                        starts.Enqueue((time, on.Velocity));
                         break;
                     case NoteOnEvent or NoteOffEvent:
                         var note = (NoteEvent)midiEvent;
                         if (open.TryGetValue(((int)note.Channel, (int)note.NoteNumber), out var pending) && pending.Count > 0)
                         {
-                            Add(notes, note.Channel, new MidiNote(pending.Dequeue(), time, note.NoteNumber));
+                            var (start, velocity) = pending.Dequeue();
+                            Add(notes, note.Channel, new MidiNote(start, time, note.NoteNumber, velocity));
                         }
 
                         break;
@@ -131,8 +132,8 @@ internal static class MidiFileReader
             {
                 while (pending.Count > 0)
                 {
-                    var start = pending.Dequeue();
-                    Add(notes, (FourBitNumber)(byte)channel, new MidiNote(start, Math.Max(time, start + 1), pitch));
+                    var (start, velocity) = pending.Dequeue();
+                    Add(notes, (FourBitNumber)(byte)channel, new MidiNote(start, Math.Max(time, start + 1), pitch, velocity));
                 }
             }
 

@@ -1085,6 +1085,9 @@ public sealed class FakeAudioMidi : AudioMidi.IAudioMidiEngine
 
     public List<AudioMidi.AudioMidiJob> Jobs { get; } = [];
 
+    /// <summary>The file a job writes, for tests that read it back; <see cref="Midi"/> (a bare header) without one.</summary>
+    public Func<AudioMidi.AudioMidiJob, byte[]>? Output { get; set; }
+
     /// <summary>The audio each job got, read while it still existed (an upload's folder goes with the request).</summary>
     public List<byte[]> Audio { get; } = [];
 
@@ -1099,7 +1102,7 @@ public sealed class FakeAudioMidi : AudioMidi.IAudioMidiEngine
         {
             throw new AudioMidi.AudioMidiException(failure);
         }
-        await File.WriteAllBytesAsync(job.Output, Midi, cancellationToken);
+        await File.WriteAllBytesAsync(job.Output, Output?.Invoke(job) ?? Midi, cancellationToken);
         return new AudioMidi.AudioMidiResult(Notes, 1.5);
     }
 }

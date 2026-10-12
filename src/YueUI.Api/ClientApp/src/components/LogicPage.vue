@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import Checkbox from 'primevue/checkbox'
 import InputGroup from 'primevue/inputgroup'
 import InputGroupAddon from 'primevue/inputgroupaddon'
 import Message from 'primevue/message'
@@ -13,6 +14,7 @@ import {
   listAssignments,
   LogicExportError,
   type ScoreSource,
+  type StemParts,
 } from '../logic/api'
 import { t } from '../logic/i18n'
 import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from '../logic/instruments'
@@ -23,6 +25,7 @@ import { clearFormState, defaultFormState, loadFormState, saveFormState, toConve
 import { baseName, download } from '../logic/score'
 import type { Assignments, ConversionResult, Diagnostic } from '../logic/types'
 import { audioUrl, listStems } from '../api'
+import { loadMidiInfo, midiInfo } from '../audioMidi'
 import { locale } from '../i18n'
 import type { RunInfo, SongInfo, StemSetState } from '../types'
 import { handedMidi, logicSong, openStems, replaceLogicSong } from '../view'
@@ -209,6 +212,59 @@ watch(usableStems, (sets, before) => {
     stemSetId.value = null
   }
 })
+
+// ---- Bass and drums from stems ----------------------------------------------------------------------
+
+/**
+ * The bass (and, as a sketch, kick, snare and hi-hat) heard in a stem instead of the ones generated from the chords.
+ * The set picked for the vocals is taken where it has the stem, else the newest that does: only the four- and
+ * six-stem models (htdemucs, …) separate a bass and drums. Whether to is remembered per browser.
+ */
+const PARTS_KEY = 'yue-ui.logicStemParts'
+function loadPartChoice(): { bass: boolean; drums: boolean } {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PARTS_KEY) ?? '{}') as { bass?: unknown; drums?: unknown }
+    return { bass: stored.bass === true, drums: stored.drums === true }
+  } catch {
+    return { bass: false, drums: false }
+  }
+}
+const partChoice = ref(loadPartChoice())
+watch(
+  partChoice,
+  (value) => {
+    try {
+      localStorage.setItem(PARTS_KEY, JSON.stringify(value))
+    } catch {
+      // Then it is forgotten with the page.
+    }
+    if (result.value) {
+      stale.value = true
+    }
+  },
+  { deep: true },
+)
+
+function setWith(stem: string): StemSetState | null {
+  const sets = songStems.value
+    .filter((set) => set.stage === 'done' && set.stems.some((file) => file.name === stem))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  return sets.find((set) => set.id === stemSetId.value) ?? sets[0] ?? null
+}
+const bassSet = computed(() => setWith('bass'))
+const drumSet = computed(() => setWith('drums'))
+
+/** What goes along with a conversion; only for a library song, and only where Basic Pitch is installed. */
+function stemParts(): StemParts | null {
+  if (mode.value !== 'library' || !midiInfo.value?.installed) {
+    return null
+  }
+  const bass = partChoice.value.bass ? (bassSet.value?.id ?? null) : null
+  const drums = partChoice.value.drums ? (drumSet.value?.id ?? null) : null
+  return bass || drums ? { bass, drums } : null
+}
+
+void loadMidiInfo()
 
 function createStems(): void {
   if (chosen.value) {
@@ -423,7 +479,7 @@ async function convert(): Promise<void> {
   try {
     const options = conversionOptions()
     const drumNotes = drumNotesKey.value
-    result.value = await convertScore(from, options, controller.signal)
+    result.value = await convertScore(from, options, controller.signal, stemParts())
     convertedDrumNotes = drumNotes
     stale.value = false
     // The assignments may have arrived while the score was on its way.
@@ -465,6 +521,7 @@ async function exportLogic(): Promise<void> {
       instrumentsForExport(assignments.value, instruments.value),
       mode.value === 'library' ? stemSetId.value : null,
       (progress) => (logicProgress.value = progress),
+      stemParts(),
     )
     logicWarnings.value = exported.warnings
     download(exported.zip, exported.fileName)
@@ -493,7 +550,10 @@ async function downloadMusicXml(): Promise<void> {
   musicXmlBusy.value = true
   musicXmlError.value = null
   try {
-    download(await exportMusicXml(from, conversionOptions(), outputName.value), `${outputName.value}.musicxml`)
+    download(
+      await exportMusicXml(from, conversionOptions(), outputName.value, stemParts()),
+      `${outputName.value}.musicxml`,
+    )
   } catch (caught) {
     musicXmlError.value =
       caught instanceof ApiError && caught.status === 0
@@ -622,6 +682,25 @@ watch(
             <p v-else-if="usableStems.length === 0" class="hint muted mt-0">{{ t('stemsMissing') }}</p>
             <p v-else-if="stemSetId" class="hint muted mt-0">{{ t('stemsHint') }}</p>
           </div>
+
+          <div v-if="midiInfo?.installed && (bassSet || drumSet)" class="flex flex-col gap-2 mt-2">
+            <span class="text-sm text-muted-color">{{ t('stemPartsTitle') }}</span>
+            <div v-if="bassSet" class="flex items-center gap-2">
+              <Checkbox v-model="partChoice.bass" input-id="logic-stem-bass" binary />
+              <label for="logic-stem-bass" class="text-sm">{{ t('stemPartsBass') }}</label>
+            </div>
+            <div v-if="drumSet" class="flex items-center gap-2">
+              <Checkbox v-model="partChoice.drums" input-id="logic-stem-drums" binary />
+              <label for="logic-stem-drums" class="text-sm">{{ t('stemPartsDrums') }}</label>
+            </div>
+            <p class="hint muted mt-0">{{ t('stemPartsHint') }}</p>
+          </div>
+          <p
+            v-else-if="midiInfo?.installed && chosen && songStems.some((set) => set.stage === 'done')"
+            class="hint muted mt-2"
+          >
+            {{ t('stemPartsMissing') }}
+          </p>
         </div>
 
         <!-- Score and audio side by side; on a phone each one takes the whole row. -->

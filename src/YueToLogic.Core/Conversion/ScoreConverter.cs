@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using YueToLogic.Core.Abc;
 using YueToLogic.Core.Arrangement;
 using YueToLogic.Core.Diagnostics;
@@ -42,6 +43,13 @@ public sealed record ConversionOptions
     /// sends none and the receiving instrument keeps the sound it is on.
     /// </summary>
     public IReadOnlyDictionary<string, int> MidiPrograms { get; set; } = new Dictionary<string, int>();
+
+    /// <summary>
+    /// Bass and drums heard in the song's recording, set by the host (from separated stems), never by a request's JSON:
+    /// they are MIDI files, not settings.
+    /// </summary>
+    [JsonIgnore]
+    public RecordedParts? Recorded { get; set; }
 }
 
 /// <param name="Success">Whether a score could be read; warnings in <see cref="Diagnostics"/> do not affect it.</param>
@@ -76,7 +84,7 @@ public sealed class ScoreConverter(IAbcScoreParser parser, IScoreArranger arrang
             return new ConversionResult(false, null, null, parsed.Diagnostics);
         }
 
-        var arranged = arranger.Arrange(parsed.Score, options.Arrangement);
+        var arranged = arranger.Arrange(parsed.Score, options.Arrangement, options.Recorded);
         var score = arranged.Score;
 
         var midi = renderer.Render(

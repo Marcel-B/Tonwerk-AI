@@ -57,3 +57,31 @@ test('without stems the button leads to the voices page with the song picked', a
   await page.getByRole('button', { name: 'Stems erzeugen' }).click()
   await expect(page).toHaveURL(/#\/voices\/run-1\/song1$/)
 })
+
+test("bass and drums come from the song's stems once asked for", async ({ page, api }) => {
+  api.answers.set('GET /api/audio-midi', () => ({ installed: true, python: '' }))
+  api.answers.set('GET /api/stems', () => [
+    stems('new', '2026-10-02T10:00:00Z', ['vocals', 'vocals_dry', 'instrumental']),
+    stems('old', '2026-10-01T10:00:00Z', ['vocals', 'drums', 'bass', 'other']),
+  ])
+  await page.goto('#/logic/run-1/song1')
+
+  await expect(page.getByText('Aus den Stems als MIDI')).toBeVisible()
+  await page.getByLabel('Bass aus dem Bass-Stem statt aus den Akkorden').check()
+  await page.getByRole('button', { name: 'Konvertieren' }).click()
+
+  // The set picked for the vocals has no bass, so the one that has it goes along.
+  await expect.poll(() => api.callsTo('POST', '/api/logic/convert').length).toBeGreaterThan(0)
+  const form = String(api.callsTo('POST', '/api/logic/convert').at(-1)!.body)
+  expect(form).toMatch(/name="bassStems"\r\n\r\nold/)
+  expect(form).not.toContain('drumStems')
+})
+
+test('without bass or drum stems the page says which models make them', async ({ page, api }) => {
+  api.answers.set('GET /api/audio-midi', () => ({ installed: true, python: '' }))
+  api.answers.set('GET /api/stems', () => [stems('new', '2026-10-02T10:00:00Z', ['vocals', 'instrumental'])])
+  await page.goto('#/logic/run-1/song1')
+
+  await expect(page.getByText(/z\. B\. htdemucs/)).toBeVisible()
+  await expect(page.getByText('Aus den Stems als MIDI')).toHaveCount(0)
+})

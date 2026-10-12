@@ -129,7 +129,9 @@ Jeder Song belegt mit FLAC, Tokens und Zwischendateien einiges an Platz. Die Bib
 
 ### Auf eine externe Platte verlegen
 
-Modelle, Songs und was Tonwerk sonst an großen Ordnern anlegt, lassen sich auf eine externe Platte verlegen. `deploy/move-to-volume.sh` ohne Angaben zeigt, was sich verlegen lässt, wie groß es ist und wo es liegt: `yue2` (die Modelle von YuE2, auch die von YuE Studio), `ane`, `songs`, `lmstudio`, `speech`, `images`, `acestep` (Modelle von ACE-Step), `acesongs` (Songs von ACE-Step), `separator`, `seedvc`, `versions`, `stems` und `videos`.
+Modelle, Songs und was Tonwerk sonst an großen Ordnern anlegt, lassen sich auf eine externe Platte verlegen. `deploy/move-to-volume.sh` ohne Angaben zeigt, was sich verlegen lässt, wie groß es ist und wo es liegt: `yue2` (die Modelle von YuE2, auch die von YuE Studio), `ane`, `songs`, `lmstudio`, `speech`, `images`, `montage` (die CLIP-Modelle der Fotovideos), `acestep` (Modelle von ACE-Step), `acesongs` (Songs von ACE-Step), `separator`, `seedvc`, `versions`, `stems` und `videos`.
+
+Ein Teil, den es noch nicht gibt, weil das Feature erst später installiert wird oder seine Modelle erst beim ersten Gebrauch lädt, lässt sich vorab verlegen: Das Skript legt dann einen leeren Ordner auf der Platte an und verlinkt ihn, sodass die Downloads gleich dort landen. Die Python-Umgebungen der Werkzeuge (`env`, je ein bis zwei GB) bleiben auf der internen Platte; Audio zu MIDI bringt sein kleines Modell darin mit und legt sonst nichts Großes an.
 
 ```sh
 deploy/move-to-volume.sh                              # Übersicht

@@ -77,6 +77,10 @@ public sealed class PushNotifier(Status.StatusHub hub, PushStore store, IPushSen
         {
             _finished[$"video:{video.Id}"] = video.Finished;
         }
+        foreach (var job in snapshot.Ace ?? [])
+        {
+            _finished[$"ace:{job.Id}"] = job.Finished;
+        }
         if (snapshot.Lyrics is { } lyrics)
         {
             _finished[$"lyrics:{lyrics.Id}"] = lyrics.Finished;
@@ -105,6 +109,9 @@ public sealed class PushNotifier(Status.StatusHub hub, PushStore store, IPushSen
                 break;
             case Video.VideoState video when Finishes($"video:{video.Id}", video.Finished) && video.Stage != "cancelled":
                 Queue($"video:{video.Id}", language => PushTexts.Video(video, language));
+                break;
+            case Ace.AceJob job when Finishes($"ace:{job.Id}", job.Finished) && job.Stage != "cancelled":
+                Queue($"ace:{job.Id}", language => PushTexts.Ace(job, language));
                 break;
             case LyricsState lyrics when Finishes($"lyrics:{lyrics.Id}", lyrics.Finished):
                 Queue("lyrics", language => PushTexts.Lyrics(lyrics, language));

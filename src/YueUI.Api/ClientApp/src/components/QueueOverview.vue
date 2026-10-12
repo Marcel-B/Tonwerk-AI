@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { t, type MessageKey } from '../i18n'
 import { holderOf, modelOf, type Model, type VoiceWork } from '../queueModels'
 import type {
+  AceJob,
   ImageState,
   LargeModel,
   LyricsState,
@@ -35,6 +36,8 @@ const props = defineProps<{
   images: ImageState[]
   /** Music videos; ffmpeg renders them on the CPU beside the models. */
   videos: VideoState[]
+  /** ACE-Step's songs; it takes the memory like the others. */
+  ace: AceJob[]
 }>()
 
 const models: { model: Model; icon: string; label: MessageKey }[] = [
@@ -43,6 +46,7 @@ const models: { model: Model; icon: string; label: MessageKey }[] = [
   { model: 'voice', icon: 'pi pi-user', label: 'modelVoice' },
   { model: 'speech', icon: 'pi pi-comments', label: 'modelSpeech' },
   { model: 'image', icon: 'pi pi-palette', label: 'modelImage' },
+  { model: 'ace', icon: 'pi pi-wave-pulse', label: 'modelAce' },
   { model: 'transcription', icon: 'pi pi-microphone', label: 'modelTranscription' },
   { model: 'video', icon: 'pi pi-video', label: 'modelVideo' },
 ]
@@ -57,6 +61,7 @@ const shown = computed(() =>
       case 'speech':
         return props.takes.some((take) => !take.finished)
       case 'image':
+      case 'ace':
       case 'transcription':
       case 'video':
         return running(m.model) + waiting(m.model) > 0
@@ -80,6 +85,8 @@ function running(model: Model): number {
       return props.takes.filter((take) => !take.finished && take.stage !== 'queued').length
     case 'image':
       return props.images.filter((i) => i.stage === 'loading' || i.stage === 'painting').length
+    case 'ace':
+      return props.ace.filter((job) => !job.finished && job.stage !== 'queued').length
     case 'transcription':
       return props.transcriptions.filter((tr) => !tr.finished).length
     case 'video':
@@ -97,6 +104,8 @@ function waiting(model: Model): number {
       return props.images.filter((i) => i.stage === 'queued').length
     case 'video':
       return props.videos.filter((v) => v.stage === 'queued').length
+    case 'ace':
+      return props.ace.filter((job) => job.stage === 'queued').length
     default:
       return props.jobs.filter((j) => modelOf(j) === model).length
   }

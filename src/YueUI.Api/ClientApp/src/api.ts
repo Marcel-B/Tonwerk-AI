@@ -39,6 +39,9 @@ import type {
   MediaInfo,
   ImageInfo,
   ImageState,
+  AceInfo,
+  AceJob,
+  AceSongRequest,
   MemoryInfo,
   VoiceInfo,
   WorkerInfo,
@@ -710,6 +713,25 @@ export async function deleteImage(id: string): Promise<void> {
   await send(`/api/images/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+export async function getAce(): Promise<AceInfo> {
+  return (await send('/api/ace')).json() as Promise<AceInfo>
+}
+
+/** Queues a song for ACE-Step; its progress arrives as `ace` events, the songs in the library once done. */
+export async function composeAce(request: AceSongRequest): Promise<AceJob> {
+  return (await send('/api/ace', json('POST', request))).json() as Promise<AceJob>
+}
+
+/** Stops a job in the works, or forgets a finished one (its songs stay in the library). */
+export async function deleteAceJob(id: string): Promise<void> {
+  await send(`/api/ace/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** What ACE-Step was asked for an ACE song, with its own seed and lyrics, to make it again on the page. */
+export async function aceSongRequest(songId: string): Promise<AceSongRequest> {
+  return (await send(`/api/songs/${songId}/ace`)).json() as Promise<AceSongRequest>
+}
+
 export interface EventHandlers {
   snapshot(snapshot: StatusSnapshot): void
   song(song: SongState): void
@@ -729,6 +751,8 @@ export interface EventHandlers {
   video(video: VideoState): void
   /** A painted cover candidate changed; a deleted one arrives as cancelled. */
   image(image: ImageState): void
+  /** An ACE-Step job changed; a stopped one arrives as cancelled. */
+  ace(job: AceJob): void
   queue(queue: QueuedJob[]): void
   /** Another large model took the memory, or gave it back. */
   memory(memory: MemoryInfo): void
@@ -759,6 +783,7 @@ export function subscribe(handlers: EventHandlers): () => void {
   on<SpeechTake>('speech', handlers.speech)
   on<VideoState>('video', handlers.video)
   on<ImageState>('image', handlers.image)
+  on<AceJob>('ace', handlers.ace)
   on<MemoryInfo>('memory', handlers.memory)
   source.onerror = () => handlers.connection(false)
   return () => source.close()

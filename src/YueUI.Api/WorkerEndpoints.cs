@@ -68,6 +68,7 @@ public static class WorkerEndpoints
                 Memory.LargeModel.Lyrics => "lyrics",
                 Memory.LargeModel.Voices => "voices",
                 Memory.LargeModel.Speech => "speech",
+                Memory.LargeModel.Ace => "ace",
                 _ => "images",
             });
         }

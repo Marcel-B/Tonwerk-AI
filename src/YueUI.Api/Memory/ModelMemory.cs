@@ -16,11 +16,14 @@ public enum LargeModel
 
     /// <summary>FLUX.2 Klein painting a cover (Images/ImageMaker.cs).</summary>
     Images,
+
+    /// <summary>ACE-Step's LM and DiT making a song (Ace/AceComposer.cs).</summary>
+    Ace,
 }
 
 /// <summary>
 /// Which large model holds the memory: the one place the rule lives that on 24 GB only one of YuE2, the lyrics model,
-/// separation with Seed-VC, a speech model or FLUX.2 Klein fits at a time.
+/// separation with Seed-VC, a speech model, FLUX.2 Klein or ACE-Step fits at a time.
 /// </summary>
 /// <remarks>
 /// The models besides YuE2 share one slot, taken by compare-and-swap, so two of them can never both have it. YuE2 is

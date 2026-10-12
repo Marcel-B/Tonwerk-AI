@@ -224,6 +224,19 @@ public sealed class WorkerEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Ten_songs_go_to_the_worker_as_one_batch_and_eleven_are_refused()
+    {
+        var refused = await _client.PostAsJsonAsync("/api/generate", new { style = "pop", lyrics = "[verse]\nla", batch = 11 });
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+
+        // The worker composes four at a time and queues the rest itself, so ten simply run through one after another.
+        var response = await _client.PostAsJsonAsync("/api/generate", new { style = "pop", lyrics = "[verse]\nla", batch = 10 });
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var command = await _app.Worker.NextCommand();
+        Assert.Equal(10, (int?)command["batch"]);
+    }
+
+    [Fact]
     public async Task Invalid_requests_are_refused_without_starting_a_worker()
     {
         var response = await _client.PostAsJsonAsync("/api/generate", new { style = "", lyrics = "x", batch = 0, quality = "best", cot = "maybe" });

@@ -401,6 +401,59 @@ export interface StorageInfo {
   totalBytes: number
 }
 
+/** Storage/StorageReport.cs: where the disk went, for the storage page. */
+export interface StorageUsage {
+  dataFolder: string
+  volumes: StorageVolume[]
+  /** Largest first. */
+  categories: StorageCategory[]
+  /** The largest pieces of each kind, largest first. */
+  items: StorageItem[]
+  leftovers: StorageLeftovers
+}
+
+export interface StorageVolume {
+  /** The mount point, `/` or `/Volumes/SSD`. */
+  path: string
+  freeBytes: number
+  totalBytes: number
+}
+
+export type StorageGroup = 'library' | 'models' | 'app'
+
+export interface StorageCategory {
+  id: string
+  group: StorageGroup
+  bytes: number
+  /** How many pieces it holds where that means something (songs, videos, …). */
+  count: number | null
+  path: string
+  /** One of `StorageUsage.volumes`. */
+  volume: string
+}
+
+export type StorageKind = 'song' | 'version' | 'stems' | 'video' | 'swap' | 'cover' | 'image' | 'transcription'
+
+export interface StorageItem {
+  kind: StorageKind
+  /** What its delete endpoint takes; a song's and a cover's is the song id. */
+  id: string
+  songId: string | null
+  title: string
+  /** The voice, the stem model, the video's format, the song's folder, …. */
+  detail: string | null
+  /** What deleting it frees; a song's includes everything that goes with it. */
+  bytes: number
+  createdAt: string | null
+  rating: number | null
+}
+
+/** Files no row points to any more. */
+export interface StorageLeftovers {
+  count: number
+  bytes: number
+}
+
 /** Whether voices can be managed (Seed-VC or ChangeMyVoice) and songs sung with them (the separator as well); VoiceEndpoints.cs. */
 export interface VoiceInfo {
   voicesConfigured: boolean

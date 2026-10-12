@@ -23,6 +23,8 @@ import type {
   SpeechVoice,
   StatusSnapshot,
   StorageInfo,
+  StorageLeftovers,
+  StorageUsage,
   TranscriptionList,
   TranscriptionState,
   TranscriptionTask,
@@ -230,6 +232,16 @@ export async function startBackup(): Promise<BackupStatus> {
 
 export async function getStorage(): Promise<StorageInfo> {
   return (await send('/api/storage')).json() as Promise<StorageInfo>
+}
+
+/** Every kind of file with its size and the largest pieces; walks the disk, so only when the storage page asks. */
+export async function getStorageUsage(): Promise<StorageUsage> {
+  return (await send('/api/storage/usage')).json() as Promise<StorageUsage>
+}
+
+/** Deletes files no row points to any more; answers what was deleted. */
+export async function deleteStorageLeftovers(): Promise<StorageLeftovers> {
+  return (await send('/api/storage/leftovers/delete', { method: 'POST' })).json() as Promise<StorageLeftovers>
 }
 
 /** The song's own cover; the time it was chosen makes a changed cover a new address, past every cache. */

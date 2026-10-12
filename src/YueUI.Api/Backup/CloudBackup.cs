@@ -378,23 +378,20 @@ public sealed class CloudBackup(
     /// <summary>Remote path and local file of everything that goes along besides the ZIP.</summary>
     private IEnumerable<(string Remote, string File)> Candidates()
     {
-        var output = new DirectoryInfo(paths.OutputDir);
-        if (output.Exists)
+        // YuE's runs and ACE-Step's alike; RunNames only takes the worker's run names, which leaves transcriptions and
+        // strays out. Both go under songs/, as the names do not repeat.
+        foreach (var run in library.RunNames().Distinct().Order(StringComparer.Ordinal))
         {
-            foreach (var run in output.EnumerateDirectories().OrderBy(d => d.Name, StringComparer.Ordinal))
+            foreach (var song in library.SongDirectories(run) ?? [])
             {
-                // SongDirectories only accepts the worker's run names, which leaves transcriptions and strays out.
-                foreach (var song in library.SongDirectories(run.Name) ?? [])
+                var name = Path.GetFileName(song);
+                if (host.IsWorkingOn(run, name))
                 {
-                    var name = Path.GetFileName(song);
-                    if (host.IsWorkingOn(run.Name, name))
-                    {
-                        continue;
-                    }
-                    foreach (var file in Below(song, $"songs/{run.Name}/{name}"))
-                    {
-                        yield return file;
-                    }
+                    continue;
+                }
+                foreach (var file in Below(song, $"songs/{run}/{name}"))
+                {
+                    yield return file;
                 }
             }
         }

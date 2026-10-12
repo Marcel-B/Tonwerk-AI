@@ -5,9 +5,10 @@ import type { LargeModel, QueuedJob, TranscriptionState, WorkerInfo } from './ty
  * The large models that take turns in the memory (Queue/JobQueue.cs): YuE2 for songs and renders, the lyrics model in
  * LM Studio, separation plus Seed-VC for voice versions and stems, and the speech lab's text-to-speech models. A
  * transcription is small and runs beside YuE2, but inside the worker, so the other three wait for it. FLUX.2 Klein
- * paints covers in the same memory (Images/ImageMaker.cs); a music video is ffmpeg on the CPU and runs beside them all.
+ * paints covers in the same memory (Images/ImageMaker.cs), and so does ACE-Step, the second song model
+ * (Ace/AceComposer.cs); a music video is ffmpeg on the CPU and runs beside them all.
  */
-export type Model = 'yue' | 'lyrics' | 'voice' | 'speech' | 'image' | 'transcription' | 'video'
+export type Model = 'yue' | 'lyrics' | 'voice' | 'speech' | 'image' | 'ace' | 'transcription' | 'video'
 
 export function modelOf(job: QueuedJob): Model {
   return job.kind === 'lyrics' ? 'lyrics' : job.kind === 'transcription' ? 'transcription' : 'yue'
@@ -29,7 +30,13 @@ export interface VoiceWork {
 }
 
 /** The server's name for each large model besides YuE2 (Memory/ModelMemory.cs), as the queue's tiles name them. */
-const largeModels: Record<LargeModel, Model> = { lyrics: 'lyrics', voices: 'voice', speech: 'speech', images: 'image' }
+const largeModels: Record<LargeModel, Model> = {
+  lyrics: 'lyrics',
+  voices: 'voice',
+  speech: 'speech',
+  images: 'image',
+  ace: 'ace',
+}
 
 /**
  * Which model holds the memory now, or null while none works. The server decides it for the large models besides
@@ -73,6 +80,9 @@ export function waitReason(
   if (holder === 'image') {
     // Likewise while a cover is painted.
     return t('waitImage')
+  }
+  if (holder === 'ace') {
+    return t('waitAce')
   }
   const left = (since: string) => (windowSeconds ?? 0) - (now - new Date(since).getTime()) / 1000
   const oldest = versions.filter((v) => v.stage === 'queued').sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
@@ -140,11 +150,12 @@ export function waitReason(
 
 /**
  * Why a take of the speech lab still waits (SpeechLab.WaitForMemoryAsync): its takes are spoken one at a time, in the
- * order they were asked for, each once YuE2, the lyrics model and the voices have let go of the memory.
+ * order they were asked for, each once YuE2, the lyrics model and the voices have let go of the memory. ACE-Step's
+ * songs wait the same way (AceComposer), as `own`.
  * @param index Its place among the takes in the works, the one being spoken included.
  */
-export function speechWaitReason(index: number, holder: Model | null): string {
-  if (holder === 'speech' || index > 0) {
+export function speechWaitReason(index: number, holder: Model | null, own: Model = 'speech'): string {
+  if (holder === own || index > 0) {
     return t('waitTurn')
   }
   switch (holder) {
@@ -154,8 +165,12 @@ export function speechWaitReason(index: number, holder: Model | null): string {
       return t('waitLyrics')
     case 'voice':
       return t('waitVoice')
+    case 'speech':
+      return t('waitSpeech')
     case 'image':
       return t('waitImage')
+    case 'ace':
+      return t('waitAce')
     case 'transcription':
       return t('waitTranscription')
     default:

@@ -64,6 +64,7 @@ export const logSources = [
   'voices',
   'speech',
   'images',
+  'ace',
   'video',
   'export',
   'logic',
@@ -113,10 +114,12 @@ export interface StatusSnapshot {
   images?: ImageState[] | null
   /** Which large model besides YuE2 holds the memory; the server decides it (Memory/ModelMemory.cs). */
   memory?: MemoryInfo | null
+  /** ACE-Step's songs in the works (and the last finished one); null from a server before them. */
+  ace?: AceJob[] | null
 }
 
 /** The large models besides YuE2 that take turns in the memory. */
-export type LargeModel = 'lyrics' | 'voices' | 'speech' | 'images'
+export type LargeModel = 'lyrics' | 'voices' | 'speech' | 'images' | 'ace'
 
 export interface MemoryInfo {
   holder: LargeModel | null
@@ -272,6 +275,8 @@ export interface SongInfo {
   note: string | null
   /** The formats the song has a finished music video in; empty while it has none. */
   videoFormats: VideoFormat[]
+  /** `ace` for a song ACE-Step made; absent or null for YuE2's. */
+  engine?: 'ace' | null
 }
 
 /**
@@ -758,4 +763,87 @@ export interface ImageInfo {
   installed: boolean
   python: string
   models: ImageModelInfo[]
+}
+
+/** ACE-Step's tasks: a new song, a new style over a library song, or a stretch of one made again. */
+export type AceTask = 'text2music' | 'cover' | 'repaint'
+
+/**
+ * A song asked of ACE-Step (Ace/AceModels.cs `AceSongRequest`); null leaves a value to the model: the LM writes lyrics
+ * and picks tempo, key, metre, length and language, the DiT takes its preset's steps, guidance and shift.
+ */
+export interface AceSongRequest {
+  title?: string | null
+  caption: string
+  lyrics?: string | null
+  instrumental?: boolean | null
+  language?: string | null
+  duration?: number | null
+  bpm?: number | null
+  key?: string | null
+  timeSignature?: number | null
+  seed?: number | null
+  batch?: number | null
+  lmModel?: string | null
+  ditModel?: string | null
+  steps?: number | null
+  guidance?: number | null
+  shift?: number | null
+  solver?: string | null
+  lmTemperature?: number | null
+  lmCfgScale?: number | null
+  lmTopP?: number | null
+  lmTopK?: number | null
+  negativePrompt?: string | null
+  enrichCaption?: boolean | null
+  adapter?: string | null
+  adapterScale?: number | null
+  task?: AceTask | null
+  /** `run/songN` a cover or repaint starts from. */
+  source?: string | null
+  coverStrength?: number | null
+  repaintStart?: number | null
+  repaintEnd?: number | null
+}
+
+export type AceStage =
+  | 'queued'
+  | 'loading'
+  | 'writing'
+  | 'composing'
+  | 'synthesizing'
+  | 'decoding'
+  | 'saving'
+  | 'done'
+  | 'failed'
+  | 'cancelled'
+
+/** A song (or batch) being made by ACE-Step (Ace/AceModels.cs `AceJob`). */
+export interface AceJob {
+  id: string
+  title: string
+  request: AceSongRequest
+  seed: number
+  stage: AceStage
+  /** Of the whole job, roughly. */
+  fraction: number
+  message: string | null
+  /** The run folder the songs went into, once done. */
+  run: string | null
+  seconds: number | null
+  createdAt: string
+  updatedAt: string
+  finished: boolean
+}
+
+/** `GET /api/ace`: whether acestep.cpp is built, which GGUF files are there, and the jobs, newest first. */
+export interface AceInfo {
+  installed: boolean
+  ready: boolean
+  binaries: string
+  models: string
+  lmModels: string[]
+  ditModels: string[]
+  adapters: string[]
+  jobs: AceJob[]
 }

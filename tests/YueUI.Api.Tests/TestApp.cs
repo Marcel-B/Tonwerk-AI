@@ -78,6 +78,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeAudioMidi AudioMidi { get; } = new();
 
+    public FakeAce Ace { get; } = new();
+
     public FakeNextcloud Nextcloud { get; } = new();
 
     /// <summary>The backup folder in the fake Nextcloud; null (the default) leaves the backup off.</summary>
@@ -190,6 +192,12 @@ public sealed class TestApp : WebApplicationFactory<Program>
             services.Configure<Video.MontageOptions>(options => options.MediaRoot = MediaRoot);
             services.AddSingleton<Images.IImageEngine>(Images);
             services.AddSingleton<AudioMidi.IAudioMidiEngine>(AudioMidi);
+            services.AddSingleton<Ace.IAceEngine>(Ace);
+            services.Configure<Ace.AceOptions>(options =>
+            {
+                options.Root = Path.Combine(Root, "ace");
+                options.WaitInterval = TimeSpan.FromMilliseconds(10);
+            });
             services.Configure<Images.ImageOptions>(options =>
             {
                 options.Root = Path.Combine(Root, "images");
@@ -1060,6 +1068,75 @@ public sealed class FakeImages : Images.IImageEngine
         }
         await File.WriteAllBytesAsync(job.Output, Jpeg, cancellationToken);
         return new Images.ImageResult(20.5, 31.25, 8.9);
+    }
+
+    private static TaskCompletionSource CompletedGate()
+    {
+        var gate = new TaskCompletionSource();
+        gate.SetResult();
+        return gate;
+    }
+}
+
+/// <summary>
+/// acestep.cpp: records what it was asked for and writes a WAV per song, with the request as ace-lm would fill it in
+/// (lyrics, tempo, key) when the LM runs; can be held back to see a job in the works.
+/// </summary>
+public sealed class FakeAce : Ace.IAceEngine
+{
+    public bool Installed { get; set; } = true;
+
+    public Ace.AceModelFiles Models { get; set; } = new(
+        ["acestep-5Hz-lm-4B-Q8_0.gguf", "acestep-5Hz-lm-1.7B-Q8_0.gguf"],
+        ["acestep-v15-turbo-Q8_0.gguf", "acestep-v15-sft-Q8_0.gguf"],
+        true,
+        true,
+        ["singer.safetensors"]);
+
+    /// <summary>Held open to keep a job running; completed by default.</summary>
+    public TaskCompletionSource Gate { get; set; } = CompletedGate();
+
+    /// <summary>Set to make the next jobs fail with it.</summary>
+    public string? Failure { get; set; }
+
+    public List<Ace.AceRun> Runs { get; } = [];
+
+    /// <summary>What the source WAV held when the job ran, for covers.</summary>
+    public byte[]? Source { get; private set; }
+
+    public Ace.AceModelFiles Files() => Models;
+
+    public async Task<IReadOnlyList<Ace.AceOutput>> GenerateAsync(Ace.AceRun run, Action<string, double> progress, CancellationToken cancellationToken)
+    {
+        lock (Runs)
+        {
+            Runs.Add(run);
+        }
+        Source = run.SourceAudio is { } source ? await File.ReadAllBytesAsync(source, cancellationToken) : null;
+        progress(run.UsesLm ? "composing" : "synthesizing", 0.4);
+        await Gate.Task.WaitAsync(cancellationToken);
+        if (Failure is { } failure)
+        {
+            throw new Ace.AceException(failure);
+        }
+        var batch = (int?)run.Request["lm_batch_size"] ?? (int?)run.Request["synth_batch_size"] ?? 1;
+        List<Ace.AceOutput> outputs = [];
+        for (var i = 0; i < batch; i++)
+        {
+            var wave = Path.Combine(run.WorkDirectory, $"request{i}0.wav");
+            await File.WriteAllBytesAsync(wave, FakeSpeech.Wav(2.5), cancellationToken);
+            var request = run.Request.DeepClone().AsObject();
+            request["seed"] = (long)run.Request["seed"]! + i;
+            if (run.UsesLm)
+            {
+                request["lyrics"] ??= $"[Verse]\nWritten by the LM {i}";
+                request["bpm"] ??= 120;
+                request["keyscale"] ??= "A minor";
+                request["audio_codes"] = "1,2,3";
+            }
+            outputs.Add(new Ace.AceOutput(wave, request));
+        }
+        return outputs;
     }
 
     private static TaskCompletionSource CompletedGate()

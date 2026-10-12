@@ -28,6 +28,7 @@ namespace YueUI.Api.Data;
 /// Version 13: reference voices of this app's own (<see cref="SqliteReferenceVoiceStore"/>).
 /// Version 14: notes written to songs (<see cref="SqliteSongNoteStore"/>).
 /// Version 15: uploaded recordings sung with another voice (<see cref="SqliteSwapStore"/>).
+/// Version 21: songs asked of ACE-Step, from queued to done (<see cref="SqliteAceStore"/>).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -470,6 +471,21 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     ALTER TABLE song_videos ADD COLUMN media TEXT NULL;
                     ALTER TABLE song_videos ADD COLUMN motif TEXT NULL;
                     PRAGMA user_version = 20;
+                    """);
+            }
+            if (current < 21)
+            {
+                // ACE-Step's jobs; the job is JSON, since nothing queries its fields. The songs lie in ace-songs/.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE ace_jobs (
+                        id TEXT PRIMARY KEY,
+                        job TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 21;
                     """);
             }
             _ready = true;

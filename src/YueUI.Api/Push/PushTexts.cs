@@ -65,6 +65,14 @@ public static class PushTexts
             : (de ? "Video fehlgeschlagen" : "Video failed", WithMessage(which, video.Message));
     }
 
+    public static (string Title, string Body) Ace(Ace.AceJob job, string language)
+    {
+        var de = IsGerman(language);
+        return job.Stage == "done"
+            ? (de ? "ACE-Step-Song fertig" : "ACE-Step song finished", job.Title)
+            : (de ? "ACE-Step-Song fehlgeschlagen" : "ACE-Step song failed", WithMessage(job.Title, job.Message));
+    }
+
     public static (string Title, string Body) Lyrics(LyricsState lyrics, string language)
     {
         var de = IsGerman(language);

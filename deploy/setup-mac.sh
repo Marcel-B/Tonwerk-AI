@@ -10,7 +10,8 @@
 #   deploy/setup-mac.sh --images           plus FLUX.2 Klein for painted covers (deploy/install-images.sh)
 #   deploy/setup-mac.sh --midi             plus Basic Pitch for audio to MIDI (deploy/install-midi.sh)
 #   deploy/setup-mac.sh --montage          plus photo videos cut to the beat (deploy/install-montage.sh)
-#   deploy/setup-mac.sh --all              all six
+#   deploy/setup-mac.sh --ace              plus ACE-Step, the second song model (deploy/install-ace.sh, about 8 GB)
+#   deploy/setup-mac.sh --all              all seven
 #   deploy/setup-mac.sh --engine-from-source
 #                                          replace an engine the YuE Studio app installed by a git checkout
 #   deploy/setup-mac.sh --update           again with the options of the last run, without asking (deploy/update.sh)
@@ -55,6 +56,7 @@ SPEECH=false
 IMAGES=false
 MIDI=false
 MONTAGE=false
+ACE=false
 FROM_SOURCE=false
 UPDATE=false
 AUTO_UPDATE=true
@@ -73,11 +75,12 @@ for argument in "$@"; do
     --images) IMAGES=true ;;
     --midi) MIDI=true ;;
     --montage) MONTAGE=true ;;
-    --all) TRANSCRIPTION=true; VOICES=true; SPEECH=true; IMAGES=true; MIDI=true; MONTAGE=true ;;
+    --ace) ACE=true ;;
+    --all) TRANSCRIPTION=true; VOICES=true; SPEECH=true; IMAGES=true; MIDI=true; MONTAGE=true; ACE=true ;;
     --engine-from-source) FROM_SOURCE=true ;;
     --no-auto-update) AUTO_UPDATE=false ;;
     --update) echo "--update comes first." >&2; exit 2 ;;
-    -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown argument: $argument" >&2; exit 2 ;;
   esac
 done
@@ -334,6 +337,19 @@ if [ "$MIDI" = true ]; then
     "$REPO/deploy/install-midi.sh"
     mkdir -p "$DATA/midi"
     echo "$MIDI_RECIPE" > "$DATA/midi/recipe"
+  fi
+fi
+
+if [ "$ACE" = true ]; then
+  step "ACE-Step"
+  # install-ace.sh pins acestep.cpp; an update runs it only when the script (and with it the pin) changed.
+  ACE_RECIPE="$(cksum < "$REPO/deploy/install-ace.sh")"
+  if [ "$UPDATE" = true ] && [ "$(cat "$DATA/ace/recipe" 2>/dev/null)" = "$ACE_RECIPE" ]; then
+    echo "Unchanged."
+  else
+    "$REPO/deploy/install-ace.sh"
+    mkdir -p "$DATA/ace"
+    echo "$ACE_RECIPE" > "$DATA/ace/recipe"
   fi
 fi
 

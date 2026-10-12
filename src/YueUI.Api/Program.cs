@@ -13,6 +13,7 @@ using YueUI.Api.Push;
 using YueUI.Api.Queue;
 using YueUI.Api.Share;
 using YueUI.Api.Images;
+using YueUI.Api.Ace;
 using YueUI.Api.Speech;
 using YueUI.Api.Video;
 using YueUI.Api.Voices;
@@ -117,6 +118,12 @@ builder.Services.Configure<ImageOptions>(builder.Configuration.GetSection(ImageO
 builder.Services.AddSingleton<IImageEngine, MfluxEngine>();
 builder.Services.AddSingleton<ImageMaker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<ImageMaker>());
+// ACE-Step 1.5 through acestep.cpp: songs of a second engine, one job at a time, into a library folder of their own.
+builder.Services.Configure<AceOptions>(builder.Configuration.GetSection(AceOptions.Section));
+builder.Services.AddSingleton<SqliteAceStore>();
+builder.Services.AddSingleton<IAceEngine, AceCppEngine>();
+builder.Services.AddSingleton<AceComposer>();
+builder.Services.AddHostedService(services => services.GetRequiredService<AceComposer>());
 builder.Services.Configure<AudioMidiOptions>(builder.Configuration.GetSection(AudioMidiOptions.Section));
 builder.Services.AddSingleton<IAudioMidiEngine, BasicPitchEngine>();
 builder.Services.AddSingleton<StemParts>();
@@ -181,6 +188,7 @@ api.MapVideoEndpoints();
 api.MapQueueEndpoints();
 api.MapSpeechEndpoints();
 api.MapImageEndpoints();
+api.MapAceEndpoints();
 api.MapAudioMidiEndpoints();
 api.MapBackupEndpoints();
 api.MapLogEndpoints();

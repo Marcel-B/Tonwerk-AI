@@ -204,6 +204,7 @@ const severityByQuality: Record<string, string> = {
         <strong>{{ t('songN', { n: song.index }) }}</strong>
       </div>
       <div v-if="song.seconds" class="muted">{{ formatDuration(song.seconds) }}</div>
+      <Tag v-if="song.engine === 'ace'" severity="contrast" :title="t('aceBadgeHint')">{{ t('aceBadge') }}</Tag>
       <Tag v-if="song.quality" :severity="severityByQuality[song.quality]">
         {{ song.quality === 'draft' ? t('qualityDraft') : t('qualityFull') }}
       </Tag>

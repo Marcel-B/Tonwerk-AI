@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
-import { coverUrl, getStorage, getVoiceInfo, listLibrary, songRequest, songScore, subscribe } from './api'
+import {
+  aceSongRequest,
+  coverUrl,
+  getStorage,
+  getVoiceInfo,
+  listLibrary,
+  songRequest,
+  songScore,
+  subscribe,
+} from './api'
+import { aceForm, fromAceRequest } from './ace'
 import AdvancedParameters from './components/AdvancedParameters.vue'
 import GenerateForm from './components/GenerateForm.vue'
 import SettingsMenu from './components/SettingsMenu.vue'
@@ -31,6 +41,7 @@ import TemplatePicker from './components/TemplatePicker.vue'
 import { loadedTemplateId, partList } from './templates'
 import { navigate, view, type View } from './view'
 import type {
+  AceJob,
   LogEntry,
   LyricsState,
   PromptTemplate,
@@ -65,6 +76,8 @@ const HarmonyPage = defineAsyncComponent(() => import('./components/HarmonyPage.
 const InstrumentsPage = defineAsyncComponent(() => import('./components/InstrumentsPage.vue'))
 // The speech lab, likewise loaded and mounted only once it is opened.
 const SpeechLab = defineAsyncComponent(() => import('./components/SpeechLab.vue'))
+// ACE-Step's page, likewise.
+const AcePage = defineAsyncComponent(() => import('./components/AcePage.vue'))
 // The log, likewise.
 const LogPage = defineAsyncComponent(() => import('./components/LogPage.vue'))
 const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.vue'))
@@ -114,6 +127,8 @@ const memory = ref<LargeModel | null>(null)
  * shows the unfinished ones; the lab lays them all over what it loaded.
  */
 const speechTakes = ref<SpeechTake[]>([])
+/** ACE-Step's jobs, those in the works from the snapshot, then as the event stream reports them. */
+const aceJobs = ref<AceJob[]>([])
 /** Songs, renders and drafts waiting for the memory. */
 const jobs = ref<QueuedJob[]>([])
 /** How long songs may pass a waiting draft or version (Queue:BundleWindow). */
@@ -213,6 +228,7 @@ const unsubscribe = subscribe({
     videos.value = snapshot.videos ?? []
     images.value = snapshot.images ?? []
     speechTakes.value = snapshot.speech ?? []
+    aceJobs.value = snapshot.ace ?? []
     jobs.value = snapshot.queue ?? []
     bundleWindowSeconds.value = snapshot.bundleWindowSeconds ?? null
     memory.value = snapshot.memory?.holder ?? null
@@ -258,6 +274,14 @@ const unsubscribe = subscribe({
       speechTakes.value.push(take)
     }
   },
+  ace(job) {
+    const index = aceJobs.value.findIndex((other) => other.id === job.id)
+    if (index >= 0) {
+      aceJobs.value[index] = job
+    } else {
+      aceJobs.value.push(job)
+    }
+  },
   queue(queue) {
     jobs.value = queue
   },
@@ -285,6 +309,7 @@ const pages: Page[] = [
 ]
 const tools: Page[] = [
   { view: 'templates', label: 'menuTemplates', icon: 'pi pi-bookmark' },
+  { view: 'ace', label: 'menuAce', icon: 'pi pi-wave-pulse' },
   { view: 'transcribe', label: 'menuTranscribe', icon: 'pi pi-microphone' },
   { view: 'voices', label: 'menuVoices', icon: 'pi pi-users' },
   { view: 'logic', label: 'menuLogic', icon: 'pi pi-box' },
@@ -309,6 +334,7 @@ const queueCount = computed(
     videos.value.filter((v) => !v.finished).length +
     images.value.filter((i) => !i.finished).length +
     speechTakes.value.filter((take) => !take.finished).length +
+    aceJobs.value.filter((job) => !job.finished).length +
     transcriptions.value.filter((tr) => !tr.finished).length,
 )
 
@@ -328,6 +354,7 @@ const badges = computed<Partial<Record<View, number>>>(() => ({
     stemSets.value.filter((s) => !s.finished).length +
     swaps.value.filter((s) => !s.finished).length,
   lab: speechTakes.value.filter((take) => !take.finished).length,
+  ace: aceJobs.value.filter((job) => !job.finished).length,
 }))
 
 /**
@@ -351,7 +378,11 @@ const storageOpened = ref(view.value === 'storage')
 const templatesOpened = ref(view.value === 'templates')
 const instrumentsOpened = ref(view.value === 'instruments')
 const harmonyOpened = ref(view.value === 'harmony')
+const aceOpened = ref(view.value === 'ace')
 watch(view, (value) => {
+  if (value === 'ace') {
+    aceOpened.value = true
+  }
   if (value === 'harmony') {
     harmonyOpened.value = true
   }
@@ -556,6 +587,13 @@ async function useAsNewSong(songId: string): Promise<void> {
     return
   }
   try {
+    if (found.song.engine === 'ace') {
+      // ACE-Step's own settings go back into its page; YuE2's form knows none of them.
+      aceForm.value = fromAceRequest(await aceSongRequest(songId))
+      navigate('ace')
+      show(t('newSongApplied', { title: found.run.title || t('untitled'), song: t('songN', { n: found.song.index }) }))
+      return
+    }
     form.value = fromSongRequest(form.value, await songRequest(songId))
     fieldErrors.value = {}
     navigate('create')
@@ -699,6 +737,7 @@ async function useAsNewSong(songId: string): Promise<void> {
           :transcriptions="transcriptions"
           :images="images"
           :videos="videos"
+          :ace="aceJobs"
         />
       </a>
     </div>
@@ -732,6 +771,7 @@ async function useAsNewSong(songId: string): Promise<void> {
           :swaps="swaps"
           :videos="videos"
           :images="images"
+          :ace="aceJobs"
           :bundle-window-seconds="bundleWindowSeconds"
           :takes="speechTakes"
           :transcriptions="transcriptions"
@@ -861,6 +901,16 @@ async function useAsNewSong(songId: string): Promise<void> {
 
   <main v-if="labOpened" v-show="view === 'lab'">
     <SpeechLab :active="view === 'lab'" :connected="connected" :live="speechTakes" @error="show($event, true)" />
+  </main>
+  <main v-if="aceOpened" v-show="view === 'ace'">
+    <AcePage
+      :active="view === 'ace'"
+      :connected="connected"
+      :live="aceJobs"
+      :runs="runs"
+      @error="show($event, true)"
+      @notice="show($event)"
+    />
   </main>
   <main v-if="logsOpened" v-show="view === 'logs'">
     <LogPage :active="view === 'logs'" />

@@ -27,10 +27,10 @@ Auf einem Mac, auf dem außer macOS nichts installiert ist, richtet ein Skript a
 ```sh
 xcode-select --install                 # Command Line Tools (git, clang), einmal
 git clone https://github.com/Marcel-B/YuE-UI.git ~/repos/YueUI
-~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage oder --all für mehr
+~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace oder --all für mehr
 ```
 
-Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos.
+Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell.
 
 Die Schritte entsprechen denen des Installers der App und landen in denselben Ordnern (`~/Library/Application Support/YuE Studio`, Songs in `~/Music/YuE Studio`). Tonwerk braucht deshalb keine andere Konfiguration, und eine später installierte App findet die Modelle. Öffnet man die App, installiert sie ihre eigene Kopie über den Checkout; das funktioniert, nur die Git-Historie ist dann weg. Umgekehrt lässt das Skript eine Installation der App unangetastet, solange es nicht mit `--engine-from-source` läuft.
 
@@ -129,7 +129,7 @@ Jeder Song belegt mit FLAC, Tokens und Zwischendateien einiges an Platz. Die Bib
 
 ### Auf eine externe Platte verlegen
 
-Modelle, Songs und was Tonwerk sonst an großen Ordnern anlegt, lassen sich auf eine externe Platte verlegen. `deploy/move-to-volume.sh` ohne Angaben zeigt, was sich verlegen lässt, wie groß es ist und wo es liegt: `yue2` (die Modelle von YuE2, auch die von YuE Studio), `ane`, `songs`, `lmstudio`, `speech`, `images`, `montage` (die CLIP-Modelle der Fotovideos), `separator`, `seedvc`, `versions`, `stems` und `videos`.
+Modelle, Songs und was Tonwerk sonst an großen Ordnern anlegt, lassen sich auf eine externe Platte verlegen. `deploy/move-to-volume.sh` ohne Angaben zeigt, was sich verlegen lässt, wie groß es ist und wo es liegt: `yue2` (die Modelle von YuE2, auch die von YuE Studio), `ane`, `songs`, `lmstudio`, `speech`, `images`, `montage` (die CLIP-Modelle der Fotovideos), `acestep` (Modelle von ACE-Step), `acesongs` (Songs von ACE-Step), `separator`, `seedvc`, `versions`, `stems` und `videos`.
 
 Ein Teil, den es noch nicht gibt, weil das Feature erst später installiert wird oder seine Modelle erst beim ersten Gebrauch lädt, lässt sich vorab verlegen: Das Skript legt dann einen leeren Ordner auf der Platte an und verlinkt ihn, sodass die Downloads gleich dort landen. Die Python-Umgebungen der Werkzeuge (`env`, je ein bis zwei GB) bleiben auf der internen Platte; Audio zu MIDI bringt sein kleines Modell darin mit und legt sonst nichts Großes an.
 
@@ -350,6 +350,30 @@ Oder mit den bisherigen Optionen über das Einrichtungsskript, damit Updates die
 
 Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-forest-labs/FLUX.2-klein-9B](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B) annehmen, ein Lese-Token für das Konto anlegen und auf dem Mac in `~/.config/tonwerk/huggingface.token` speichern. Klein 4B braucht das nicht. Die Gewichte, die ComfyUI schon geladen hat, nutzt mflux nicht; es lädt sie im Format von Hugging Face neu.
 
+## Songs mit ACE-Step
+
+Neben YuE2 macht [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) Songs, über [acestep.cpp](https://github.com/ServeurpersoCom/acestep.cpp) (GGML mit Metal) und die quantisierten Modelle von [Serveurperso/ACE-Step-1.5-GGUF](https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF), MIT-lizenziert. Es hat eine eigene Seite unter **Werkzeuge → ACE-Step**, weil seine Parameter andere sind:
+
+- **Aufgabe:** *Neuer Song*, *Cover* (ein Song der Bibliothek im neuen Stil, mit *Nähe zum Original*) oder *Neu malen* (ein Abschnitt eines Songs in Sekunden wird neu erzeugt).
+- **Beschreibung** statt Tags: Genre, Instrumente, Stimme und Stimmung in freien Worten, am besten auf Englisch; die Bausteine passen auch hier.
+- **Text** ist bei einem neuen Song optional: leer schreibt das Sprachmodell (LM) ihn selbst. Abschnitte wie `[Verse]` und `[Chorus]` versteht ACE-Step. Die Sprache des Gesangs lässt sich festlegen (50 Sprachen, Deutsch dabei).
+- **Länge, Tempo, Tonart, Takt** legt man fest oder überlässt sie dem LM; bei Cover und Neu malen kommen sie vom Ausgangssong.
+- **Varianten** (1 bis 4) macht aus einem Auftrag mehrere Songs mit aufeinanderfolgenden Seeds.
+- **Erweiterte Parameter:** LM und DiT (aus dem Modellordner), Schritte, Guidance, Shift, Solver, Temperatur, CFG, Top p/k und negativer Prompt des LM, „Beschreibung ausbauen“ und ein Adapter (LoRA) mit Stärke. Leer gelassen gilt, was das Modell vorsieht.
+
+Die Songs landen in derselben Bibliothek, mit einem „ACE“-Schild, und lassen sich abspielen, bewerten, teilen und löschen wie alle anderen; eine Partitur (`score.abc`) gibt es nicht, also auch keinen Logic-Export daraus und kein Rendern. **Alles übernehmen** füllt bei einem ACE-Song die ACE-Seite, mit dem Text, den das LM geschrieben hat, und dem Seed des Songs. Sie liegen nicht bei YuE Studio, sondern in `ace-songs/` neben der Datenbank, und kommen mit in die Sicherung.
+
+Ein Auftrag wartet wie ein Bild, bis YuE2, das Textmodell, die Stimmen, das Sprachlabor und die Cover den Speicher freigeben, und so lange warten diese. Tonwerk startet für jeden Auftrag `ace-lm` und `ace-synth` neu, danach ist der Speicher wieder frei. Der Standardsatz (4B-LM, Turbo-DiT, Text-Encoder, VAE, Q8) ist etwa 7,7 GB groß. Die **Warteschlange** zeigt Aufträge unter **ACE-Step**; eine Benachrichtigung meldet fertige.
+
+**Einrichtung.** Einmal auf dem Mac im Repository, nach `deploy/install.sh`:
+
+```sh
+deploy/install-ace.sh           # acestep.cpp bauen (Commit fest im Skript), Standardmodelle laden
+deploy/install-ace.sh --sft     # dazu der SFT-DiT (feiner, etwa 50 Schritte statt 8)
+```
+
+Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit Updates den Build mitpflegen. Programm und Modelle liegen unter `~/Library/Application Support/YuE UI/ace/`, Adapter als `.safetensors` in `ace/adapters/`. Bisher nur in einem Linux-Container mit nachgebauten Programmen getestet, nicht auf dem Mac und nicht mit echten Modellen.
+
 ## Konfiguration
 
 `appsettings.json` bzw. Umgebungsvariablen:
@@ -395,6 +419,12 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `Images:ModelCache` (`Images__ModelCache`) | `<Root>/models` | Hugging-Face-Cache der Bildmodelle (`HF_HOME`) |
 | `Images:TokenFile` (`Images__TokenFile`) | `~/.config/tonwerk/huggingface.token` | Hugging-Face-Token, nur für Klein 9B |
 | `Images:Timeout` (`Images__Timeout`) | `01:30:00` | so lange darf ein Bild samt erstem Download dauern |
+| `Ace:Root` (`Ace__Root`) | `~/Library/Application Support/YuE UI/ace` | Ordner für ACE-Step; die folgenden drei liegen darunter |
+| `Ace:Binaries` (`Ace__Binaries`) | `acestep.cpp/build` | `ace-lm` und `ace-synth` |
+| `Ace:Models` (`Ace__Models`) | `models` | GGUF-Dateien (LM, DiT, Text-Encoder, VAE) |
+| `Ace:Adapters` (`Ace__Adapters`) | `adapters` | LoRAs für den DiT |
+| `Ace:Songs` (`Ace__Songs`) | `ace-songs` neben der Datenbank | wo ACE-Songs gespeichert werden |
+| `Ace:Timeout` (`Ace__Timeout`) | `01:00:00` | so lange darf ein Auftrag dauern |
 | `Push:DataPath` (`Push__DataPath`) | `~/Library/Application Support/YuE UI/push.json` | VAPID-Schlüssel und Abonnements für Benachrichtigungen |
 | `Data:Path` (`Data__Path`) | `~/Library/Application Support/YuE UI/yueui.db` | SQLite-Datenbank von Tonwerk (Playlists, geänderte Titel, Bewertungen) |
 | `Logs:Directory` (`Logs__Directory`) | `~/Library/Application Support/YuE UI/logs` | Tagesdateien des Protokolls |
@@ -490,6 +520,10 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `GET` | `/api/audio-midi` | Audio zu MIDI: `{ installed, python }` |
 | `POST` | `/api/audio-midi` | Aufnahme zu MIDI: Formular mit `file` (jedes Format, das ffmpeg liest, bis 200 MB), `mono?` (Standard an), `quantize?`, `bends?`, `tempo?`; antwortet sofort mit der MIDI-Datei, die Zahl der Noten im Header `X-Audio-Midi-Notes`; `400` für das Raster ohne Tempo, `422` ohne Noten, `501` ohne Basic Pitch |
 | `POST` | `/api/songs/{run}/{song}/stems/{id}/{name}/midi` | Ein Stem zu MIDI: `{ mono?, quantize?, bends?, tempo? }`, Tempo sonst aus `score.abc` des Songs; Antwort wie oben |
+| `GET` | `/api/ace` | ACE-Step: `{ installed, ready, binaries, models, lmModels, ditModels, adapters, jobs }` |
+| `POST` | `/api/ace` | Song bei ACE-Step bestellen (`caption`, optional `title`, `lyrics`, `instrumental`, `language`, `duration`, `bpm`, `key`, `timeSignature`, `seed`, `batch`, `task`, `source`, Modelle und Parameter); antwortet `202` mit dem Auftrag, der Fortschritt kommt als `ace`-Event (`queued`, `loading`, `writing`, `composing`, `synthesizing`, `decoding`, `saving`, dann `done` mit `run` oder `failed`); `501` ohne acestep.cpp oder Modelle |
+| `DELETE` | `/api/ace/{id}` | Auftrag abbrechen oder aus der Liste nehmen |
+| `GET` | `/api/songs/{run}/{song}/ace` | Einstellungen eines ACE-Songs für „Alles übernehmen“ |
 | `GET` | `/api/images` | Gemalte Cover: `{ installed, python, models }` (Modelle mit Lizenz, `commercial`, `downloaded`, `tokenFound`) |
 | `GET` / `POST` | `/api/songs/{run}/{song}/images` | Vorschläge des Songs, neueste zuerst, bzw. `{ prompt, model?, seed? }` malen; antwortet `202`, der Fortschritt kommt als `image`-Event (`queued`, `loading`, `painting` mit `fraction`, dann `done` oder `failed`); `501` ohne mflux |
 | `GET` / `DELETE` | `/api/images/{id}` | Vorschlag als JPEG bzw. abbrechen oder löschen |

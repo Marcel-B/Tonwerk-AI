@@ -318,6 +318,30 @@ export interface RunInfo {
   bytes: number
 }
 
+/** A lyrics line with when it is sung (Timing/LyricsAligner.cs). */
+export interface TimedLine {
+  text: string
+  section: string | null
+  start: number
+  end: number
+  /** How many of its words Whisper heard; 0 where the time is only guessed. */
+  heard: number
+}
+
+export interface LyricsTiming {
+  lines: TimedLine[]
+  source: 'vocals' | 'mix'
+  /** The share of the lyrics' words Whisper heard, 0 to 1. */
+  coverage: number
+  createdAt: string
+}
+
+/** `GET /api/songs/{run}/{song}/timing`: the timing, or how far a song without one is. */
+export interface TimingAnswer {
+  timing: LyricsTiming | null
+  info: { installed: boolean; state: 'none' | 'queued' | 'listening' | 'failed'; message: string | null }
+}
+
 /** One style block or setting against the stars of the songs made with it (Library/Insights.cs). */
 export interface InsightEntry {
   value: string

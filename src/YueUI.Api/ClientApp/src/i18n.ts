@@ -420,6 +420,8 @@ const messages = {
     videoShowCover: 'Cover zeigen',
     videoWithoutCover: 'ohne Cover',
     videoShowTitle: 'Titel einblenden',
+    videoShowLyrics: 'Songtext einblenden',
+    videoSubtitles: 'Untertitel (.srt) für YouTube',
     videoHint:
       'Der Mac rechnet das Video im Hintergrund (1080p, 30 fps, H.264 mit AAC 320 kbit/s) und meldet sich, wenn es fertig ist. Die Vorschau zeigt Balken und Welle nur angedeutet, im Video tanzen sie zur Musik. Ist es fertig, ersetzt es das bisherige Video des Songs im selben Format.',
     videoSource: 'Bild',
@@ -1448,6 +1450,8 @@ const messages = {
     videoShowCover: 'Show cover',
     videoWithoutCover: 'without cover',
     videoShowTitle: 'Show title',
+    videoShowLyrics: 'Show lyrics',
+    videoSubtitles: 'Subtitles (.srt) for YouTube',
     videoHint:
       "The Mac renders the video in the background (1080p, 30 fps, H.264 with AAC 320 kbit/s) and lets you know when it is done. The preview only hints at the bars and the wave; in the video they move to the music. Once done, it replaces the song's earlier video in the same format.",
     videoSource: 'Picture',

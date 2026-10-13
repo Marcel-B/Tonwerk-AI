@@ -80,6 +80,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeAce Ace { get; } = new();
 
+    public FakeListener Listener { get; } = new();
+
     public FakeNextcloud Nextcloud { get; } = new();
 
     public FakeLoki Loki { get; } = new();
@@ -198,6 +200,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
             services.AddSingleton<Images.IImageEngine>(Images);
             services.AddSingleton<AudioMidi.IAudioMidiEngine>(AudioMidi);
             services.AddSingleton<Ace.IAceEngine>(Ace);
+            services.AddSingleton<Timing.IWordListener>(Listener);
             services.Configure<Ace.AceOptions>(options =>
             {
                 options.Root = Path.Combine(Root, "ace");
@@ -1235,5 +1238,29 @@ public sealed class FakeLoki
             }
             return new HttpResponseMessage(HttpStatusCode.NoContent);
         }
+    }
+}
+
+/// <summary>Whisper: hears the words it is given; off by default, so the other tests' songs are not timed.</summary>
+public sealed class FakeListener : Timing.IWordListener
+{
+    public bool Installed { get; set; }
+
+    public List<Timing.HeardWord> Words { get; set; } = [];
+
+    /// <summary>Set to make the next songs fail with it.</summary>
+    public string? Failure { get; set; }
+
+    public List<(string Audio, string? Language, string Prompt)> Calls { get; } = [];
+
+    public Task<IReadOnlyList<Timing.HeardWord>> ListenAsync(string audio, string? language, string prompt, CancellationToken cancellationToken)
+    {
+        lock (Calls)
+        {
+            Calls.Add((audio, language, prompt));
+        }
+        return Failure is not null
+            ? Task.FromException<IReadOnlyList<Timing.HeardWord>>(new Timing.TimingException(Failure))
+            : Task.FromResult<IReadOnlyList<Timing.HeardWord>>(Words);
     }
 }

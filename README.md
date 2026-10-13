@@ -27,7 +27,7 @@ Auf einem Mac, auf dem außer macOS nichts installiert ist, richtet ein Skript a
 ```sh
 xcode-select --install                 # Command Line Tools (git, clang), einmal
 git clone https://github.com/Marcel-B/YuE-UI.git ~/repos/YueUI
-~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace oder --all für mehr
+~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper oder --all für mehr
 ```
 
 Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell.
@@ -193,6 +193,15 @@ Der Ordner enthält 5 bis 30 Songs im selben Stil (MP3, WAV, FLAC, M4A …). Ein
 Fertige LoRAs landen in `~/Library/Application Support/YuE UI/loras` und stehen im Formular unter **Erweitert → Klang-LoRA**, mit einer Stärke von 0 bis 3. LoRAs von Hugging Face im Format von ComfyUI passen auch, wenn sie nur den Klangteil ändern: die `.safetensors`-Datei in den Ordner legen oder über `POST /api/loras` hochladen.
 
 Grenzen: YuE2 gibt kein Werkzeug heraus, das aus fremder Musik die Song-Tokens gewinnt, die die Klangsynthese beim Generieren sieht. Trainiert wird deshalb im Modus, den YuE2 für Training ohne sie kennt (nur der Text-Prompt ist sichtbar). Beim Generieren wirkt eine LoRA dadurch oft etwas schwächer; eine Stärke um 1,5 gleicht das aus. Songs mit verschiedenen LoRAs warten bei der Synthese aufeinander, weil nur eine zur Zeit in den Gewichten stecken kann, und ein Song mit LoRA geht nicht aufs iPhone. Lizenz: Die Gewichte von YuE2 stehen unter CC BY-NC 4.0, aber Einzelpersonen dürfen erzeugte Songs ausdrücklich verkaufen und vermarkten ([MODEL_LICENSE](https://github.com/multimodal-art-projection/YuE/blob/main/MODEL_LICENSE)). Eine LoRA ist eine Bearbeitung der Gewichte: Sie selbst darf nicht verkauft und nur mit Nennung von YuE2 weitergegeben werden. Ob Songs, die mit einer LoRA entstanden sind, unter dieselbe Erlaubnis fallen, sagt die Lizenz nicht ausdrücklich. Die Rechte an den Trainingssongs bleiben bei ihren Urhebern.
+
+## Songtext mit Zeitmarken
+
+Tonwerk weiß, welche Zeile gerade gesungen wird: Whisper (`mlx-whisper` mit large-v3 turbo, etwa 1,6 GB) hört sich jeden neuen Song einmal an, am liebsten die Gesangsspur aus den Stems, wenn es welche gibt, sonst den ganzen Song. Den Text kennt Tonwerk schon, Whisper sagt nur, wann welches Wort kommt; die Zeilen werden dann auf die gehörten Wörter gelegt, auch wenn Whisper sich verhört oder Wörter auslässt, und ein wiederholter Refrain nimmt nie die Zeiten des ersten. Zeilen ohne gehörtes Wort teilen sich die Lücke zwischen ihren Nachbarn.
+
+- **Vollbild-Player:** Der Text läuft mit, die gesungene Zeile ist hell, die anderen gedimmt, und die Ansicht scrollt mit, außer man hat gerade selbst gescrollt. Ein Tipp auf eine Zeile springt dorthin. Ältere Songs werden beim ersten Öffnen im Vollbild angehört.
+- **Musikvideo:** **Songtext einblenden** zeigt die gesungene Zeile groß im Band über dem Analyzer. Daneben gibt es die Zeiten als Untertiteldatei (`.srt`), die YouTube beim Hochladen zum Video nimmt.
+
+Ein Song braucht auf dem Mac deutlich unter einer Minute; Whisper wartet, solange ein anderes großes Modell den Speicher hat. Einrichtung: `deploy/setup-mac.sh --whisper` (oder die gespeicherten Optionen mit `--whisper` dazu), das Modell lädt beim ersten Song. Abschalten des automatischen Anhörens: `Timing:Auto` auf `false`.
 
 ## Transkription mit SheetSage2
 
@@ -545,8 +554,12 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `POST` | `/api/swaps` | Stimmenspur tauschen: Formular mit `file` (bis 300 MB), `voiceId`, `semiToneShift?`, `strength?`, `diffusionSteps?`, `separate?` (ganzer Song: erst trennen, dann zurückmischen) und `keepReverb?`; antwortet `202`, der Fortschritt kommt als `swap`-Event wie bei einer Fassung; `501` ohne Seed-VC (oder mit `separate` ohne Trennung) |
 | `GET` | `/api/swaps/{id}/audio` / `source` | Ergebnis als FLAC (`?download=true` mit Dateinamen) bzw. der Upload, beide Range-fähig |
 | `DELETE` | `/api/swaps/{id}` | Tausch abbrechen oder löschen |
+| `GET` | `/api/timing` | Ob Whisper installiert ist, wo Tonwerk seine Python-Umgebung sucht und welches Modell es nimmt |
+| `GET` | `/api/songs/{run}/{song}/timing` | Zeitmarken des Songtexts (`timing`: Zeilen mit `start`, `end`, `section`, `heard`; `source`, `coverage`) und wie weit ein Song ohne sie ist (`info`) |
+| `POST` | `/api/songs/{run}/{song}/timing` | Song (neu) anhören lassen; `202`, `501` ohne Whisper |
+| `GET` | `/api/songs/{run}/{song}/timing.srt` | Die Zeitmarken als Untertitel (SubRip) |
 | `GET` | `/api/songs/{run}/{song}/videos` | Musikvideos des Songs, neueste zuerst |
-| `POST` | `/api/songs/{run}/{song}/videos` | Musikvideo rendern: Formular mit `format` (`landscape`/`portrait`), `effect` (`bars`/`wave`/`none`), `color?` (`#rrggbb`, sonst Tonwerks Grün), `motion` (`particles`/`plasma`/`none`), `showCover?` (Standard an), `showTitle?` und den Ebenen als PNG: `background`, `cover` (mit `showCover`), `title` (mit `showTitle`), `particles` in Bildgröße, `plasma0` bis `plasma7` (die Blitze, mit Cover als Quadrat um seine Mitte, 1000×1000 bzw. 1080×1080, ohne in Bildgröße). Ein Fotovideo hat `media` (ein Ordner aus `GET /api/videos/media`), `motif?` und statt `background` die Abdunklung `shade?`, keine `motion`; antwortet `202`, der Fortschritt kommt als `video`-Event; `501` ohne `ffmpeg` oder, für ein Fotovideo, ohne dessen Python-Umgebung |
+| `POST` | `/api/songs/{run}/{song}/videos` | Musikvideo rendern: Formular mit `format` (`landscape`/`portrait`), `effect` (`bars`/`wave`/`none`), `color?` (`#rrggbb`, sonst Tonwerks Grün), `motion` (`particles`/`plasma`/`none`), `showCover?` (Standard an), `showTitle?`, `showLyrics?` (nur mit Zeitmarken) und den Ebenen als PNG: `background`, `cover` (mit `showCover`), `title` (mit `showTitle`), `particles` in Bildgröße, `plasma0` bis `plasma7` (die Blitze, mit Cover als Quadrat um seine Mitte, 1000×1000 bzw. 1080×1080, ohne in Bildgröße), `lyrics0`, `lyrics1`, … (je bis zu 24 Zeilen in Feldern von der Größe des Bands, darüber ein leeres). Ein Fotovideo hat `media` (ein Ordner aus `GET /api/videos/media`), `motif?` und statt `background` die Abdunklung `shade?`, keine `motion`; antwortet `202`, der Fortschritt kommt als `video`-Event; `501` ohne `ffmpeg` oder, für ein Fotovideo, ohne dessen Python-Umgebung |
 | `GET` | `/api/videos/media` | Ordner für Fotovideos: `installed`, `root` und je Ordner `name`, `photos`, `videos` |
 | `GET` | `/api/videos/{id}/file` | Das MP4 (`?download=true` mit Dateinamen), Range-fähig |
 | `DELETE` | `/api/videos/{id}` | Video abbrechen oder löschen |

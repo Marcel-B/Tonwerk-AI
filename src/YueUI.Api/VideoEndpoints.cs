@@ -67,12 +67,14 @@ public static class VideoEndpoints
         [FromForm] bool? showTitle,
         [FromForm] string? media,
         [FromForm] string? motif,
+        [FromForm] bool? showLyrics,
         IFormFileCollection files,
         SongLibrary library,
         SqliteVideoStore store,
         VideoMaker maker,
         IMontageBuilder montage,
         IOptions<MontageOptions> montageOptions,
+        Timing.TimingFiles timings,
         TimeProvider time,
         CancellationToken cancellationToken)
     {
@@ -163,6 +165,25 @@ public static class VideoEndpoints
                 wanted.Add(($"plasma{i}", area.Width, area.Height));
             }
         }
+        // Lyrics come as strips of lines, an empty slot above them, each slot the band's size; the times are the
+        // server's own, so the strips need only the right number of lines.
+        IReadOnlyList<LyricsCue>? cues = null;
+        if (showLyrics == true)
+        {
+            if (timings.Get(run, song) is not { Lines.Count: > 0 } timing)
+            {
+                errors["showLyrics"] = ["The song's lyrics have no times yet."];
+            }
+            else
+            {
+                cues = VideoLayout.Cues(timing);
+                var strip = 0;
+                foreach (var chunk in cues.Chunk(VideoLayout.LyricsPerStrip))
+                {
+                    wanted.Add(($"lyrics{strip++}", layout.Width, layout.BandHeight * (chunk.Length + 1)));
+                }
+            }
+        }
         var layers = new Dictionary<string, byte[]>();
         foreach (var (name, wantedWidth, wantedHeight) in wanted)
         {
@@ -201,6 +222,10 @@ public static class VideoEndpoints
         foreach (var (name, data) in layers)
         {
             await File.WriteAllBytesAsync(Path.Combine(store.Folder(video.Id), $"{name}.png"), data, cancellationToken);
+        }
+        if (cues is not null)
+        {
+            await File.WriteAllTextAsync(store.LyricsCuesPath(video.Id), System.Text.Json.JsonSerializer.Serialize(cues, SqliteVideoStore.Json), cancellationToken);
         }
         return Results.Accepted($"/api/videos/{video.Id}/file", maker.Enqueue(video));
     }

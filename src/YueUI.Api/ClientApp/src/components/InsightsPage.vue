@@ -92,9 +92,7 @@ function tone(entry: InsightEntry): string {
             <li v-for="entry in weak" :key="entry.value" :class="['row', tone(entry)]">
               <span class="value truncate">{{ valueLabel(group, entry.value) }}</span>
               <span class="bar" :style="{ '--share': `${(entry.average / 5) * 100}%` }" />
-              <span class="numbers"
-                >★ {{ stars(entry.average) }} · {{ t('insightsSongs', { n: entry.count }) }}</span
-              >
+              <span class="numbers">★ {{ stars(entry.average) }} · {{ t('insightsSongs', { n: entry.count }) }}</span>
             </li>
           </ul>
         </template>

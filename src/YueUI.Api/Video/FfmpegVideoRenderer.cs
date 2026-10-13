@@ -112,7 +112,15 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger, ILo
         {
             arguments.AddRange(["-framerate", rate, "-i", layers.Shade]);
         }
-        arguments.AddRange(["-filter_complex", Graph(video, seconds, layers.Cover is not null, layers.Title is not null, layers.Motion.Count, layers.Shade is not null, level)]);
+        foreach (var strip in layers.Lyrics ?? [])
+        {
+            arguments.AddRange(["-framerate", rate, "-i", strip.Path]);
+        }
+        arguments.AddRange([
+            "-filter_complex",
+            Graph(video, seconds, layers.Cover is not null, layers.Title is not null, layers.Motion.Count, layers.Shade is not null, level,
+                layers.Lyrics?.Select(strip => strip.Cues).ToList()),
+        ]);
         arguments.AddRange(["-map", "[v]", "-map", "[a]"]);
         if (seconds is > 0)
         {
@@ -132,9 +140,13 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger, ILo
     /// <summary>
     /// Background, then particles or the plasma ball, then the analyzer or waveform in its band, then the cover, then
     /// the title fading in; the whole fades in from and out to black. Inputs: 0 background, 1 audio, then cover and
-    /// title when there are, then the moving layer's pictures, the bars' heights and a photo video's shade.
+    /// title when there are, then the moving layer's pictures, the bars' heights, a photo video's shade and the lyrics'
+    /// strips. The lyrics lie over the band, under the cover.
     /// </summary>
-    public static string Graph(VideoState video, double? seconds, bool cover, bool title, int motion, bool shade = false, string? level = null)
+    /// <param name="lyrics">Each lyrics strip's times, in input order; none without lyrics.</param>
+    public static string Graph(
+        VideoState video, double? seconds, bool cover, bool title, int motion, bool shade = false, string? level = null,
+        IReadOnlyList<IReadOnlyList<LyricsCue>>? lyrics = null)
     {
         var layout = VideoLayout.For(video.Format);
         var (w, h, bandY, bandH) = (layout.Width, layout.Height, layout.BandY, layout.BandHeight);
@@ -240,6 +252,20 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger, ILo
             chains.Add("[bc][ba]alphamerge[band]");
             chains.Add($"[{current}][band]overlay=0:{bandY}:format=auto[withband]");
             current = "withband";
+        }
+
+        if (lyrics is { Count: > 0 })
+        {
+            // A window the band's size jumps to the slot of the line being sung, or to the empty one on top. ffmpeg
+            // has no fonts to rely on, so the browser drew the lines; crop picks them by time.
+            var lyricsInput = motionInput + motion + (video.Effect == VideoEffects.Bars ? 1 : 0) + (shade ? 1 : 0);
+            for (var i = 0; i < lyrics.Count; i++)
+            {
+                var slot = string.Join("+", lyrics[i].Select((cue, line) => $"{line + 1}*gte(t,{Number(cue.Start)})*lt(t,{Number(cue.End)})"));
+                chains.Add($"[{lyricsInput + i}:v]format=rgba,loop=loop=-1:size=1,crop={w}:{bandH}:0:'{bandH}*({slot})'[lyrics{i}]");
+                chains.Add($"[{current}][lyrics{i}]overlay=0:{bandY}:format=auto[withlyrics{i}]");
+                current = $"withlyrics{i}";
+            }
         }
 
         if (cover)

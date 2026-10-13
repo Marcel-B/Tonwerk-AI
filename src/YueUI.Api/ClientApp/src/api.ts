@@ -14,6 +14,7 @@ import type {
   MidiScore,
   PlaylistInfo,
   InsightReport,
+  TimingAnswer,
   PromptTemplate,
   QueuedJob,
   RunInfo,
@@ -177,6 +178,21 @@ export async function rateSong(songId: string, rating: number | null): Promise<v
 export async function saveSongNote(songId: string, note: string): Promise<void> {
   // keepalive: a note typed just before the page goes away (the app closed, a reload) still arrives.
   await send(`/api/songs/${songId}/note`, { ...json('PUT', { note }), keepalive: true })
+}
+
+/** When each lyrics line of the song is sung, or how far its timing is. */
+export async function getTiming(songId: string): Promise<TimingAnswer> {
+  return (await send(`/api/songs/${songId}/timing`)).json() as Promise<TimingAnswer>
+}
+
+/** The timed lyrics as SubRip subtitles, which YouTube takes beside a video. */
+export function subtitlesUrl(songId: string): string {
+  return `${apiBase}/api/songs/${songId}/timing.srt`
+}
+
+/** Asks Whisper to time the song's lyrics; 501 when it is not installed. */
+export async function requestTiming(songId: string): Promise<TimingAnswer> {
+  return (await send(`/api/songs/${songId}/timing`, { method: 'POST' })).json() as Promise<TimingAnswer>
 }
 
 /** Which style blocks and settings the rated songs were made with, against their stars. */
@@ -546,6 +562,8 @@ export interface VideoRequest {
   /** A photo video's folder; its pictures take the background's place. */
   media?: string
   motif?: string
+  /** The sung line in the band; the server has the times, `lyrics0…` the lines. */
+  showLyrics?: boolean
 }
 
 /**
@@ -561,6 +579,8 @@ export interface VideoLayerImages {
   particles?: Blob
   /** The plasma ball's frames, sent as `plasma0`, `plasma1`, … */
   plasma?: Blob[]
+  /** The lyrics' strips, sent as `lyrics0`, `lyrics1`, … */
+  lyrics?: Blob[]
 }
 
 /** Sends the layers and queues the video; its progress arrives as `video` events. */

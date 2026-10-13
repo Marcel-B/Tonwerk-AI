@@ -10,6 +10,7 @@ using YueUI.Api.Loras;
 using YueUI.Api.Logic;
 using YueUI.Api.Monitoring;
 using YueUI.Api.Lyrics;
+using YueUI.Api.Timing;
 using YueUI.Api.Push;
 using YueUI.Api.Queue;
 using YueUI.Api.Share;
@@ -104,6 +105,11 @@ builder.Services.AddSingleton<VoiceConverter>();
 builder.Services.AddHostedService(services => services.GetRequiredService<VoiceConverter>());
 builder.Services.AddHostedService<AutoVersions>();
 builder.Services.AddSingleton<QuickSongs>();
+builder.Services.Configure<TimingOptions>(builder.Configuration.GetSection(TimingOptions.Section));
+builder.Services.AddSingleton<TimingFiles>();
+builder.Services.AddSingleton<IWordListener, WhisperListener>();
+builder.Services.AddSingleton<LyricsTimer>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<LyricsTimer>());
 builder.Services.AddHostedService(provider => provider.GetRequiredService<QuickSongs>());
 
 // Music videos: the browser draws the still layers, ffmpeg animates and encodes them, one at a time.
@@ -186,6 +192,7 @@ api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"
 api.MapWorkerEndpoints();
 api.MapLoraEndpoints();
 api.MapLibraryEndpoints();
+api.MapTimingEndpoints();
 api.MapExportEndpoints();
 api.MapCoverEndpoints();
 api.MapTranscriptionEndpoints();

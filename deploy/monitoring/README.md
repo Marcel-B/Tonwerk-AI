@@ -57,6 +57,8 @@ Ob Prometheus den Mac erreicht, zeigt `http://monitoring:9090/targets`. Löst de
 
 Das Dashboard **Finanz-O-Mat** (`grafana/dashboards/finanzomat.json`) zeigt Erreichbarkeit, Kontoumsätze ohne Beleg, Belege mit Prüfhinweis, Alter des letzten Backups, Updates, Anfragen und Antwortzeiten, eingelesene Belege, Anmeldungen, Speicher und CPU sowie das Protokoll. Die App meldet sich mit `finanz-o-mat-lxc.sh monitoring <CTID>` auf dem Proxmox-Host selbst an (Ziel `prometheus/targets/finanzomat.yml`, siehe README von [finanz-O-mat](https://github.com/Marcel-B/finanz-O-mat/blob/main/deploy/proxmox/README.md#monitoring)).
 
+Das Dashboard **MyJourney** (`grafana/dashboards/myjourney.json`) zeigt Erreichbarkeit, den Bestand an Orten und Reisen, offene Live-Verbindungen, Anfragen und Antwortzeiten, Datenänderungen, Nextcloud-Backups, Speicher und CPU sowie das Protokoll. Die App bindet sich über ihre Env-Variablen an (`MYJOURNEY_METRICS_ENABLED`, `MYJOURNEY_LOKI_URL`; Ziel `prometheus/targets/myjourney.yml`, siehe DEPLOY.md §8 von [MyJourney](https://github.com/Marcel-B/MyJourney/blob/main/DEPLOY.md)).
+
 Prometheus behält 90 Tage (`PROMETHEUS_RETENTION`), Loki 30 Tage (`loki/loki.yml`).
 
 ## Wie viel ist das?

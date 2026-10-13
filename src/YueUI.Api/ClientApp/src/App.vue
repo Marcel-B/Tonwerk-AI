@@ -82,6 +82,7 @@ const AcePage = defineAsyncComponent(() => import('./components/AcePage.vue'))
 const LogPage = defineAsyncComponent(() => import('./components/LogPage.vue'))
 const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.vue'))
 const TemplatesPage = defineAsyncComponent(() => import('./components/TemplatesPage.vue'))
+const InsightsPage = defineAsyncComponent(() => import('./components/InsightsPage.vue'))
 
 const logCapacity = 300
 const form = ref(loadFormState())
@@ -309,6 +310,7 @@ const pages: Page[] = [
 ]
 const tools: Page[] = [
   { view: 'templates', label: 'menuTemplates', icon: 'pi pi-bookmark' },
+  { view: 'insights', label: 'menuInsights', icon: 'pi pi-chart-bar' },
   { view: 'ace', label: 'menuAce', icon: 'pi pi-wave-pulse' },
   { view: 'transcribe', label: 'menuTranscribe', icon: 'pi pi-microphone' },
   { view: 'voices', label: 'menuVoices', icon: 'pi pi-users' },
@@ -376,6 +378,7 @@ const labOpened = ref(view.value === 'lab')
 const logsOpened = ref(view.value === 'logs')
 const storageOpened = ref(view.value === 'storage')
 const templatesOpened = ref(view.value === 'templates')
+const insightsOpened = ref(view.value === 'insights')
 const instrumentsOpened = ref(view.value === 'instruments')
 const harmonyOpened = ref(view.value === 'harmony')
 const aceOpened = ref(view.value === 'ace')
@@ -403,6 +406,9 @@ watch(view, (value) => {
   }
   if (value === 'templates') {
     templatesOpened.value = true
+  }
+  if (value === 'insights') {
+    insightsOpened.value = true
   }
 })
 
@@ -930,6 +936,18 @@ async function useAsNewSong(songId: string): Promise<void> {
           @notice="show($event)"
           @error="show($event, true)"
         />
+      </template>
+    </Card>
+  </main>
+
+  <main v-if="insightsOpened" v-show="view === 'insights'">
+    <Card>
+      <template #title>
+        <h2>{{ t('insights') }}</h2>
+      </template>
+      <template #content>
+        <p class="muted mt-0">{{ t('insightsIntro') }}</p>
+        <InsightsPage :active="view === 'insights'" />
       </template>
     </Card>
   </main>

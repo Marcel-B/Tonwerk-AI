@@ -318,6 +318,29 @@ export interface RunInfo {
   bytes: number
 }
 
+/** One style block or setting against the stars of the songs made with it (Library/Insights.cs). */
+export interface InsightEntry {
+  value: string
+  count: number
+  average: number
+  /** The average pulled towards the overall one, so a value on one song does not lead; the lists are sorted by it. */
+  score: number
+}
+
+export type InsightKey = 'style' | 'engine' | 'quality' | 'lora' | 'steps' | 'length' | 'instrumental'
+
+export interface InsightGroup {
+  key: InsightKey
+  entries: InsightEntry[]
+}
+
+/** `GET /api/insights`: what the rated songs were made with. */
+export interface InsightReport {
+  rated: number
+  average: number
+  groups: InsightGroup[]
+}
+
 /** A playlist (PlaylistEndpoints.cs): song ids (`run/songN`) in the order they play. */
 export interface PlaylistInfo {
   id: number

@@ -13,6 +13,7 @@ import type {
   LyricsState,
   MidiScore,
   PlaylistInfo,
+  InsightReport,
   PromptTemplate,
   QueuedJob,
   RunInfo,
@@ -176,6 +177,11 @@ export async function rateSong(songId: string, rating: number | null): Promise<v
 export async function saveSongNote(songId: string, note: string): Promise<void> {
   // keepalive: a note typed just before the page goes away (the app closed, a reload) still arrives.
   await send(`/api/songs/${songId}/note`, { ...json('PUT', { note }), keepalive: true })
+}
+
+/** Which style blocks and settings the rated songs were made with, against their stars. */
+export async function getInsights(): Promise<InsightReport> {
+  return (await send('/api/insights')).json() as Promise<InsightReport>
 }
 
 /** Every playlist, oldest first, with its song ids in order; songs deleted since are left out. */

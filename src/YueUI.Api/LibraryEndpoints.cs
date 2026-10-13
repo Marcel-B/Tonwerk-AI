@@ -34,6 +34,8 @@ public static partial class LibraryEndpoints
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/library", (SongLibrary library) => library.ListRuns());
+        // Which style blocks and settings the rated songs were made with, against their stars.
+        api.MapGet("/insights", (SongLibrary library) => Insights.Build(library));
         // Range requests let the browser's player seek and start before a five-minute FLAC is loaded.
         // A download is a tagged copy (cover, lyrics); the player, the Logic page and range requests get the file itself.
         api.MapGet("/songs/{run}/{song}/audio", (string run, string song, bool? download, SongLibrary library, TaggedFiles tagged) =>

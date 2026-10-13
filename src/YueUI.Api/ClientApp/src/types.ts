@@ -318,6 +318,53 @@ export interface RunInfo {
   bytes: number
 }
 
+/** A lyrics line with when it is sung (Timing/LyricsAligner.cs). */
+export interface TimedLine {
+  text: string
+  section: string | null
+  start: number
+  end: number
+  /** How many of its words Whisper heard; 0 where the time is only guessed. */
+  heard: number
+}
+
+export interface LyricsTiming {
+  lines: TimedLine[]
+  source: 'vocals' | 'mix'
+  /** The share of the lyrics' words Whisper heard, 0 to 1. */
+  coverage: number
+  createdAt: string
+}
+
+/** `GET /api/songs/{run}/{song}/timing`: the timing, or how far a song without one is. */
+export interface TimingAnswer {
+  timing: LyricsTiming | null
+  info: { installed: boolean; state: 'none' | 'queued' | 'listening' | 'failed'; message: string | null }
+}
+
+/** One style block or setting against the stars of the songs made with it (Library/Insights.cs). */
+export interface InsightEntry {
+  value: string
+  count: number
+  average: number
+  /** The average pulled towards the overall one, so a value on one song does not lead; the lists are sorted by it. */
+  score: number
+}
+
+export type InsightKey = 'style' | 'engine' | 'quality' | 'lora' | 'steps' | 'length' | 'instrumental'
+
+export interface InsightGroup {
+  key: InsightKey
+  entries: InsightEntry[]
+}
+
+/** `GET /api/insights`: what the rated songs were made with. */
+export interface InsightReport {
+  rated: number
+  average: number
+  groups: InsightGroup[]
+}
+
 /** A playlist (PlaylistEndpoints.cs): song ids (`run/songN`) in the order they play. */
 export interface PlaylistInfo {
   id: number

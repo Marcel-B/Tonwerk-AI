@@ -95,6 +95,8 @@ export interface VideoSettings {
   media: string
   /** What its pictures should show, for CLIP; empty takes the sharpest and best exposed. */
   motif: string
+  /** The sung line in the band, where the song's lyrics have times. */
+  showLyrics: boolean
 }
 
 const storageKey = 'yue-ui.video'
@@ -110,6 +112,7 @@ export function loadVideoSettings(): VideoSettings {
     source: 'cover',
     media: '',
     motif: '',
+    showLyrics: true,
   }
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Partial<VideoSettings> & {
@@ -126,6 +129,7 @@ export function loadVideoSettings(): VideoSettings {
       source: videoSources.includes(stored.source as VideoSource) ? (stored.source as VideoSource) : defaults.source,
       media: typeof stored.media === 'string' ? stored.media : defaults.media,
       motif: typeof stored.motif === 'string' ? stored.motif : defaults.motif,
+      showLyrics: typeof stored.showLyrics === 'boolean' ? stored.showLyrics : defaults.showLyrics,
     }
   } catch {
     return defaults
@@ -152,6 +156,8 @@ export interface VideoLayers {
   particles: HTMLCanvasElement | null
   /** The plasma ball's frames and where they go in the picture. */
   plasma: { frames: HTMLCanvasElement[]; x: number; y: number } | null
+  /** The timed lyrics' strips (`drawLyricsStrips`). */
+  lyrics: HTMLCanvasElement[] | null
 }
 
 /**
@@ -162,6 +168,8 @@ export async function drawVideoLayers(
   target: ExportTarget,
   settings: VideoSettings,
   subtitle: string,
+  /** The timed lines' texts, in order; null where the lyrics have no times or are not wanted. */
+  lyrics: string[] | null = null,
 ): Promise<VideoLayers> {
   const layout = videoLayouts[settings.format]
   const image = await coverImage(target)
@@ -174,6 +182,7 @@ export async function drawVideoLayers(
     title: settings.showTitle ? drawTitle(layout, target.title || 'Tonwerk', subtitle) : null,
     particles: !photos && settings.motion === 'particles' ? drawParticles(layout, target.songId) : null,
     plasma: !photos && settings.motion === 'plasma' ? drawPlasma(layout, target.songId, settings.showCover) : null,
+    lyrics: settings.showLyrics && lyrics?.length ? drawLyricsStrips(layout, lyrics) : null,
   }
 }
 
@@ -191,6 +200,9 @@ export async function toPngs(layers: VideoLayers): Promise<VideoLayerImages> {
   }
   if (layers.plasma) {
     images.plasma = await Promise.all(layers.plasma.frames.map(png))
+  }
+  if (layers.lyrics) {
+    images.lyrics = await Promise.all(layers.lyrics.map(png))
   }
   return images
 }
@@ -236,6 +248,12 @@ export function drawPreview(layers: VideoLayers, settings: VideoSettings): strin
       context.strokeStyle = layers.color
       context.stroke()
     }
+  }
+  if (layers.lyrics) {
+    // The first line, as it shows while it is sung.
+    const strip = layers.lyrics[0]!
+    const slot = layout.bandHeight
+    context.drawImage(strip, 0, slot, layout.width, slot, 0, layout.bandY, layout.width, slot)
   }
   if (layers.cover) {
     context.drawImage(layers.cover, 0, 0)
@@ -446,6 +464,49 @@ function drawTitle(layout: Layout, title: string, subtitle: string): HTMLCanvasE
     context.fillText(subtitle, layout.width / 2, y - size * 0.15 + size * 0.45, width)
   }
   return canvas
+}
+
+/** The server's `VideoLayout.LyricsPerStrip`: a whole song in one canvas would be taller than iOS allows. */
+export const lyricsPerStrip = 24
+
+/**
+ * The sung lines for the band, as the server's renderer picks them by time: strips of up to `lyricsPerStrip` slots of
+ * the band's size under an empty one, each line centred in its slot, as large as fits in two lines, with a shadow so
+ * it stays readable over the analyzer.
+ */
+export function drawLyricsStrips(layout: Layout, lines: string[]): HTMLCanvasElement[] {
+  const strips: HTMLCanvasElement[] = []
+  const slot = layout.bandHeight
+  const width = layout.width - 2 * 80
+  const font = (size: number) => `700 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`
+  for (let first = 0; first < lines.length; first += lyricsPerStrip) {
+    const chunk = lines.slice(first, first + lyricsPerStrip)
+    const { canvas, context } = frame(layout.width, slot * (chunk.length + 1))
+    context.textAlign = 'center'
+    context.textBaseline = 'middle'
+    context.shadowColor = 'rgb(0 0 0 / 0.85)'
+    context.shadowBlur = 16
+    context.shadowOffsetY = 2
+    context.fillStyle = 'rgb(255 255 255 / 0.97)'
+    chunk.forEach((text, index) => {
+      let size = Math.round(slot * 0.32)
+      let wrapped: string[] = []
+      for (; size >= 28; size -= 2) {
+        context.font = font(size)
+        wrapped = wrap(context, text, width)
+        if (wrapped.length <= 2 && wrapped.every((line) => context.measureText(line).width <= width)) {
+          break
+        }
+      }
+      const middle = slot * (index + 1) + slot / 2
+      const step = size * 1.15
+      wrapped.slice(0, 2).forEach((line, i, shown) => {
+        context.fillText(line, layout.width / 2, middle + (i - (shown.length - 1) / 2) * step, width)
+      })
+    })
+    strips.push(canvas)
+  }
+  return strips
 }
 
 /**

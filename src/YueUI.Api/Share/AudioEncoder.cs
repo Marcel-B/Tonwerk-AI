@@ -8,6 +8,9 @@ public enum AudioFormat
     /// <summary>AAC in an MPEG-4 container (<c>.m4a</c>).</summary>
     M4a,
     Mp3,
+
+    /// <summary>FLAC again, only worth it with <see cref="ILoudness"/> on: the export's copy brought to the target.</summary>
+    Flac,
 }
 
 /// <summary>Makes the small AAC a song is shared as and the MP3 or M4A it is exported as. Tests replace it.</summary>
@@ -22,9 +25,10 @@ public interface IAudioEncoder
 /// <c>afconvert</c> comes with macOS and reads FLAC, so the Mac needs nothing installed; <c>ffmpeg</c> is the
 /// fallback for a development machine elsewhere. 128 kbit/s makes a three-minute song about 3 MB instead of the
 /// FLAC's 30, small enough for any messenger, and AAC in <c>.m4a</c> plays everywhere, iOS included. MP3 needs
-/// <c>ffmpeg</c> (Homebrew's comes with LAME); <c>afconvert</c> cannot write it.
+/// <c>ffmpeg</c> (Homebrew's comes with LAME); <c>afconvert</c> cannot write it. With <see cref="ILoudness"/> on, every
+/// file goes through ffmpeg with its filter, since <c>afconvert</c> cannot change the level.
 /// </summary>
-public sealed class AacEncoder(ILogger<AacEncoder> logger) : IAudioEncoder
+public sealed class AacEncoder(ILoudness loudness, ILogger<AacEncoder> logger) : IAudioEncoder
 {
     public const int BitRate = 128_000;
 
@@ -38,7 +42,13 @@ public sealed class AacEncoder(ILogger<AacEncoder> logger) : IAudioEncoder
         string tool;
         string[] arguments;
         var rate = bitRate.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (format == AudioFormat.M4a && File.Exists(AfConvert))
+        var level = await loudness.FilterAsync(flac, cancellationToken);
+        if (format == AudioFormat.Flac && level is null)
+        {
+            // Nothing to change: the caller copies the original.
+            return false;
+        }
+        if (format == AudioFormat.M4a && level is null && File.Exists(AfConvert))
         {
             tool = AfConvert;
             arguments = ["-f", "m4af", "-d", "aac", "-b", rate, flac, target];
@@ -47,10 +57,20 @@ public sealed class AacEncoder(ILogger<AacEncoder> logger) : IAudioEncoder
         {
             tool = ffmpeg;
             // Tags are written afterwards (IAudioTagger); the FLAC's own would only be mixed into them.
-            arguments = format == AudioFormat.Mp3
-                ? ["-nostdin", "-loglevel", "error", "-y", "-i", flac, "-vn", "-map_metadata", "-1", "-c:a", "libmp3lame", "-b:a", rate, "-f", "mp3", target]
+            List<string> common = ["-nostdin", "-loglevel", "error", "-y", "-i", flac, "-vn", "-map_metadata", "-1"];
+            if (level is not null)
+            {
+                // loudnorm resamples to 192 kHz inside; 48 kHz is what every player and the videos use.
+                common.AddRange(["-af", level, "-ar", "48000"]);
+            }
+            arguments = format switch
+            {
+                AudioFormat.Mp3 => [.. common, "-c:a", "libmp3lame", "-b:a", rate, "-f", "mp3", target],
+                // 24 bits, since the gain moved the samples off the original's 16-bit grid.
+                AudioFormat.Flac => [.. common, "-sample_fmt", "s32", "-bits_per_raw_sample", "24", "-c:a", "flac", "-f", "flac", target],
                 // faststart puts the index first, so a player can start before the whole file is there.
-                : ["-nostdin", "-loglevel", "error", "-y", "-i", flac, "-vn", "-map_metadata", "-1", "-c:a", "aac", "-b:a", rate, "-movflags", "+faststart", "-f", "mp4", target];
+                _ => [.. common, "-c:a", "aac", "-b:a", rate, "-movflags", "+faststart", "-f", "mp4", target],
+            };
         }
         else
         {

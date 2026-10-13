@@ -10,6 +10,7 @@ using YueUI.Api.Loras;
 using YueUI.Api.Logic;
 using YueUI.Api.Monitoring;
 using YueUI.Api.Lyrics;
+using YueUI.Api.Timing;
 using YueUI.Api.Push;
 using YueUI.Api.Queue;
 using YueUI.Api.Share;
@@ -54,6 +55,8 @@ builder.Services.Configure<LogicOptions>(builder.Configuration.GetSection(LogicO
 builder.Services.AddYueToLogic();
 
 // Sharing a song from the phone as a small AAC instead of the FLAC.
+builder.Services.Configure<LoudnessOptions>(builder.Configuration.GetSection(LoudnessOptions.Section));
+builder.Services.AddSingleton<ILoudness, Loudness>();
 builder.Services.AddSingleton<IAudioEncoder, AacEncoder>();
 builder.Services.AddSingleton<StreamCopies>();
 builder.Services.AddHostedService<StreamCopyMaker>();
@@ -101,6 +104,13 @@ builder.Services.AddHttpClient(StemClient.HttpClientName, client => client.Timeo
 builder.Services.AddSingleton<VoiceConverter>();
 builder.Services.AddHostedService(services => services.GetRequiredService<VoiceConverter>());
 builder.Services.AddHostedService<AutoVersions>();
+builder.Services.AddSingleton<QuickSongs>();
+builder.Services.Configure<TimingOptions>(builder.Configuration.GetSection(TimingOptions.Section));
+builder.Services.AddSingleton<TimingFiles>();
+builder.Services.AddSingleton<IWordListener, WhisperListener>();
+builder.Services.AddSingleton<LyricsTimer>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<LyricsTimer>());
+builder.Services.AddHostedService(provider => provider.GetRequiredService<QuickSongs>());
 
 // Music videos: the browser draws the still layers, ffmpeg animates and encodes them, one at a time.
 builder.Services.AddSingleton<IVideoRenderer, FfmpegVideoRenderer>();
@@ -182,6 +192,7 @@ api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"
 api.MapWorkerEndpoints();
 api.MapLoraEndpoints();
 api.MapLibraryEndpoints();
+api.MapTimingEndpoints();
 api.MapExportEndpoints();
 api.MapCoverEndpoints();
 api.MapTranscriptionEndpoints();

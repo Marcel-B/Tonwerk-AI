@@ -97,7 +97,8 @@ public sealed partial class SongLibrary(
     SqliteVideoStore videos,
     StreamCopies streams,
     SqliteDatabase database,
-    Microsoft.Extensions.Options.IOptions<Ace.AceOptions> ace)
+    Microsoft.Extensions.Options.IOptions<Ace.AceOptions> ace,
+    Timing.TimingFiles timings)
 {
     public string OutputDir => paths.OutputDir;
 
@@ -204,6 +205,7 @@ public sealed partial class SongLibrary(
             videos.RemoveSong($"{run}/{song}");
         });
         streams.ForgetSong(run, song);
+        timings.ForgetSong(run, song);
         var runDirectory = new DirectoryInfo(Path.GetDirectoryName(directory)!);
         if (!SongFolders(runDirectory).Any())
         {
@@ -439,6 +441,7 @@ public sealed partial class SongLibrary(
         notes.RemoveRun(run);
         videos.RemoveRun(run);
         streams.ForgetRun(run);
+        timings.ForgetRun(run);
     });
 
     /// <summary>The files are gone already; a database that cannot be written only keeps a row nobody sees.</summary>

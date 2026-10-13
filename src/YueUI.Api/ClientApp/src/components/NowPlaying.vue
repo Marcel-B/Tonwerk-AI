@@ -18,7 +18,10 @@ import {
   seek,
   toggle,
 } from '../player'
+import { getTiming, requestTiming } from '../api'
 import { rate, ratingOf } from '../ratings'
+import { lineAt, shownLines } from '../timing'
+import type { LyricsTiming } from '../types'
 import { readBands, reducedMotion, setVisual, visuals } from '../spectrum'
 import { coverColour } from '../video'
 import PlaylistToggle from './PlaylistToggle.vue'
@@ -105,14 +108,75 @@ function clock(seconds: number): string {
 // ---- Lyrics --------------------------------------------------------------------------------------------------------
 
 /** YuE2's lyrics with their section tags ([Verse], [Chorus], …) as headings of their own. */
-const lyricLines = computed(() =>
-  props.lyrics
-    .split('\n')
-    .map((line) => line.trim())
-    .map((text) => ({ text, section: /^\[[^\]]+\]$/.test(text) })),
-)
+const lyricLines = computed(() => shownLines(props.lyrics))
 const hasLyrics = computed(() => lyricLines.value.some((line) => line.text && !line.section))
 const showLyrics = computed(() => visuals.value.nowPlayingLyrics)
+
+/**
+ * When each line is sung (Whisper, on the server): the line being sung is lit and kept in view, and a tap on a line
+ * jumps there. A song without timing is asked for once and looked at again while the lyrics are open; until then the
+ * lyrics stand as they are.
+ */
+const timing = ref<{ songId: string; value: LyricsTiming } | null>(null)
+const currentTiming = computed(() => (timing.value?.songId === current.value?.songId ? timing.value!.value : null))
+const activeLine = computed(() => lineAt(currentTiming.value, elapsed.value))
+let timingPoll: number | undefined
+
+async function loadTiming(songId: string, ask: boolean): Promise<void> {
+  window.clearTimeout(timingPoll)
+  try {
+    let answer = await getTiming(songId)
+    if (!answer.timing && ask && answer.info.installed && answer.info.state === 'none') {
+      answer = await requestTiming(songId)
+    }
+    if (current.value?.songId !== songId) {
+      return
+    }
+    if (answer.timing) {
+      timing.value = { songId, value: answer.timing }
+    } else if (answer.info.state === 'queued' || answer.info.state === 'listening') {
+      timingPoll = window.setTimeout(() => void loadTiming(songId, false), 10_000)
+    }
+  } catch {
+    // Without timing the lyrics just stand; nothing to tell.
+  }
+}
+
+watch(
+  () => (showLyrics.value && hasLyrics.value && current.value ? current.value.songId : null),
+  (songId) => {
+    window.clearTimeout(timingPoll)
+    if (songId && timing.value?.songId !== songId) {
+      void loadTiming(songId, true)
+    }
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => window.clearTimeout(timingPoll))
+
+const lyricsPanel = useTemplateRef<HTMLElement>('lyricsPanel')
+/** A finger scrolling the lyrics wins over following the song for a few seconds. */
+let scrolledByHand = 0
+
+function handScrolled(): void {
+  scrolledByHand = Date.now()
+}
+
+watch(activeLine, async (index) => {
+  if (index < 0 || Date.now() - scrolledByHand < 4000) {
+    return
+  }
+  const line = lyricsPanel.value?.querySelector<HTMLElement>(`[data-timed="${index}"]`)
+  line?.scrollIntoView({ block: 'center', behavior: reducedMotion.value ? 'auto' : 'smooth' })
+})
+
+function seekLine(timed: number): void {
+  const line = currentTiming.value?.lines[timed]
+  if (line) {
+    scrolledByHand = 0
+    seek(line.start)
+  }
+}
 
 // ---- Switches ------------------------------------------------------------------------------------------------------
 
@@ -300,12 +364,25 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="showLyrics" class="lyrics-panel">
+      <div
+        v-if="showLyrics"
+        ref="lyricsPanel"
+        :class="['lyrics-panel', { timed: !!currentTiming }]"
+        @touchmove.passive="handScrolled"
+        @wheel.passive="handScrolled"
+      >
         <p v-if="!hasLyrics" class="opacity-70">{{ t('nowPlayingInstrumental') }}</p>
         <template v-else>
           <template v-for="(line, index) in lyricLines" :key="index">
             <div v-if="line.section" class="section">{{ line.text.slice(1, -1) }}</div>
-            <p v-else-if="line.text" class="line">{{ line.text }}</p>
+            <p
+              v-else-if="line.text"
+              :class="['line', { active: line.timed >= 0 && line.timed === activeLine }]"
+              :data-timed="line.timed >= 0 ? line.timed : undefined"
+              @click="currentTiming && line.timed >= 0 && seekLine(line.timed)"
+            >
+              {{ line.text }}
+            </p>
             <div v-else class="h-3" />
           </template>
         </template>
@@ -568,6 +645,17 @@ onBeforeUnmount(() => {
   font-size: 1.4rem;
   font-weight: 700;
   line-height: 1.3;
+}
+
+/* With timing, the sung line stands out and the others step back, as in Apple Music. */
+.timed .line {
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.timed .line.active {
+  opacity: 1;
 }
 
 .section {

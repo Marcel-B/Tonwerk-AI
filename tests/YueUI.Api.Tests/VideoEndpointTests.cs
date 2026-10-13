@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Http.Json;
@@ -314,6 +315,52 @@ public sealed class VideoEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NotImplemented, refused.StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, cover.StatusCode);
         Assert.False((await client.GetFromJsonAsync<MediaInfo>("/api/videos/media", TestApp.Json))!.Installed);
+    }
+
+    [Fact]
+    public async Task Timed_lyrics_come_as_strips_of_lines_and_their_times_stay_the_servers()
+    {
+        _app.AddSong("20260101-120000-neon", "song1");
+        var lines = Enumerable.Range(0, 30).Select(i => new Timing.TimedLine($"Line {i}", null, 10 + i * 4, 12 + i * 4, 2)).ToList();
+        await _app.Services.GetRequiredService<Timing.TimingFiles>()
+            .SaveAsync("20260101-120000-neon", "song1", new Timing.LyricsTiming(lines, "vocals", 1, DateTimeOffset.UnixEpoch), CancellationToken.None);
+        var client = _app.CreateClient();
+        var layout = VideoLayout.For(VideoFormats.Landscape);
+
+        // Two strips: 24 lines and 6, each under an empty slot.
+        var wrong = Form(VideoFormats.Landscape, VideoEffects.Bars, VideoMotions.None, showTitle: false);
+        wrong.Add(new StringContent("true"), "showLyrics");
+        wrong.Add(new ByteArrayContent(Png(layout.Width, layout.BandHeight * 25)), "lyrics0", "lyrics0.png");
+        var refused = await client.PostAsync("/api/songs/20260101-120000-neon/song1/videos", wrong);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Contains("lyrics1", await refused.Content.ReadAsStringAsync());
+
+        var form = Form(VideoFormats.Landscape, VideoEffects.Bars, VideoMotions.None, showTitle: false);
+        form.Add(new StringContent("true"), "showLyrics");
+        form.Add(new ByteArrayContent(Png(layout.Width, layout.BandHeight * 25)), "lyrics0", "lyrics0.png");
+        form.Add(new ByteArrayContent(Png(layout.Width, layout.BandHeight * 7)), "lyrics1", "lyrics1.png");
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync("/api/songs/20260101-120000-neon/song1/videos", form)).StatusCode);
+
+        await WaitForVideo(client, "20260101-120000-neon/song1", v => v.Finished);
+        var strips = _app.Videos.Layers!.Lyrics!;
+        Assert.Equal([24, 6], strips.Select(s => s.Cues.Count));
+        Assert.All(strips, strip => Assert.True(File.Exists(strip.Path)));
+        // Shown until a moment after the line, not into the next one's start.
+        Assert.Equal(new LyricsCue(10, 13.5), strips[0].Cues[0]);
+        Assert.Equal(new LyricsCue(126, 129.5), strips[1].Cues[^1]);
+    }
+
+    [Fact]
+    public async Task Lyrics_without_times_are_refused()
+    {
+        _app.AddSong("20260101-120000-neon", "song1");
+        var form = Form(VideoFormats.Landscape, VideoEffects.Bars, VideoMotions.None, showTitle: false);
+        form.Add(new StringContent("true"), "showLyrics");
+
+        var response = await _app.CreateClient().PostAsync("/api/songs/20260101-120000-neon/song1/videos", form);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("showLyrics", await response.Content.ReadAsStringAsync());
     }
 
     private static MultipartFormDataContent Form(string format, string effect, string motion, bool showTitle, bool showCover = true, string? color = null, string? media = null)

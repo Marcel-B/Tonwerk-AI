@@ -32,6 +32,7 @@ public sealed class StreamCopies(
     SqliteVersionStore versions,
     IAudioEncoder encoder,
     IAudioTagger tagger,
+    ILoudness loudness,
     ILogger<StreamCopies> logger)
 {
     public const int BitRate = 192_000;
@@ -138,7 +139,8 @@ public sealed class StreamCopies(
         {
             return null;
         }
-        if (IsFresh(source, target) && ReadStamp(target) == tags.Stamp)
+        var stamp = ReadStamp(target);
+        if (IsFresh(source, target) && stamp.Audio == loudness.Key && stamp.Tags == tags.Stamp)
         {
             return target;
         }
@@ -156,15 +158,20 @@ public sealed class StreamCopies(
     private static bool IsFresh(string source, string target) =>
         File.Exists(target) && File.GetLastWriteTimeUtc(target) >= File.GetLastWriteTimeUtc(source);
 
-    private static string? ReadStamp(string target)
+    /// <summary>
+    /// The stamp's first line is the tags', the second the loudness setting the audio was encoded with (none in
+    /// copies made before there was one, so those are encoded again once).
+    /// </summary>
+    private static (string? Tags, string? Audio) ReadStamp(string target)
     {
         try
         {
-            return File.ReadAllText(StampPath(target));
+            var lines = File.ReadAllText(StampPath(target)).Split('\n');
+            return (lines[0], lines.Length > 1 ? lines[1] : "");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return null;
+            return (null, null);
         }
     }
 
@@ -179,7 +186,8 @@ public sealed class StreamCopies(
         {
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             // Only the tags changed: a copy is quicker than encoding again (checked anew, a render may have come).
-            if (IsFresh(source, target))
+            var key = loudness.Key;
+            if (IsFresh(source, target) && ReadStamp(target).Audio == key)
             {
                 File.Copy(target, temp);
             }
@@ -190,7 +198,7 @@ public sealed class StreamCopies(
             Tag(temp, tags);
             File.Move(temp, target, overwrite: true);
             // Also after a failed tagging: trying again on every range request would copy the file each time.
-            await File.WriteAllTextAsync(StampPath(target), tags.Stamp);
+            await File.WriteAllTextAsync(StampPath(target), $"{tags.Stamp}\n{key}");
             return true;
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException or OperationCanceledException)

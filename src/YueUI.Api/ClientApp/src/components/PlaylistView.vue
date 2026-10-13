@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
-import { formatDuration, t } from '../i18n'
+import { formatBytes, formatDuration, t } from '../i18n'
 import { current, play, playing, trackOf, type Track } from '../player'
 import {
   activePlaylist,
@@ -13,6 +13,7 @@ import {
   savePlaylist,
   selectPlaylist,
 } from '../playlist'
+import { isOffline, offlineBytes, offlineProgress, offlineSongs, setOffline, syncOffline } from '../offline'
 import type { RunInfo, SongInfo } from '../types'
 import { showSong, songHref } from '../view'
 import SongMenu from './SongMenu.vue'
@@ -60,6 +61,33 @@ function move(index: number, by: number): void {
 function remove(entry: Entry): void {
   void save(playlistIds.value.filter((id) => id !== entry.song.id))
 }
+
+// ---- Offline ------------------------------------------------------------------------------------------
+
+const keptOffline = computed(() => isOffline(activePlaylist.value?.id))
+const keptCount = computed(() => entries.value.filter((e) => offlineSongs.value.has(e.song.id)).length)
+
+function toggleOffline(): void {
+  const playlist = activePlaylist.value
+  if (playlist) {
+    setOffline(playlist.id, !keptOffline.value)
+    void syncOffline(playlists.value, props.runs)
+  }
+}
+
+// The copies follow the playlists and the library (a render changes a song's audio), a moment after the last change,
+// and once on the way in, when the app comes back online.
+let timer: ReturnType<typeof setTimeout> | undefined
+function scheduleSync(): void {
+  clearTimeout(timer)
+  timer = setTimeout(() => void syncOffline(playlists.value, props.runs), 1500)
+}
+watch([playlists, () => props.runs], scheduleSync, { immediate: true })
+window.addEventListener('online', scheduleSync)
+onBeforeUnmount(() => {
+  clearTimeout(timer)
+  window.removeEventListener('online', scheduleSync)
+})
 
 // ---- Choosing, creating, renaming and deleting playlists ----------------------------------------------
 
@@ -180,6 +208,16 @@ function askDelete(): void {
         @click="startEditing('rename')"
       />
       <Button
+        :icon="keptOffline ? 'pi pi-cloud-download' : 'pi pi-cloud'"
+        text
+        rounded
+        :severity="keptOffline ? undefined : 'secondary'"
+        :aria-pressed="keptOffline"
+        v-tooltip.top="keptOffline ? t('offlineOff') : t('offlineOn')"
+        :aria-label="t('offline')"
+        @click="toggleOffline"
+      />
+      <Button
         icon="pi pi-trash"
         text
         rounded
@@ -190,6 +228,14 @@ function askDelete(): void {
         @click="askDelete"
       />
     </div>
+    <p v-if="keptOffline" class="muted text-sm mt-0 mb-3 flex items-center gap-2">
+      <i :class="['pi', offlineProgress ? 'pi-spin pi-spinner' : 'pi-cloud-download', 'text-xs']" aria-hidden="true" />
+      <span>{{
+        offlineProgress
+          ? t('offlineSyncing', { done: offlineProgress.done, total: offlineProgress.total })
+          : t('offlineKept', { count: keptCount, total: entries.length, size: formatBytes(offlineBytes) })
+      }}</span>
+    </p>
     <p v-if="entries.length === 0" class="muted">{{ t('playlistEmpty') }}</p>
     <template v-else>
       <div class="flex items-center justify-between gap-2 mb-3">
@@ -225,7 +271,12 @@ function askDelete(): void {
               >{{ entry.track.title }}</a
             >
             <div class="muted text-sm">
-              {{ entry.track.detail
+              <i
+                v-if="keptOffline && offlineSongs.has(entry.song.id)"
+                class="pi pi-check-circle text-xs mr-1"
+                :title="t('offlineSong')"
+                :aria-label="t('offlineSong')"
+              />{{ entry.track.detail
               }}<template v-if="entry.song.seconds"> · {{ formatDuration(entry.song.seconds) }}</template>
             </div>
           </div>

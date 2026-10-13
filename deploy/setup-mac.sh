@@ -9,9 +9,10 @@
 #   deploy/setup-mac.sh --speech           plus the speech lab's environment (deploy/install-speech.sh)
 #   deploy/setup-mac.sh --images           plus FLUX.2 Klein for painted covers (deploy/install-images.sh)
 #   deploy/setup-mac.sh --midi             plus Basic Pitch for audio to MIDI (deploy/install-midi.sh)
+#   deploy/setup-mac.sh --whisper          plus Whisper for lyrics timing (deploy/install-whisper.sh)
 #   deploy/setup-mac.sh --montage          plus photo videos cut to the beat (deploy/install-montage.sh)
 #   deploy/setup-mac.sh --ace              plus ACE-Step, the second song model (deploy/install-ace.sh, about 8 GB)
-#   deploy/setup-mac.sh --all              all seven
+#   deploy/setup-mac.sh --all              all eight
 #   deploy/setup-mac.sh --engine-from-source
 #                                          replace an engine the YuE Studio app installed by a git checkout
 #   deploy/setup-mac.sh --update           again with the options of the last run, without asking (deploy/update.sh)
@@ -55,6 +56,7 @@ VOICES=false
 SPEECH=false
 IMAGES=false
 MIDI=false
+WHISPER=false
 MONTAGE=false
 ACE=false
 FROM_SOURCE=false
@@ -74,13 +76,14 @@ for argument in "$@"; do
     --speech) SPEECH=true ;;
     --images) IMAGES=true ;;
     --midi) MIDI=true ;;
+    --whisper) WHISPER=true ;;
     --montage) MONTAGE=true ;;
     --ace) ACE=true ;;
-    --all) TRANSCRIPTION=true; VOICES=true; SPEECH=true; IMAGES=true; MIDI=true; MONTAGE=true; ACE=true ;;
+    --all) TRANSCRIPTION=true; VOICES=true; SPEECH=true; IMAGES=true; MIDI=true; WHISPER=true; MONTAGE=true; ACE=true ;;
     --engine-from-source) FROM_SOURCE=true ;;
     --no-auto-update) AUTO_UPDATE=false ;;
     --update) echo "--update comes first." >&2; exit 2 ;;
-    -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown argument: $argument" >&2; exit 2 ;;
   esac
 done
@@ -337,6 +340,19 @@ if [ "$MIDI" = true ]; then
     "$REPO/deploy/install-midi.sh"
     mkdir -p "$DATA/midi"
     echo "$MIDI_RECIPE" > "$DATA/midi/recipe"
+  fi
+fi
+
+if [ "$WHISPER" = true ]; then
+  step "Lyrics timing"
+  # install-whisper.sh pins mlx-whisper; an update runs it only when the script changed.
+  WHISPER_RECIPE="$(cksum < "$REPO/deploy/install-whisper.sh")"
+  if [ "$UPDATE" = true ] && [ "$(cat "$DATA/whisper/recipe" 2>/dev/null)" = "$WHISPER_RECIPE" ]; then
+    echo "Unchanged."
+  else
+    "$REPO/deploy/install-whisper.sh"
+    mkdir -p "$DATA/whisper"
+    echo "$WHISPER_RECIPE" > "$DATA/whisper/recipe"
   fi
 fi
 

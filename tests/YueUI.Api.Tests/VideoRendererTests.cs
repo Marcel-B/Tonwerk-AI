@@ -94,6 +94,44 @@ public sealed class VideoRendererTests : IDisposable
     }
 
     [Fact]
+    public async Task Lyrics_lines_show_in_the_band_while_they_are_sung()
+    {
+        if (AacEncoder.FindFfmpeg() is not { } ffmpeg)
+        {
+            return;
+        }
+        var layout = VideoLayout.For(VideoFormats.Landscape);
+        var (w, h) = (layout.Width, layout.BandHeight);
+        var flac = Path.Combine(_directory, "audio.flac");
+        await Run(ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=110:sample_rate=48000:duration=3", "-ac", "2", flac);
+        var background = await Picture(ffmpeg, "background.png", $"color=black:s={w}x{layout.Height}");
+        // Strip 0: an empty slot and 24 lines, the first red, the rest only later than the song; strip 1: one blue line.
+        var first = await Picture(ffmpeg, "lyrics0.png", $"color=black@0:s={w}x{h * 25},format=rgba,drawbox=x=0:y={h}:w={w}:h={h}:color=red@1:t=fill:replace=1");
+        var second = await Picture(ffmpeg, "lyrics1.png", $"color=black@0:s={w}x{h * 2},format=rgba,drawbox=x=0:y={h}:w={w}:h={h}:color=blue@1:t=fill:replace=1");
+        List<LyricsCue> cues = [new(0.9, 1.5), .. Enumerable.Range(0, 23).Select(i => new LyricsCue(10 + i, 11 + i))];
+        var strips = new List<LyricsStrip> { new(first, cues), new(second, [new LyricsCue(2.0, 2.8)]) };
+        var video = new VideoState { Id = "v1", SongId = "run/song1", Title = "", Format = VideoFormats.Landscape, Effect = VideoEffects.None, ShowCover = false };
+        var output = Path.Combine(_directory, "video.mp4");
+
+        await new FfmpegVideoRenderer(NullLogger<FfmpegVideoRenderer>.Instance)
+            .RenderAsync(video, flac, seconds: null, new VideoLayers(background, null, null, [], Lyrics: strips), output, _ => { }, CancellationToken.None);
+
+        async Task<byte[]> PixelAt(double seconds)
+        {
+            var pixel = Path.Combine(_directory, "pixel.rgb");
+            await Run(ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-ss", seconds.ToString(System.Globalization.CultureInfo.InvariantCulture), "-i", output,
+                "-frames:v", "1", "-vf", $"format=rgb24,crop=2:2:{w / 2}:{layout.BandY + h / 2}", "-f", "rawvideo", "-pix_fmt", "rgb24", pixel);
+            return await File.ReadAllBytesAsync(pixel);
+        }
+        var red = await PixelAt(1.2);
+        Assert.True(red[0] > 150 && red[2] < 80, $"red at 1.2 s: {string.Join(",", red)}");
+        var none = await PixelAt(1.75);
+        Assert.True(none.All(c => c < 60), $"nothing at 1.75 s: {string.Join(",", none)}");
+        var blue = await PixelAt(2.4);
+        Assert.True(blue[2] > 150 && blue[0] < 80, $"blue at 2.4 s: {string.Join(",", blue)}");
+    }
+
+    [Fact]
     public void The_band_takes_the_videos_colour_or_Tonwerks()
     {
         var video = new VideoState { Id = "v1", SongId = "run/song1", Title = "", Format = VideoFormats.Landscape, Effect = VideoEffects.Bars };

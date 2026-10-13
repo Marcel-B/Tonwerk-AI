@@ -2,7 +2,17 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Checkbox from 'primevue/checkbox'
-import { addVideo, deleteVideo, fetchMediaFolders, fetchVideoFile, listVideos, saveBlob, videoUrl } from '../api'
+import {
+  addVideo,
+  deleteVideo,
+  fetchMediaFolders,
+  fetchVideoFile,
+  getTiming,
+  listVideos,
+  saveBlob,
+  subtitlesUrl,
+  videoUrl,
+} from '../api'
 import { loadExportSettings, type ExportTarget } from '../export'
 import { formatBytes, t } from '../i18n'
 import {
@@ -18,7 +28,7 @@ import {
   videoTarget,
   type VideoLayers,
 } from '../video'
-import type { MediaInfo, VideoState } from '../types'
+import type { LyricsTiming, MediaInfo, VideoState } from '../types'
 
 /**
  * App.vue holds the one dialog for music videos; the library and the song menu open it through `openVideo`. The
@@ -41,6 +51,10 @@ const showTitle = ref(stored.showTitle)
 const source = ref(stored.source)
 const media = ref(stored.media)
 const motif = ref(stored.motif)
+const showLyrics = ref(stored.showLyrics)
+/** When the song's lines are sung; the lyrics option and the subtitle file only exist with it. */
+const timing = ref<LyricsTiming | null>(null)
+const timed = computed(() => (timing.value?.lines.length ?? 0) > 0)
 const photos = computed(() => source.value === 'photos')
 /** What the picture looks like; the motif only matters on the server, so typing it draws nothing again. */
 const settings = computed(() => ({
@@ -52,6 +66,7 @@ const settings = computed(() => ({
   source: source.value,
   media: media.value,
   motif: '',
+  showLyrics: showLyrics.value,
 }))
 
 /** The artist the export dialog remembers goes under the title. */
@@ -125,7 +140,8 @@ async function redraw(target: ExportTarget): Promise<void> {
   const ticket = ++drawn
   drawing.value = true
   try {
-    const next = await drawVideoLayers(target, settings.value, subtitle)
+    const lines = timing.value?.lines.map((line) => line.text) ?? null
+    const next = await drawVideoLayers(target, settings.value, subtitle, lines)
     if (ticket === drawn && videoTarget.value === target) {
       layers.value = next
       preview.value = drawPreview(next, settings.value)
@@ -151,7 +167,17 @@ watch(
     preview.value = null
     shareFile.value = null
     loaded.value = []
+    timing.value = null
     void redraw(target)
+    // Lyrics are drawn once their times are known; a song without them just has none in its video.
+    void getTiming(target.songId)
+      .then((answer) => {
+        if (videoTarget.value === target && answer.timing) {
+          timing.value = answer.timing
+          void redraw(target)
+        }
+      })
+      .catch(() => undefined)
     try {
       const videos = await listVideos(target.songId)
       if (videoTarget.value === target) {
@@ -195,6 +221,7 @@ async function start(): Promise<void> {
   sending.value = true
   try {
     const { format, effect, motion, showCover, showTitle } = settings.value
+    const lyrics = !!layers.value.lyrics
     const video = await addVideo(
       target.songId,
       {
@@ -204,6 +231,7 @@ async function start(): Promise<void> {
         showCover,
         showTitle,
         color: layers.value.color,
+        showLyrics: lyrics,
         ...(photos.value ? { media: media.value, motif: motif.value.trim() } : {}),
       },
       await toPngs(layers.value),
@@ -374,7 +402,14 @@ function close(): void {
           <Checkbox v-model="showTitle" binary />
           <span>{{ t('videoShowTitle') }}</span>
         </label>
+        <label v-if="timed" class="flex items-center gap-2">
+          <Checkbox v-model="showLyrics" binary />
+          <span>{{ t('videoShowLyrics') }}</span>
+        </label>
       </div>
+      <a v-if="timed && videoTarget" :href="subtitlesUrl(videoTarget.songId)" download class="text-sm">
+        <i class="pi pi-file text-xs" aria-hidden="true" /> {{ t('videoSubtitles') }}
+      </a>
       <small class="muted">{{ photos ? t('videoPhotosHint') : t('videoHint') }}</small>
       <div class="flex justify-end">
         <Button type="submit" :label="t('videoStart')" icon="pi pi-video" :loading="sending" :disabled="!ready" />

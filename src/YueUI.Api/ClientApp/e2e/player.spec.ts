@@ -62,3 +62,54 @@ test('the AirPods resume a song paused in the pocket', async ({ page }) => {
   await expect(page.locator('audio')).toHaveCount(1)
   expect(await page.evaluate(() => document.querySelector('audio')!.dataset.old)).toBeUndefined()
 })
+
+test('the full-screen player lights the line being sung and jumps to a tapped one', async ({ page, api }) => {
+  api.runs = [
+    run('run-1', {
+      title: 'Nachtzug',
+      lyrics: '[Verse]\nErste Zeile im Zug\nZweite Zeile am Fenster\n\n[Chorus]\nDritte Zeile',
+    }),
+  ]
+  api.answers.set('GET /api/songs/run-1/song1/timing', () => ({
+    timing: {
+      lines: [
+        { text: 'Erste Zeile im Zug', section: 'Verse', start: 0, end: 2.5, heard: 4 },
+        { text: 'Zweite Zeile am Fenster', section: 'Verse', start: 3, end: 5.5, heard: 4 },
+        { text: 'Dritte Zeile', section: 'Chorus', start: 6, end: 9, heard: 2 },
+      ],
+      source: 'vocals',
+      coverage: 1,
+      createdAt: '2026-10-13T18:00:00Z',
+    },
+    info: { installed: true, state: 'none', message: null },
+  }))
+  // Seeking needs range requests, which the plain answer above does not take.
+  const wav = silence()
+  await page.route('**/api/songs/run-1/song1/stream', (route) => {
+    const [, from, to] = /bytes=(\d+)-(\d*)/.exec(route.request().headers()['range'] ?? '') ?? []
+    if (from === undefined) {
+      return route.fulfill({ status: 200, contentType: 'audio/wav', headers: { 'Accept-Ranges': 'bytes' }, body: wav })
+    }
+    const end = to ? Number(to) : wav.length - 1
+    return route.fulfill({
+      status: 206,
+      contentType: 'audio/wav',
+      headers: { 'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${from}-${end}/${wav.length}` },
+      body: wav.subarray(Number(from), end + 1),
+    })
+  })
+  await page.goto('#/songs')
+  await page.getByRole('group').filter({ hasText: 'Nachtzug' }).getByRole('button', { name: 'Abspielen' }).click()
+  await page.getByRole('button', { name: 'Nachtzug' }).first().click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Text', exact: true }).click()
+
+  const active = page.locator('.line.active')
+  await expect(active).toHaveText('Erste Zeile im Zug')
+  await expect(active).toHaveText('Zweite Zeile am Fenster', { timeout: 6000 })
+  await page.screenshot({
+    path: process.env.TIMING_SHOTS ? `${process.env.TIMING_SHOTS}/player-text-handy.png` : undefined,
+  })
+
+  await page.locator('.line', { hasText: 'Dritte Zeile' }).click()
+  await expect(active).toHaveText('Dritte Zeile')
+})

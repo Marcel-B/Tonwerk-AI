@@ -43,7 +43,7 @@ public sealed class ExportEndpointTests : IDisposable
     }
 
     [Fact]
-    public async Task A_flac_is_the_songs_own_audio_tagged_without_encoding()
+    public async Task A_flac_without_a_loudness_change_is_the_songs_own_audio_tagged()
     {
         _app.AddSong(Run, "song1");
 
@@ -52,7 +52,7 @@ public sealed class ExportEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("audio/flac", response.Content.Headers.ContentType!.MediaType);
         Assert.Equal(await File.ReadAllBytesAsync(_app.AudioPath(Run, "song1")), await response.Content.ReadAsByteArrayAsync());
-        Assert.Null(_app.Encoder.Source);
+        Assert.Equal(AudioFormat.Flac, _app.Encoder.Format);
         Assert.Null(_app.Tagger.Tags!.Cover);
         Assert.Null(_app.Tagger.Tags.Artist);
     }

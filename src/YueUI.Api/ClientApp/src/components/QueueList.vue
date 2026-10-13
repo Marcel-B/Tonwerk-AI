@@ -20,6 +20,7 @@ import QueueOverview from './QueueOverview.vue'
 import SongTimeline from './SongTimeline.vue'
 import { holderOf, speechWaitReason, transcribing, waitReason } from '../queueModels'
 import { navigate, showSong, songHref } from '../view'
+import { addPlaylist } from '../playlist'
 import type {
   AceJob,
   LogEntry,
@@ -75,6 +76,34 @@ const emit = defineEmits<{
 }>()
 
 const hasFinished = computed(() => props.songs.some((s) => s.finished))
+
+/**
+ * The finished songs the queue still shows, in the order they were made, so they can be heard and rated in one go
+ * from a playlist of their own. ACE-Step's jobs name only their run, so its songs come from the library's listing.
+ */
+const readySongIds = computed(() => {
+  const ids = props.songs.filter((s) => s.stage === 'ready' && props.listed.has(s.id)).map((s) => s.id)
+  for (const job of props.ace) {
+    if (job.stage === 'done' && job.run) {
+      ids.push(...[...props.listed].filter((id) => id.startsWith(`${job.run}/`)).sort(bySongNumber))
+    }
+  }
+  return [...new Set(ids)]
+})
+
+function bySongNumber(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true })
+}
+
+async function playlistOfFinished(): Promise<void> {
+  const name = t('queuePlaylistName', {
+    date: new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }),
+  })
+  await run(async () => {
+    await addPlaylist(name, readySongIds.value)
+    navigate('playlist')
+  })
+}
 
 const jobIcons: Record<QueuedJob['kind'], string> = {
   song: 'pi pi-sparkles',
@@ -328,6 +357,16 @@ watch(
         outlined
         size="small"
         @click="emit('hideFinished')"
+      />
+      <Button
+        v-if="readySongIds.length > 0"
+        :label="t('queuePlaylist', { n: readySongIds.length })"
+        :title="t('queuePlaylistHint')"
+        icon="pi pi-list"
+        severity="secondary"
+        outlined
+        size="small"
+        @click="playlistOfFinished"
       />
       <Button
         :label="t('stopAll')"

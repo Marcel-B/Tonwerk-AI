@@ -87,7 +87,11 @@ public static class ExportEndpoints
             var flac = Path.Combine(directory, "audio.flac");
             if (extension == "flac")
             {
-                File.Copy(flac, temp);
+                // Brought to the target loudness where that is on and ffmpeg is there, else the original.
+                if (!await encoder.EncodeAsync(flac, temp, AudioFormat.Flac, 0, cancellationToken))
+                {
+                    File.Copy(flac, temp, overwrite: true);
+                }
             }
             else if (!await encoder.EncodeAsync(
                 flac,

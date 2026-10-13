@@ -103,6 +103,8 @@ builder.Services.AddHttpClient(StemClient.HttpClientName, client => client.Timeo
 builder.Services.AddSingleton<VoiceConverter>();
 builder.Services.AddHostedService(services => services.GetRequiredService<VoiceConverter>());
 builder.Services.AddHostedService<AutoVersions>();
+builder.Services.AddSingleton<QuickSongs>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<QuickSongs>());
 
 // Music videos: the browser draws the still layers, ffmpeg animates and encodes them, one at a time.
 builder.Services.AddSingleton<IVideoRenderer, FfmpegVideoRenderer>();

@@ -125,6 +125,15 @@ Das Suchfeld über der Bibliothek sucht wahlweise in **Titel & Stil** oder im **
 
 **Benachrichtigungen einschalten** im Zahnrad-Menü oben rechts meldet per Web Push, wenn ein Song fertig ist oder fehlschlägt, eine Transkription endet oder ein Songtext-Entwurf steht, auch bei gesperrtem Handy. Abgebrochene Songs bleiben still. Auf iPhone und iPad geht das nur in der App auf dem Home-Bildschirm (ab iOS 16.4) und nur über HTTPS, also über `tailscale serve`; im normalen Safari-Tab erklärt der Eintrag das. Beim Einschalten kommt eine Test-Nachricht. Jedes Gerät schaltet für sich ein, die Texte kommen in der Sprache, die dort eingestellt ist.
 
+**Song per Kurzbefehl oder Siri:** `POST /api/quick` macht aus ein paar Wörtern in einem Aufruf einen Song. Erst schreibt das Textmodell den Songtext (wie „Text schreiben“ im Formular, Deutsch, wenn nichts anderes gesagt ist), danach kommt der Song von selbst in die Warteschlange; die Benachrichtigung meldet den fertigen Song (der Textentwurf meldet sich nur, wenn er scheitert). Der Stil ist der des neuesten Songs, wenn keiner mitkommt. So wird daraus ein Kurzbefehl auf dem iPhone (Tailscale muss verbunden sein):
+
+1. In der App **Kurzbefehle** einen neuen Kurzbefehl anlegen, z. B. „Tonwerk-Song“.
+2. Aktion **Text diktieren** (Sprache Deutsch).
+3. Aktion **Inhalte von URL abrufen** mit der URL `https://<mac-name>.<tailnet>.ts.net:8443/api/quick`, Methode **POST**, Anfragetext **JSON** und dem Feld `keywords` (Text) = **Diktierter Text**. Wahlweise weitere Felder: `style` (Text), `language` (`de` oder `en`), `batch` (Zahl, 1 bis 10), `quality` (`draft` oder `full`), `title` (sonst der Anfang der Stichwörter).
+4. Wahlweise **Mitteilung anzeigen** mit „Song ist unterwegs“.
+
+Danach reicht „Hey Siri, Tonwerk-Song“, dann sagen, worum es gehen soll. Die Antwort ist `202` mit `draftId`, `stage`, `title` und `style`, ein fehlendes oder falsches Feld ein `400` mit der Erklärung.
+
 Der Server legt beim ersten Mal ein VAPID-Schlüsselpaar an und speichert es mit den Abonnements in `~/Library/Application Support/YuE UI/push.json` (nur für den eigenen Benutzer lesbar). Diese Datei nicht löschen: Mit einem neuen Schlüssel kommt nichts mehr an, bis jedes Gerät die Benachrichtigungen einmal neu einschaltet. Die Nachrichten gehen über die Push-Dienste von Apple, Google oder Mozilla, der Mac braucht dafür Internet.
 
 ## Speicherplatz
@@ -495,6 +504,7 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `GET` | `/api/songs/{run}/{song}/audio` | FLAC (Range-fähig; `?download=true` als Download, eine Kopie mit Titel, Songtext und Cover in den Tags) |
 | `GET` | `/api/songs/{run}/{song}/score` | `score.abc` |
 | `GET` | `/api/songs/{run}/{song}/stream` | Was der Player spielt: AAC-Kopie mit 192 kbit/s (Range-fähig, beim ersten Mal erzeugt), ohne Encoder die FLAC |
+| `POST` | `/api/quick` | Song aus Stichwörtern in einem Aufruf (JSON: `keywords`, optional `style`, `language` `de`/`en`, `title`, `batch`, `quality`): erst der Songtext, dann der Song; `202` mit `draftId`, `title`, `style` |
 | `POST` | `/api/songs/{run}/{song}/export` | Song als MP3, M4A oder FLAC mit Tags und Cover (Formular: `format` = `small` (AAC 128 kbit/s zum Teilen)/`mp3`/`m4a`/`flac`, `artist`, `genre`, `cover` als JPEG/PNG bis 5 MB, ohne `cover` das eigene Cover des Songs); `501`, wenn der Encoder fehlt |
 | `GET` | `/api/songs/{run}/{song}/cover` | Das eigene Cover des Songs; `404` ohne |
 | `PUT` | `/api/songs/{run}/{song}/cover` | Setzt das Cover (Formular: `cover` als JPEG/PNG bis 5 MB) |

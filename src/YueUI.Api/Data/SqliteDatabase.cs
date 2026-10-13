@@ -30,6 +30,7 @@ namespace YueUI.Api.Data;
 /// Version 15: uploaded recordings sung with another voice (<see cref="SqliteSwapStore"/>).
 /// Version 21: songs asked of ACE-Step, from queued to done (<see cref="SqliteAceStore"/>).
 /// Version 22: the measured loudness of audio files, a cache (<see cref="Share.Loudness"/>).
+/// Version 23: songs asked for from a shortcut, waiting for their lyrics draft (<see cref="Lyrics.QuickSongs"/>).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -503,6 +504,21 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                         measured TEXT NOT NULL
                     );
                     PRAGMA user_version = 22;
+                    """);
+            }
+            if (current < 23)
+            {
+                // The song a shortcut asked for, by the id of the lyrics draft it waits for; the request is JSON.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE quick_songs (
+                        draft_id TEXT PRIMARY KEY,
+                        request TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 23;
                     """);
             }
             _ready = true;

@@ -11,6 +11,7 @@ import {
   samplingOverrides,
   toGenerateRequest,
   toTemplateSettings,
+  withScore,
 } from './form'
 import type { SongRequest } from './types'
 
@@ -44,6 +45,31 @@ describe('toGenerateRequest', () => {
     const full = { ...defaultFormState(), quality: 'full' as const }
     expect(toGenerateRequest(full)).toMatchObject({ draftSteps: null, fullSteps: null })
     expect(toGenerateRequest({ ...full, fullSteps: 48 }).fullSteps).toBe(48)
+  })
+
+  test('a score switched off stays in the form but is not sent', () => {
+    const form = { ...defaultFormState(), abc: exampleScore, cot: 'melody' as const }
+    expect(toGenerateRequest(form)).toMatchObject({ abc: exampleScore.trim(), cot: 'melody' })
+    expect(toGenerateRequest({ ...form, useAbc: false })).toMatchObject({ abc: null, cot: 'melody' })
+  })
+
+  test('advanced parameters switched off go out as defaults, the seed and a score with its planning stay', () => {
+    const form = {
+      ...defaultFormState(),
+      useAdvanced: false,
+      seed: '5',
+      maxSeconds: 60,
+      lora: 'warm',
+      abcSampling: { ...defaultSampling.abcSampling, topK: 50 },
+    }
+    expect(toGenerateRequest(form)).toMatchObject({
+      seed: 5,
+      maxTokens: null,
+      lora: null,
+      abcSampling: null,
+      cot: 'full',
+    })
+    expect(toGenerateRequest({ ...form, abc: exampleScore, cot: 'melody' }).cot).toBe('melody')
   })
 
   test('a voice goes along with the original reverb', () => {
@@ -102,8 +128,29 @@ describe('fromSongRequest', () => {
     expect(form.abcSampling).toEqual({ ...defaultSampling.abcSampling, topK: 10 })
   })
 
+  test("without a score of its own the song's written one comes along switched off", () => {
+    const own = 'X:1\nK:C\n"C" C2 D2 |'
+    expect(fromSongRequest(defaultFormState(), request, own)).toMatchObject({ abc: own, useAbc: false, cot: 'full' })
+    const asked = fromSongRequest({ ...defaultFormState(), useAdvanced: false }, { ...request, abc: own }, 'other')
+    expect(asked).toMatchObject({ abc: own, useAbc: true, useAdvanced: true })
+  })
+
   test('a song without a token limit gets the model default', () => {
     expect(fromSongRequest(defaultFormState(), { ...request, maxTokens: null }).maxSeconds).toBe(maxSongSeconds)
+  })
+})
+
+describe('withScore', () => {
+  test('only the score and its planning change, switched on', () => {
+    const form = { ...defaultFormState(), style: 'jazz', seed: '3', useAbc: false }
+    expect(withScore(form, exampleScore)).toMatchObject({
+      style: 'jazz',
+      seed: '3',
+      abc: exampleScore,
+      cot: 'full',
+      useAbc: true,
+    })
+    expect(withScore(form, 'X:1\nK:C\nC2 D2 |').cot).toBe('melody')
   })
 })
 
@@ -144,5 +191,10 @@ describe('templates', () => {
     const scored = { ...form, abc: exampleScore, cot: 'melody' as const }
     expect(applyTemplate(scored, { cot: 'full' }).cot).toBe('melody')
     expect(applyTemplate(form, { cot: 'off' }).cot).toBe('off')
+  })
+  test('with parameters switch the advanced ones back on', () => {
+    const off = { ...form, useAdvanced: false }
+    expect(applyTemplate(off, { draftSteps: 12 }).useAdvanced).toBe(true)
+    expect(applyTemplate(off, { style: 'blues' }).useAdvanced).toBe(false)
   })
 })

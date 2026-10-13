@@ -24,7 +24,7 @@ import VoicesPanel from './components/VoicesPanel.vue'
 import StemsPanel from './components/StemsPanel.vue'
 import VoiceSwapPanel from './components/VoiceSwapPanel.vue'
 import Message from 'primevue/message'
-import { applyTemplate, fromSongRequest, loadFormState, partsOf, planningFor, saveFormState } from './form'
+import { applyTemplate, fromSongRequest, loadFormState, partsOf, saveFormState, withScore } from './form'
 import { formatBytes, t, workerLabel, type MessageKey } from './i18n'
 import { current, refreshTracks } from './player'
 import { loadPlaylists, playlistIds } from './playlist'
@@ -536,25 +536,16 @@ function useScore(abc: string, name: string): void {
 }
 
 /**
- * A song's score to build on, e.g. with changed chords or tempo: with its run's style, lyrics and the song's seed,
- * so that a changed score is all that differs. Planning follows the score: chords are kept when it has them.
+ * A song's score (its score.abc, or one from a MIDI file) to build on, e.g. with changed chords or tempo: only the score
+ * and its planning, the rest of the form stays as it is. "Use everything" brings the song's other settings.
  */
 function useSongScore(run: RunInfo, song: SongInfo, abc: string, midiWarnings?: string[]): void {
-  const cot = planningFor(abc)
-  form.value = {
-    ...form.value,
-    title: run.title,
-    style: run.style,
-    lyrics: run.lyrics,
-    abc,
-    cot,
-    seed: song.seed === null ? form.value.seed : String(song.seed),
-  }
+  form.value = withScore(form.value, abc)
   navigate('create')
   const applied = t(midiWarnings ? 'songMidiApplied' : 'songScoreApplied', {
     title: run.title || t('untitled'),
     song: t('songN', { n: song.index }),
-    planning: t(cot === 'full' ? 'cotFull' : 'cotMelody'),
+    planning: t(form.value.cot === 'full' ? 'cotFull' : 'cotMelody'),
   })
   show(midiWarnings?.length ? `${applied} ${t('midiWarnings', { messages: midiWarnings.join(' ') })}` : applied)
 }
@@ -580,7 +571,7 @@ async function useSongScoreById(songId: string): Promise<void> {
   }
 }
 
-/** The song made again: everything it was generated with, from its request.json, the seed and a score included. */
+/** The song made again: everything it was generated with, from its request.json, the seed and its score included. */
 async function useAsNewSong(songId: string): Promise<void> {
   const found = listedSong(songId)
   if (!found) {
@@ -594,10 +585,17 @@ async function useAsNewSong(songId: string): Promise<void> {
       show(t('newSongApplied', { title: found.run.title || t('untitled'), song: t('songN', { n: found.song.index }) }))
       return
     }
-    form.value = fromSongRequest(form.value, await songRequest(songId))
+    const request = await songRequest(songId)
+    // The score YuE2 wrote comes along switched off, for a song asked without one.
+    const ownScore = request.abc === null && found.song.hasScore ? await songScore(songId) : null
+    form.value = fromSongRequest(form.value, request, ownScore)
     fieldErrors.value = {}
     navigate('create')
-    show(t('newSongApplied', { title: form.value.title || t('untitled'), song: t('songN', { n: found.song.index }) }))
+    const applied = t('newSongApplied', {
+      title: form.value.title || t('untitled'),
+      song: t('songN', { n: found.song.index }),
+    })
+    show(ownScore === null ? applied : `${applied} ${t('ownScoreApplied')}`)
   } catch (caught) {
     show(caught instanceof Error ? caught.message : String(caught), true)
   }

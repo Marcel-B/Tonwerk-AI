@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import { ApiError, draftLyrics, generate, getLyricsModels, listVoices, reviseLyrics } from '../api'
-import { defaultFormState, toGenerateRequest, type FormState } from '../form'
+import { defaultFormState, toGenerateRequest, usesScore, type FormState } from '../form'
 import { formatBytes, t } from '../i18n'
 import { photoDataUrl } from '../photo'
 import { insertSectionTag } from '../lyricsTags'
@@ -53,7 +53,7 @@ const message = ref<{ text: string; error: boolean } | null>(null)
 
 // The API refuses this too; saying so before sending saves a round trip from the phone.
 const scoreWithoutPlanning = computed(
-  () => form.value.abc.trim() !== '' && form.value.cot === 'off' && !form.value.instrumental,
+  () => usesScore(form.value) && form.value.cot === 'off' && !form.value.instrumental,
 )
 
 async function submit(): Promise<void> {
@@ -567,6 +567,25 @@ const batchOptions = Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label
         </FloatLabel>
         <FieldHelp id="gen-batch-help" :hint="t('batchHint')" :more="t('batchMore')" />
         <small v-if="fieldErrors.batch" class="danger">{{ fieldErrors.batch.join(' ') }}</small>
+      </div>
+
+      <!-- Out here, not among the advanced parameters: it stays in effect when those are switched off. -->
+      <div class="col-span-2">
+        <FloatLabel variant="on" class="mt-2 w-full">
+          <InputText
+            fluid
+            id="gen-seed"
+            v-model="form.seed"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            :placeholder="t('seedPlaceholder')"
+            aria-describedby="gen-seed-help"
+          />
+          <label for="gen-seed">{{ t('seed') }}</label>
+        </FloatLabel>
+        <FieldHelp id="gen-seed-help" :hint="t('seedHint')" :more="t('seedMore')" />
+        <small v-if="fieldErrors.seed" class="danger">{{ fieldErrors.seed.join(' ') }}</small>
       </div>
     </div>
 

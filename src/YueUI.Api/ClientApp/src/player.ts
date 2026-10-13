@@ -255,6 +255,24 @@ function onPlay(): void {
   }
 }
 
+/**
+ * Play from the AirPods, the lock screen or Control Center. Without this handler iOS resumed the element by itself and
+ * the `play` event came afterwards, where `onPlay` found the graph stale and swapped the element outside any gesture:
+ * the new element was refused in the background, the old one that iOS knew as the Now Playing session was gone, and
+ * nothing short of restarting the app played again. WebKit runs Media Session handlers as a user gesture, so the
+ * element can be swapped here, before it starts, and starts on the new one. No new context though: one made with the
+ * page hidden may not sound, so a stale graph gives way to an unrouted element and the analyzer rests until the next
+ * tap on our buttons.
+ */
+function resumeRemotely(): void {
+  if (!audio || !current.value) {
+    return
+  }
+  freshStart(true)
+  listen(false)
+  void audio.play().catch(() => undefined)
+}
+
 function playUnrouted(): void {
   unroute(true)
   void audio?.play().catch(() => undefined)
@@ -503,6 +521,8 @@ function showOnLockScreen(track: Track): void {
       })
       .catch(() => undefined)
   }
+  navigator.mediaSession.setActionHandler('play', resumeRemotely)
+  navigator.mediaSession.setActionHandler('pause', () => audio?.pause())
   navigator.mediaSession.setActionHandler('nexttrack', hasNext.value ? () => void next(false) : null)
   navigator.mediaSession.setActionHandler('previoustrack', () => previous(false))
   try {

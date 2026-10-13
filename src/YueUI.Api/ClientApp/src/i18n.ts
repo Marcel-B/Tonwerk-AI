@@ -127,6 +127,9 @@ const messages = {
       'Song 1 bekommt den Seed, Song 2 den Seed + 1 usw. – gleicher Stil und Text, verschiedene Interpretationen. Bis zu vier Songs (zwei auf Macs mit weniger als 24 GB) werden gemeinsam komponiert und kosten dabei kaum mehr Zeit als einer; die Synthese läuft danach Song für Song.\n\nMehr als vier komponiert der Worker in weiteren Durchgängen, die Songs laufen also nacheinander durch.\n\nOriginal: batch, hier 1–10; Standard 1. Pro Durchgang komponiert der Worker höchstens 4 (YUE2_MAX_BATCH).',
     advanced: 'Erweiterte Parameter',
     advancedChanged: 'angepasst',
+    advancedUse: 'Erweiterte Parameter verwenden',
+    advancedOff: 'aus',
+    advancedUnused: 'Ausgeschaltet: Der Song wird mit den Standardwerten erzeugt, die Werte hier bleiben stehen.',
     advancedIntro:
       'Mit den Standardwerten vorbelegt; für einen normalen Song muss hier nichts geändert werden. Das Zurücksetzen lässt eine eigene Partitur samt ihrer Planung stehen.',
     advancedReset: 'Auf Standardwerte zurücksetzen',
@@ -178,6 +181,8 @@ const messages = {
     maxLengthMore:
       'Wie lang ein Song wird, ergibt sich aus Text und Stil. Erreicht er die Grenze, wird er dort abgeschnitten. Eine kurze Grenze spart Zeit, wenn nur der Anfang interessiert, z. B. 1:00 zum Ausprobieren eines Stils.\n\nStandard des Modells sind 6:00 (9000 Tokens, 25 pro Sekunde). Bis 10:00 geht es über die YueUI-Erweiterung des Workers; mehr passt nicht in den Kontext des Modells, den sich Prompt, Partitur und Song teilen (24576 Tokens). Über 6:00 ist ungetestet: Das Modell muss dafür einen längeren Text auch wirklich ausfüllen, und die Neural Engine übernimmt Songs über etwa 8 Minuten nicht mehr, sie laufen dann auf der GPU.\n\nOriginal: max_tokens, 200–15000 (25 pro Sekunde), Standard 9000; ohne die Tonwerk-Erweiterung höchstens 9000. Die Untergrenze 200 ist YuE2s min_tokens.',
     abc: 'Eigene Partitur (ABC)',
+    abcUse: 'Partitur verwenden',
+    abcUnused: 'Ausgeschaltet: Die Partitur bleibt stehen, wird aber nicht mitgeschickt; YuE2 plant den Song selbst.',
     abcPlaceholder: 'X:1\nM:4/4\nL:1/16\nQ:1/4=88\nK:C\n…',
     abcHint: 'Ersetzt die Planung durch eine eigene Partitur: Melodie, Akkorde, Tempo und Form stehen dann fest.',
     abcMore:
@@ -381,11 +386,13 @@ const messages = {
     useAsTemplate: 'Als Vorlage',
     templateLoaded: 'Stil und Text von „{title}“ stehen im Formular.',
     songMidiApplied:
-      'Stil, Text und Seed von „{title}“, {song}, und die Partitur aus der MIDI-Datei stehen im Formular, die Planung auf „{planning}“.',
+      'Die Partitur aus der MIDI-Datei zu „{title}“, {song}, steht im Formular, die Planung auf „{planning}“. Alles andere im Formular bleibt.',
+    ownScoreApplied:
+      'Die Partitur, die YuE2 dafür geschrieben hat, steht ausgeschaltet unter „Eigene Partitur“; eingeschaltet lässt sich etwa die Tonart ändern.',
     midiWarnings: 'Hinweise zur MIDI-Datei: {messages}',
     useMidi: 'MIDI aus Logic als Partitur',
     songScoreApplied:
-      'Stil, Text, Seed und Partitur von „{title}“, {song}, stehen im Formular, die Planung auf „{planning}“. Die Partitur lässt sich unter „Erweiterte Parameter“ bearbeiten.',
+      'Die Partitur von „{title}“, {song}, steht unter „Eigene Partitur“, die Planung auf „{planning}“. Alles andere im Formular bleibt.',
     renderFull: 'Voll rendern',
     rendering: 'In Arbeit',
     download: 'FLAC',
@@ -1120,6 +1127,9 @@ const messages = {
       'Song 1 gets the seed, song 2 the seed + 1 and so on – same style and lyrics, different interpretations. Up to four songs (two on Macs with less than 24 GB) are composed together at hardly more cost than one; synthesis then runs song by song.\n\nMore than four are composed in further passes, so the songs simply run one after another.\n\nOriginal: batch, 1–10 here; default 1. The worker composes at most 4 per pass (YUE2_MAX_BATCH).',
     advanced: 'Advanced parameters',
     advancedChanged: 'changed',
+    advancedUse: 'Use advanced parameters',
+    advancedOff: 'off',
+    advancedUnused: 'Switched off: the song is made with the defaults, the values here stay.',
     advancedIntro:
       'Preset to the defaults; a normal song needs no changes here. Resetting leaves your own score and its planning in place.',
     advancedReset: 'Reset to defaults',
@@ -1171,6 +1181,8 @@ const messages = {
     maxLengthMore:
       'How long a song gets follows from its lyrics and style. If it reaches the limit, it is cut off there. A short limit saves time when only the beginning matters, e.g. 1:00 to try out a style.\n\nThe model’s default is 6:00 (9000 tokens, 25 per second). Up to 10:00 works through YueUI’s worker extension; more does not fit the model’s context, which prompt, score and song share (24576 tokens). Beyond 6:00 is untested: the model has to actually fill it with longer lyrics, and the Neural Engine no longer takes songs over about 8 minutes, so they run on the GPU.\n\nOriginal: max_tokens, 200–15000 (25 per second), default 9000; at most 9000 without the Tonwerk extension. The lower limit 200 is YuE2’s min_tokens.',
     abc: 'Your own score (ABC)',
+    abcUse: 'Use the score',
+    abcUnused: 'Switched off: the score stays here but is not sent; YuE2 plans the song itself.',
     abcPlaceholder: 'X:1\nM:4/4\nL:1/16\nQ:1/4=88\nK:C\n…',
     abcHint: 'Replaces the planning with your own score: melody, chords, tempo and form are then fixed.',
     abcMore:
@@ -1373,11 +1385,13 @@ const messages = {
     useAsTemplate: 'Use as template',
     templateLoaded: 'Style and lyrics of “{title}” are in the form.',
     songMidiApplied:
-      'Style, lyrics and seed of “{title}”, {song}, and the score from the MIDI file are in the form, planning is set to “{planning}”.',
+      'The score from the MIDI file for “{title}”, {song}, is in the form, planning is set to “{planning}”. The rest of the form stays.',
+    ownScoreApplied:
+      'The score YuE2 wrote for it is under “Your own score”, switched off; switch it on to change the key, say.',
     midiWarnings: 'Notes on the MIDI file: {messages}',
     useMidi: 'MIDI from Logic as score',
     songScoreApplied:
-      'Style, lyrics, seed and score of “{title}”, {song}, are in the form, planning is set to “{planning}”. The score can be edited under “Advanced parameters”.',
+      'The score of “{title}”, {song}, is under “Your own score”, planning is set to “{planning}”. The rest of the form stays.',
     renderFull: 'Render full',
     rendering: 'In progress',
     download: 'FLAC',

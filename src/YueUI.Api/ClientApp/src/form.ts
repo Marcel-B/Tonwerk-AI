@@ -18,6 +18,13 @@ export interface FormState {
   batch: number
   cot: Cot
   seed: string
+  /**
+   * Whether the score goes out with the song. Off keeps it in the form unsent, so "use everything" can bring a song's
+   * own score along and still make that very song again.
+   */
+  useAbc: boolean
+  /** Whether the advanced parameters go out; off sends the worker's defaults and keeps the values in the form. */
+  useAdvanced: boolean
   draftSteps: number
   engines: Engines | ''
   /** Longest song in seconds; the API wants tokens. */
@@ -66,9 +73,9 @@ export const maxLoraStrength = 3
 
 const storageKey = 'yue-ui.form'
 
+/** The advanced section's fields; the seed sits beside the song count, outside it. */
 type AdvancedKey =
   | 'cot'
-  | 'seed'
   | 'draftSteps'
   | 'fullSteps'
   | 'engines'
@@ -83,7 +90,6 @@ type AdvancedKey =
 export function defaultAdvanced(): Pick<FormState, AdvancedKey> {
   return {
     cot: 'full',
-    seed: '',
     draftSteps: 8,
     engines: '',
     maxSeconds: maxSongSeconds,
@@ -108,6 +114,9 @@ export function defaultFormState(): FormState {
     instrumental: false,
     quality: 'draft',
     batch: 1,
+    seed: '',
+    useAbc: true,
+    useAdvanced: true,
     voiceId: '',
     voiceShift: 0,
     voiceStrength: 0.7,
@@ -116,24 +125,27 @@ export function defaultFormState(): FormState {
   }
 }
 
-/** A score and the planning chosen for it (a transcription wants "melody") belong together and outlast a reset. */
-function hasScore(form: FormState): boolean {
-  return form.abc.trim() !== ''
+/**
+ * A score that goes out with the song. It and the planning chosen for it (a transcription wants "melody") belong
+ * together and outlast a reset.
+ */
+export function usesScore(form: FormState): boolean {
+  return form.useAbc && form.abc.trim() !== ''
 }
 
 /** The advanced parameters back at their defaults; the score is not a parameter and stays, with its planning. */
 export function resetAdvanced(form: FormState): FormState {
-  return { ...form, ...defaultAdvanced(), abc: form.abc, cot: hasScore(form) ? form.cot : 'full' }
+  return { ...form, ...defaultAdvanced(), abc: form.abc, cot: usesScore(form) ? form.cot : 'full' }
 }
 
 /**
  * Whether an advanced parameter differs from its default. The section is collapsed and kept across visits, so a
- * forgotten seed must stay visible; a score (with its planning) is shown on its own.
+ * forgotten value must stay visible; a score (with its planning) is shown on its own.
  */
 export function advancedChanged(form: FormState): boolean {
   const defaults = defaultAdvanced()
   return (Object.keys(defaults) as AdvancedKey[]).some((key) => {
-    if (key === 'abc' || (key === 'cot' && hasScore(form))) {
+    if (key === 'abc' || (key === 'cot' && usesScore(form))) {
       return false
     }
     const value = form[key]
@@ -203,7 +215,9 @@ export function saveFormState(form: FormState): void {
   }
 }
 
-export function toGenerateRequest(form: FormState): GenerateRequest {
+export function toGenerateRequest(sent: FormState): GenerateRequest {
+  // Switched off, the advanced parameters go out as their defaults; the score's planning stays with a score.
+  const form = sent.useAdvanced ? sent : resetAdvanced(sent)
   const seed = form.seed.trim() === '' ? null : Number.parseInt(form.seed, 10)
   return {
     title: form.title.trim(),
@@ -217,7 +231,7 @@ export function toGenerateRequest(form: FormState): GenerateRequest {
     engines: form.engines === '' ? null : form.engines,
     draftSteps: form.quality === 'draft' ? form.draftSteps : null,
     maxTokens: form.maxSeconds < maxSongSeconds ? form.maxSeconds * tokensPerSecond : null,
-    abc: form.abc.trim() === '' ? null : form.abc.trim(),
+    abc: usesScore(form) ? form.abc.trim() : null,
     fullSteps: form.quality === 'full' && form.fullSteps !== defaultFullSteps ? form.fullSteps : null,
     abcSampling: samplingOverrides('abcSampling', form.abcSampling),
     semanticSampling: samplingOverrides('semanticSampling', form.semanticSampling),
@@ -238,11 +252,13 @@ export function toGenerateRequest(form: FormState): GenerateRequest {
 }
 
 /**
- * The form set to what a song was made with, to make it again with changes: its seed and score included, one song
- * (the seed is that song's). What the song's request does not say goes back to its default; the lyrics draft's
- * settings are the form's own and stay.
+ * The form set to what a song was made with, to make it again with changes: its seed included, one song (the seed is
+ * that song's). What the song's request does not say goes back to its default; the lyrics draft's settings are the
+ * form's own and stay. The score is the one the song was asked with; without one, the score YuE2 wrote for it
+ * (`ownScore`) comes along switched off, so "generate" still makes the same song and switching it on (to change the
+ * key, say) builds on it.
  */
-export function fromSongRequest(form: FormState, request: SongRequest): FormState {
+export function fromSongRequest(form: FormState, request: SongRequest, ownScore: string | null = null): FormState {
   const defaults = defaultFormState()
   const seconds = request.maxTokens === null ? maxSongSeconds : request.maxTokens / tokensPerSecond
   return {
@@ -259,13 +275,23 @@ export function fromSongRequest(form: FormState, request: SongRequest): FormStat
     engines: request.engines ?? '',
     // The form offers fixed lengths; the next one up still fits the song.
     maxSeconds: lengthChoices.find((choice) => choice >= seconds) ?? lengthChoices[lengthChoices.length - 1]!,
-    abc: request.abc ?? '',
+    abc: request.abc ?? ownScore ?? '',
+    useAbc: request.abc !== null,
+    useAdvanced: true,
     fullSteps: request.fullSteps ?? defaults.fullSteps,
     abcSampling: { ...defaultSampling.abcSampling, ...definedOnly(request.abcSampling) },
     semanticSampling: { ...defaultSampling.semanticSampling, ...definedOnly(request.semanticSampling) },
     lora: request.lora ?? '',
     loraStrength: request.loraStrength ?? defaults.loraStrength,
   }
+}
+
+/**
+ * A song's score (its score.abc, or one from a MIDI file) as the form's score and nothing else: the rest of the form
+ * stays. Planning follows the score: chords are kept when it has them.
+ */
+export function withScore(form: FormState, abc: string): FormState {
+  return { ...form, abc, cot: planningFor(abc), useAbc: true }
 }
 
 /** A null in the JSON must not replace a default. */
@@ -357,12 +383,16 @@ export function applyTemplate(form: FormState, settings: Record<string, unknown>
   const result: Record<string, unknown> = { ...form }
   for (const key of templateParts.flatMap((part) => templatePartKeys[part])) {
     const value = settings[key]
-    if (!sameType(defaults[key], value) || (key === 'cot' && hasScore(form))) {
+    if (!sameType(defaults[key], value) || (key === 'cot' && usesScore(form))) {
       continue
     }
     // Nested, so a template saved before a sampling value was added still gets it.
     result[key] =
       key === 'abcSampling' || key === 'semanticSampling' ? keepValid(defaults[key], value as Partial<Sampling>) : value
+  }
+  // A template's parameters are meant to be heard.
+  if (partsOf(settings).includes('parameters')) {
+    result.useAdvanced = true
   }
   return result as unknown as FormState
 }

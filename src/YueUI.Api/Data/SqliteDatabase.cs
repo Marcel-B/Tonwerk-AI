@@ -29,6 +29,7 @@ namespace YueUI.Api.Data;
 /// Version 14: notes written to songs (<see cref="SqliteSongNoteStore"/>).
 /// Version 15: uploaded recordings sung with another voice (<see cref="SqliteSwapStore"/>).
 /// Version 21: songs asked of ACE-Step, from queued to done (<see cref="SqliteAceStore"/>).
+/// Version 22: the measured loudness of audio files, a cache (<see cref="Share.Loudness"/>).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -486,6 +487,22 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                         created_at TEXT NOT NULL
                     );
                     PRAGMA user_version = 21;
+                    """);
+            }
+            if (current < 22)
+            {
+                // loudnorm's first pass per file; size and time tell a render's new FLAC from the old one.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE loudness (
+                        path TEXT PRIMARY KEY,
+                        length INTEGER NOT NULL,
+                        modified TEXT NOT NULL,
+                        measured TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 22;
                     """);
             }
             _ready = true;

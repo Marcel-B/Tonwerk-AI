@@ -564,7 +564,8 @@ public sealed class FakeEncoder : IAudioEncoder
         Target = m4a;
         Format = format;
         BitRate = bitRate;
-        if (!Available)
+        // A FLAC is only encoded to change its loudness, which the tests leave to LoudnessTests: the original goes.
+        if (!Available || format == AudioFormat.Flac)
         {
             return Task.FromResult(false);
         }

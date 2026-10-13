@@ -11,7 +11,8 @@ namespace YueUI.Api.Video;
 /// fonts: the title is a picture). One frame of a three-minute song is a still most of the way, so CRF 18 keeps it
 /// sharp at a few tens of megabytes.
 /// </summary>
-public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : IVideoRenderer
+/// <param name="loudness">Brings the soundtrack to the exports' loudness; none leaves it as it is.</param>
+public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger, ILoudness? loudness = null) : IVideoRenderer
 {
     /// <summary>A long song with particles takes a few minutes on the Mac mini; anything beyond this is hanging.</summary>
     private static readonly TimeSpan Timeout = TimeSpan.FromHours(2);
@@ -49,9 +50,10 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
             {
                 await SpectrumBands.WriteAsync(ffmpeg, flac, VideoLayout.For(video.Format).Bars, spectrum, cancellationToken);
             }
+            var level = loudness is null ? null : await loudness.FilterAsync(flac, cancellationToken);
             var result = await ToolProcess.RunAsync(
                 ffmpeg,
-                Arguments(video, flac, duration, layers, temp, spectrum),
+                Arguments(video, flac, duration, layers, temp, spectrum, level),
                 Timeout,
                 cancellationToken,
                 line: line =>
@@ -87,7 +89,9 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
 
     /// <summary>The whole command line; the graph is in <see cref="Graph"/>.</summary>
     /// <param name="spectrum">The bars' heights from <see cref="SpectrumBands"/>, when the video has bars.</param>
-    public static IReadOnlyList<string> Arguments(VideoState video, string flac, double? seconds, VideoLayers layers, string output, string? spectrum = null)
+    /// <param name="level">The loudness filter for the soundtrack (<see cref="ILoudness"/>), if any.</param>
+    public static IReadOnlyList<string> Arguments(
+        VideoState video, string flac, double? seconds, VideoLayers layers, string output, string? spectrum = null, string? level = null)
     {
         var rate = VideoLayout.FrameRate.ToString(CultureInfo.InvariantCulture);
         List<string> arguments = ["-nostdin", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-y"];
@@ -108,7 +112,7 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
         {
             arguments.AddRange(["-framerate", rate, "-i", layers.Shade]);
         }
-        arguments.AddRange(["-filter_complex", Graph(video, seconds, layers.Cover is not null, layers.Title is not null, layers.Motion.Count, layers.Shade is not null)]);
+        arguments.AddRange(["-filter_complex", Graph(video, seconds, layers.Cover is not null, layers.Title is not null, layers.Motion.Count, layers.Shade is not null, level)]);
         arguments.AddRange(["-map", "[v]", "-map", "[a]"]);
         if (seconds is > 0)
         {
@@ -130,7 +134,7 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
     /// the title fading in; the whole fades in from and out to black. Inputs: 0 background, 1 audio, then cover and
     /// title when there are, then the moving layer's pictures, the bars' heights and a photo video's shade.
     /// </summary>
-    public static string Graph(VideoState video, double? seconds, bool cover, bool title, int motion, bool shade = false)
+    public static string Graph(VideoState video, double? seconds, bool cover, bool title, int motion, bool shade = false, string? level = null)
     {
         var layout = VideoLayout.For(video.Format);
         var (w, h, bandY, bandH) = (layout.Width, layout.Height, layout.BandY, layout.BandHeight);
@@ -152,7 +156,9 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger) : I
         {
             audio.Add("ap");
         }
-        chains.Add(audio.Count == 1 ? "[1:a]anull[a]" : $"[1:a]asplit={audio.Count}{string.Concat(audio.Select(a => $"[{a}]"))}");
+        // The loudness filter comes first, so the waveform and the bass pulse move with what is heard.
+        var source = level is null ? "[1:a]" : $"[1:a]{level},aresample=48000,";
+        chains.Add(audio.Count == 1 ? $"{source}anull[a]" : $"{source}asplit={audio.Count}{string.Concat(audio.Select(a => $"[{a}]"))}");
         // The montage ends with the song; tpad holds its last frame should it be a frame short.
         chains.Add(video.Media is null ? "[0:v]format=rgba,loop=loop=-1:size=1[bg]" : "[0:v]format=rgba,tpad=stop_mode=clone:stop=-1[bg]");
         var current = "bg";

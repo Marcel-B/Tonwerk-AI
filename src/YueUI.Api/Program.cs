@@ -54,6 +54,8 @@ builder.Services.Configure<LogicOptions>(builder.Configuration.GetSection(LogicO
 builder.Services.AddYueToLogic();
 
 // Sharing a song from the phone as a small AAC instead of the FLAC.
+builder.Services.Configure<LoudnessOptions>(builder.Configuration.GetSection(LoudnessOptions.Section));
+builder.Services.AddSingleton<ILoudness, Loudness>();
 builder.Services.AddSingleton<IAudioEncoder, AacEncoder>();
 builder.Services.AddSingleton<StreamCopies>();
 builder.Services.AddHostedService<StreamCopyMaker>();

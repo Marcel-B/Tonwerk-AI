@@ -130,7 +130,8 @@ const loraHint = computed(() => {
 
 <template>
   <!-- Collapsed at first: a normal song needs none of this, and the queue sits right below. -->
-  <Panel v-model:collapsed="collapsed" toggleable>
+  <!-- The header lays its actions out inline, which left a checkbox and a tag on the baseline below the buttons. -->
+  <Panel v-model:collapsed="collapsed" toggleable :pt="{ headerActions: { class: 'flex items-center gap-1' } }">
     <template #header>
       <div class="flex gap-4">
         {{ t('advanced') }}
@@ -139,13 +140,7 @@ const loraHint = computed(() => {
     <template #icons>
       <Tag v-if="!form.useAdvanced" severity="secondary">{{ t('advancedOff') }}</Tag>
       <Tag v-else-if="changed" severity="warn">{{ t('advancedChanged') }}</Tag>
-      <Checkbox
-        v-model="form.useAdvanced"
-        binary
-        class="ml-2 mr-2"
-        :aria-label="t('advancedUse')"
-        v-tooltip="t('advancedUse')"
-      />
+      <Checkbox v-model="form.useAdvanced" binary :aria-label="t('advancedUse')" v-tooltip="t('advancedUse')" />
     </template>
     <small v-if="!form.useAdvanced" class="muted block mb-2">{{ t('advancedUnused') }}</small>
     <div :class="{ 'opacity-60': !form.useAdvanced }">

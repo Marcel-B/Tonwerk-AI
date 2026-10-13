@@ -84,19 +84,13 @@ function useMidi(): void {
 </script>
 
 <template>
-  <Panel v-model:collapsed="collapsed" toggleable>
+  <!-- The header lays its actions out inline, which left a checkbox and a tag on the baseline below the buttons. -->
+  <Panel v-model:collapsed="collapsed" toggleable :pt="{ headerActions: { class: 'flex items-center gap-1' } }">
     <template #header>
       {{ t('abc') }}
     </template>
     <template #icons>
-      <Checkbox
-        v-if="hasScore"
-        v-model="form.useAbc"
-        binary
-        class="mr-2"
-        :aria-label="t('abcUse')"
-        v-tooltip="t('abcUse')"
-      />
+      <Checkbox v-if="hasScore" v-model="form.useAbc" binary :aria-label="t('abcUse')" v-tooltip="t('abcUse')" />
       <Button
         v-if="!hasScore"
         v-tooltip="t('abcExample')"

@@ -38,16 +38,19 @@ async function currentSubscription(): Promise<PushSubscription | null> {
 }
 
 /**
- * Registers the service worker and finds out the state. An existing subscription is sent to the server again, so
+ * Registers the service worker (push and offline playlists) and finds out the state. An existing subscription is sent to the server again, so
  * that one the server lost (a new data file, a new key pair) heals by itself, and so that it speaks the current
  * language.
  */
 export async function initPush(): Promise<void> {
+  // Offline playlists need the worker too, also where there is no Web Push (Safari in a tab).
+  if ('serviceWorker' in navigator) {
+    await navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL })
+  }
   if (!supported()) {
     pushState.value = isIos() && !standalone() ? 'install' : 'unsupported'
     return
   }
-  await navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL })
   if (Notification.permission === 'denied') {
     pushState.value = 'denied'
     return

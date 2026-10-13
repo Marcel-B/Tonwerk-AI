@@ -55,6 +55,8 @@ Ob Prometheus den Mac erreicht, zeigt `http://monitoring:9090/targets`. Löst de
 - **Speicher und Server:** wer wann den Speicher hielt, freier Platz über die Zeit, Speicher des Server-Prozesses (nicht der Modelle).
 - **Protokoll:** Warnungen und Fehler je Quelle über die Zeit, darunter das Protokoll aus Loki mit Filtern für Quelle, Stufe und Text.
 
+Das Dashboard **Finanz-O-Mat** (`grafana/dashboards/finanzomat.json`) zeigt Erreichbarkeit, Kontoumsätze ohne Beleg, Belege mit Prüfhinweis, Alter des letzten Backups, Updates, Anfragen und Antwortzeiten, eingelesene Belege, Anmeldungen, Speicher und CPU sowie das Protokoll. Die App meldet sich mit `finanz-o-mat-lxc.sh monitoring <CTID>` auf dem Proxmox-Host selbst an (Ziel `prometheus/targets/finanzomat.yml`, siehe README von [finanz-O-mat](https://github.com/Marcel-B/finanz-O-mat/blob/main/deploy/proxmox/README.md#monitoring)).
+
 Prometheus behält 90 Tage (`PROMETHEUS_RETENTION`), Loki 30 Tage (`loki/loki.yml`).
 
 ## Wie viel ist das?

@@ -67,6 +67,18 @@ public sealed class StatusHub(Func<IWorkerStatus> worker, IOptions<QueueOptions>
         }
     }
 
+    /// <summary>The newest lyrics draft, without a whole snapshot.</summary>
+    public LyricsState? Lyrics
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _lyrics;
+            }
+        }
+    }
+
     /// <summary>The jobs waiting in <see cref="JobQueue"/>, without a whole snapshot (<c>/metrics</c>).</summary>
     public IReadOnlyList<QueuedJob> Queue
     {

@@ -716,6 +716,19 @@ export async function deleteSpeechTake(id: string): Promise<void> {
   await send(`/api/speech/takes/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+/** A speech recording cleaned of noise by one model; it waits with the takes and reports as a `speech` event. */
+export async function cleanSpeech(file: Blob, fileName: string, model: string): Promise<SpeechTake> {
+  const form = new FormData()
+  form.append('model', model)
+  form.append('file', file, fileName)
+  return (await send('/api/speech/cleanups', { method: 'POST', body: form })).json() as Promise<SpeechTake>
+}
+
+/** The recording a cleaned take started from, to hear before and after. */
+export function speechTakeSourceUrl(id: string): string {
+  return `${apiBase}/api/speech/takes/${encodeURIComponent(id)}/source`
+}
+
 export function speechTakeAudioUrl(id: string, download = false): string {
   return `${apiBase}/api/speech/takes/${encodeURIComponent(id)}/audio${download ? '?download=true' : ''}`
 }

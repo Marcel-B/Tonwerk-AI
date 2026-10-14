@@ -172,6 +172,13 @@ const reasons = computed(() =>
 const takesInWork = computed(() => props.takes.filter((take) => !take.finished))
 
 function takeDetail(take: SpeechTake): string {
+  if (take.source !== null) {
+    // A recording being cleaned: its name, and how far it is.
+    return [
+      take.source,
+      ...(take.progress !== null && !take.finished ? [`${Math.round(take.progress * 100)} %`] : []),
+    ].join(' · ')
+  }
   return [take.voiceLabel ?? t('labOwnVoice'), take.text.replace(/\s+/g, ' ').trim()].join(' · ')
 }
 
@@ -589,7 +596,7 @@ watch(
       <h3 class="m-0 text-sm font-medium text-muted-color">{{ t('menuLab') }}</h3>
       <ul class="m-0 p-0 list-none flex flex-col gap-1">
         <li v-for="(take, i) in takesInWork" :key="take.id" class="flex gap-2 items-center">
-          <i class="pi pi-comments text-muted-color" />
+          <i :class="take.source !== null ? 'pi pi-filter' : 'pi pi-comments'" class="text-muted-color" />
           <div class="min-w-0 flex-1">
             <a
               href="#/lab"

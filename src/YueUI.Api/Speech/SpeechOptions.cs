@@ -30,6 +30,9 @@ public sealed class SpeechOptions
     /// <summary>The models the lab offers; replaces <see cref="SpeechModel.Defaults"/> when set.</summary>
     public List<SpeechModel>? Models { get; set; }
 
+    /// <summary>The models that clean a speech recording; replaces <see cref="SpeechModel.CleanDefaults"/> when set.</summary>
+    public List<SpeechModel>? CleanModels { get; set; }
+
     public string ResolvedRoot => string.IsNullOrWhiteSpace(Root)
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YuE UI", "speech")
         : Expand(Root);
@@ -39,6 +42,8 @@ public sealed class SpeechOptions
     public string ResolvedModelCache => string.IsNullOrWhiteSpace(ModelCache) ? Path.Combine(ResolvedRoot, "models") : Expand(ModelCache);
 
     public IReadOnlyList<SpeechModel> ResolvedModels => Models is { Count: > 0 } models ? models : SpeechModel.Defaults;
+
+    public IReadOnlyList<SpeechModel> ResolvedCleanModels => CleanModels is { Count: > 0 } models ? models : SpeechModel.CleanDefaults;
 
     private static string Expand(string path) => Path.GetFullPath(path.StartsWith("~/", StringComparison.Ordinal)
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path[2..])

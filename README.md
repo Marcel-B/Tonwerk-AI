@@ -307,6 +307,15 @@ Chatterbox und die beiden Higgs-Modelle sprechen am Stück höchstens etwa 40 Se
 
 Ein Modell wird für jedes Ergebnis geladen und danach wieder freigegeben. Es wartet wie eine Fassung, bis YuE2, das Textmodell und Stimmumwandlungen den Speicher freigeben, und so lange warten diese. Die Seite **Warteschlange** listet laufende und wartende Sprachtests unter **Sprachlabor** (mit Abbrechen) und zeigt dann eine vierte Kachel **Sprache**. Beim ersten Mal lädt sich ein Modell herunter (3 bis 9 GB), das dauert.
 
+### Sprache säubern
+
+Unten im Sprachlabor nimmt **Sprache säubern** einer Aufnahme von Sprache (Vortrag, Interview, Sprachnotiz, auch ein Video, dann nur der Ton) Rauschen und Störgeräusche. Datei wählen, Modell wählen, **Säubern**. Das Ergebnis steht darunter zum Anhören und Herunterladen (WAV, 48 kHz mono, `<Name>-clean.wav`); **Original anhören** spielt die Aufnahme, wie sie war. Zur Wahl stehen zwei Modelle zur Sprachverbesserung aus mlx-audio:
+
+- **MossFormer2 SE 48K** (Apache 2.0, aus Alibabas ClearerVoice-Studio, etwa 250 MB): nimmt Rauschen und viel vom Raumklang gründlich weg.
+- **DeepFilterNet 3** (MIT/Apache 2.0, wenige MB): klein, schnell und sanft; nimmt gleichmäßiges Rauschen weg und lässt die Stimme mit ihrem Hall.
+
+Eine Aufnahme darf bis zu 2 Stunden lang und 1 GB groß sein. Sie wartet in derselben Reihe wie die Sprachtests und belegt solange den Speicher; der Fortschritt steht in Prozent dabei und in der Warteschlange. Andere Kandidaten der Recherche (Oktober 2026) blieben draußen: Resemble Enhance erfindet beim Säubern Wörter hinzu, NVIDIAs RE-USE ist nicht kommerziell und braucht CUDA, Sidon gibt es nur als CoreML in einem Swift-Paket. Die Gesangstrennung der Stems ist für Musik trainiert und lässt Sprache dumpfer. Die Liste lässt sich unter `Speech:CleanModels` ersetzen. Auf dem Mac noch nicht gehört.
+
 **Einrichtung.** Das Labor braucht eine eigene Python-Umgebung mit mlx-audio, getrennt von der von YuE Studio. Dazu kommt PyTorch (etwa 1 GB), das nur Higgs Audio v3 braucht: Es liest seinen Audio-Codec über PyTorch. Fehlt ein Paket, sagt der Sprachtest das und nennt das Skript, das es nachinstalliert. Einmal auf dem Mac im Repository ausführen, nachdem `deploy/install.sh` gelaufen ist:
 
 ```sh

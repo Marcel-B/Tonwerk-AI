@@ -117,7 +117,7 @@ public static class LyricsEndpoints
                 return Results.ValidationProblem(errors);
             }
             var draft = await queue.LyricsAsync(new LyricsRequest(request.Keywords!.Trim(), style, language), cancellationToken);
-            quick.Expect(draft.Id, song);
+            await quick.ExpectAsync(draft.Id, song, cancellationToken);
             return Results.Accepted(value: new QuickSongStarted(draft.Id, draft.Stage, title, style!));
         });
         return api;

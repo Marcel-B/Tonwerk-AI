@@ -521,6 +521,19 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 23;
                     """);
             }
+            if (current < 24)
+            {
+                // A take that cleans an uploaded recording instead of speaking a text: the recording's name, and how
+                // far the cleaning is, since a long talk takes minutes.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    ALTER TABLE speech_takes ADD COLUMN source TEXT;
+                    ALTER TABLE speech_takes ADD COLUMN progress REAL;
+                    PRAGMA user_version = 24;
+                    """);
+            }
             _ready = true;
         }
     }

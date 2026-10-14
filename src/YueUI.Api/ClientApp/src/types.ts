@@ -917,3 +917,83 @@ export interface AceInfo {
   adapters: string[]
   jobs: AceJob[]
 }
+
+/** A written song sketch planned by Claude (Sketches/SketchModels.cs `SketchPlan`). */
+export interface SketchPlan {
+  title: string
+  style: string
+  tempo: number
+  beatsPerBar: number
+  key: string
+  sections: SketchSection[]
+  notes: string[]
+}
+
+export interface SketchSection {
+  name: string
+  tag: string
+  parts: string[]
+  energy: number
+  lyrics: string[]
+  bars: SketchBar[]
+}
+
+export interface SketchBar {
+  chords: string
+  vocal: string | null
+  lyric: string | null
+  ins: string | null
+  parts: string[] | null
+}
+
+export type SketchStage = 'queued' | 'writing' | 'done' | 'failed'
+
+export interface SketchJob {
+  id: string
+  title: string
+  stage: SketchStage
+  message: string | null
+  source: string
+  instruction: string | null
+  model: string | null
+  plan: SketchPlan | null
+  inputTokens: number | null
+  outputTokens: number | null
+  createdAt: string
+  updatedAt: string
+  finished: boolean
+}
+
+export interface SketchSummary {
+  id: string
+  title: string
+  stage: SketchStage
+  message: string | null
+  createdAt: string
+  updatedAt: string
+  bars: number | null
+  seconds: number | null
+}
+
+/** Something the server repaired in a plan or doubts about it; `code` picks the words (i18n `sketchWarning_*`). */
+export interface SketchWarning {
+  code: 'barLength' | 'note' | 'chord' | 'chordSimplified' | 'syllables' | 'key' | 'tooLong'
+  bar: number | null
+  detail: string | null
+}
+
+/** A finished sketch with what was made of its plan; one still in the works has only `job`. */
+export interface SketchResult {
+  job: SketchJob
+  abc?: string
+  lyrics?: string
+  request?: SongRequest
+  warnings?: SketchWarning[]
+  bars?: number
+  seconds?: number
+}
+
+export interface SketchInfo {
+  configured: boolean
+  model: string
+}

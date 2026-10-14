@@ -47,6 +47,9 @@ import type {
   AceInfo,
   AceJob,
   AceSongRequest,
+  SketchInfo,
+  SketchResult,
+  SketchSummary,
   MemoryInfo,
   VoiceInfo,
   WorkerInfo,
@@ -777,6 +780,36 @@ export async function composeAce(request: AceSongRequest): Promise<AceJob> {
 /** Stops a job in the works, or forgets a finished one (its songs stay in the library). */
 export async function deleteAceJob(id: string): Promise<void> {
   await send(`/api/ace/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** Whether Claude can plan sketches (an Anthropic key is set), and with which model. */
+export async function getSketchInfo(): Promise<SketchInfo> {
+  return (await send('/api/sketches/info')).json() as Promise<SketchInfo>
+}
+
+/** Every sketch, newest first. */
+export async function getSketches(): Promise<SketchSummary[]> {
+  return (await send('/api/sketches')).json() as Promise<SketchSummary[]>
+}
+
+/** Sends a written sketch to Claude; the plan follows minutes later, so the answer is the waiting sketch. */
+export async function planSketch(text: string, instruction: string): Promise<SketchSummary> {
+  return (
+    await send('/api/sketches', json('POST', { text, instruction: instruction || null }))
+  ).json() as Promise<SketchSummary>
+}
+
+export async function getSketch(id: string): Promise<SketchResult> {
+  return (await send(`/api/sketches/${encodeURIComponent(id)}`)).json() as Promise<SketchResult>
+}
+
+export async function deleteSketch(id: string): Promise<void> {
+  await send(`/api/sketches/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** Where the sketch's MIDI draft and score download from, for a link the browser follows. */
+export function sketchFileUrl(id: string, file: 'midi' | 'score'): string {
+  return `${apiBase}/api/sketches/${encodeURIComponent(id)}/${file}`
 }
 
 /** What ACE-Step was asked for an ACE song, with its own seed and lyrics, to make it again on the page. */

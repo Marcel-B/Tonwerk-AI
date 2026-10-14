@@ -80,6 +80,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeAce Ace { get; } = new();
 
+    public FakeSketchModel Sketches { get; } = new();
+
+    /// <summary>The Anthropic key the sketches see; null leaves them unconfigured.</summary>
+    public string? SketchKey { get; set; } = "sketch-key";
+
     public FakeListener Listener { get; } = new();
 
     public FakeSongListener SongListener { get; } = new();
@@ -205,6 +210,12 @@ public sealed class TestApp : WebApplicationFactory<Program>
             services.AddSingleton<Images.IImageEngine>(Images);
             services.AddSingleton<AudioMidi.IAudioMidiEngine>(AudioMidi);
             services.AddSingleton<Ace.IAceEngine>(Ace);
+            services.AddSingleton<Sketches.ISketchModel>(Sketches);
+            services.Configure<Sketches.SketchOptions>(options =>
+            {
+                options.ApiKey = SketchKey;
+                options.KeyFile = Path.Combine(Root, "anthropic.key");
+            });
             services.AddSingleton<Timing.IWordListener>(Listener);
             services.AddSingleton<Analysis.ISongListener>(SongListener);
             services.Configure<Analysis.AnalysisOptions>(options =>
@@ -1128,6 +1139,39 @@ public sealed class FakeImages : Images.IImageEngine
         }
         await File.WriteAllBytesAsync(job.Output, Jpeg, cancellationToken);
         return new Images.ImageResult(20.5, 31.25, 8.9);
+    }
+
+    private static TaskCompletionSource CompletedGate()
+    {
+        var gate = new TaskCompletionSource();
+        gate.SetResult();
+        return gate;
+    }
+}
+
+/// <summary>Claude: answers every sketch with <see cref="Plan"/>; can be held back or made to fail.</summary>
+public sealed class FakeSketchModel : Sketches.ISketchModel
+{
+    public Sketches.SketchPlan Plan { get; set; } = SketchSamples.Plan();
+
+    public TaskCompletionSource Gate { get; set; } = CompletedGate();
+
+    public string? Failure { get; set; }
+
+    public List<(string Sketch, string? Instruction)> Calls { get; } = [];
+
+    public async Task<Sketches.SketchAnswer> PlanAsync(string sketch, string? instruction, CancellationToken cancellationToken)
+    {
+        lock (Calls)
+        {
+            Calls.Add((sketch, instruction));
+        }
+        await Gate.Task.WaitAsync(cancellationToken);
+        if (Failure is { } failure)
+        {
+            throw new Sketches.SketchModelException(failure);
+        }
+        return new Sketches.SketchAnswer(Plan, "claude-test", 1200, 9000);
     }
 
     private static TaskCompletionSource CompletedGate()

@@ -42,6 +42,7 @@ import TemplatePicker from './components/TemplatePicker.vue'
 import { loadedTemplateId, partList } from './templates'
 import { navigate, view, type View } from './view'
 import type {
+  SongRequest,
   AceJob,
   LogEntry,
   LyricsState,
@@ -84,6 +85,7 @@ const LogPage = defineAsyncComponent(() => import('./components/LogPage.vue'))
 const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.vue'))
 const TemplatesPage = defineAsyncComponent(() => import('./components/TemplatesPage.vue'))
 const InsightsPage = defineAsyncComponent(() => import('./components/InsightsPage.vue'))
+const SketchPage = defineAsyncComponent(() => import('./components/SketchPage.vue'))
 
 const logCapacity = 300
 const form = ref(loadFormState())
@@ -312,6 +314,7 @@ const pages: Page[] = [
 const tools: Page[] = [
   { view: 'templates', label: 'menuTemplates', icon: 'pi pi-bookmark' },
   { view: 'insights', label: 'menuInsights', icon: 'pi pi-chart-bar' },
+  { view: 'sketch', label: 'menuSketch', icon: 'pi pi-pencil' },
   { view: 'ace', label: 'menuAce', icon: 'pi pi-wave-pulse' },
   { view: 'transcribe', label: 'menuTranscribe', icon: 'pi pi-microphone' },
   { view: 'voices', label: 'menuVoices', icon: 'pi pi-users' },
@@ -380,6 +383,7 @@ const logsOpened = ref(view.value === 'logs')
 const storageOpened = ref(view.value === 'storage')
 const templatesOpened = ref(view.value === 'templates')
 const insightsOpened = ref(view.value === 'insights')
+const sketchOpened = ref(view.value === 'sketch')
 const instrumentsOpened = ref(view.value === 'instruments')
 const harmonyOpened = ref(view.value === 'harmony')
 const aceOpened = ref(view.value === 'ace')
@@ -410,6 +414,9 @@ watch(view, (value) => {
   }
   if (value === 'insights') {
     insightsOpened.value = true
+  }
+  if (value === 'sketch') {
+    sketchOpened.value = true
   }
 })
 
@@ -576,6 +583,13 @@ async function useSongScoreById(songId: string): Promise<void> {
   } catch (caught) {
     show(caught instanceof Error ? caught.message : String(caught), true)
   }
+}
+
+/** A planned sketch as the next song: its lyrics, style and score, the rest of the form as it was. */
+function useSketch(request: SongRequest): void {
+  form.value = fromSongRequest(form.value, request)
+  fieldErrors.value = {}
+  navigate('create')
 }
 
 /** The song made again: everything it was generated with, from its request.json, the seed and its score included. */
@@ -951,6 +965,18 @@ async function useAsNewSong(songId: string): Promise<void> {
       <template #content>
         <p class="muted mt-0">{{ t('insightsIntro') }}</p>
         <InsightsPage :active="view === 'insights'" />
+      </template>
+    </Card>
+  </main>
+
+  <main v-if="sketchOpened" v-show="view === 'sketch'">
+    <Card>
+      <template #title>
+        <h2>{{ t('sketch') }}</h2>
+      </template>
+      <template #content>
+        <p class="muted mt-0">{{ t('sketchIntro') }}</p>
+        <SketchPage :active="view === 'sketch'" @use="useSketch" @notice="show($event)" @error="show($event, true)" />
       </template>
     </Card>
   </main>

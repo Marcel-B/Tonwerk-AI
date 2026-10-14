@@ -9,6 +9,7 @@ import { formatBytes, formatDateTime, t } from '../i18n'
 import { libraryTracks, play, trackOf } from '../player'
 import { rate, ratings } from '../ratings'
 import { matchesRun, matchingLines, parseQuery, type SearchScope } from '../search'
+import { matchesTrait, type TraitFilter } from '../traits'
 import { librarySort, sortRuns, type SortedRun } from '../sort'
 import { needsReview, reviewDays } from '../review'
 import type { RunInfo, SongInfo, VersionState } from '../types'
@@ -58,6 +59,7 @@ const scope = ref<SearchScope>('titleStyle')
 const terms = computed(() => parseQuery(query.value))
 const searching = computed(() => terms.value.length > 0)
 const minRating = ref<number | 'review'>(0)
+const trait = ref<TraitFilter>('all')
 const reviewing = computed(() => minRating.value === 'review')
 
 /**
@@ -74,10 +76,11 @@ function shownSongs(run: RunInfo): SongInfo[] {
   // Read here, so the list follows a rating that changes while filtered.
   const stars = ratings.value
   const filter = minRating.value
+  const heard = run.songs.filter((song) => matchesTrait(song, trait.value))
   if (filter === 'review') {
-    return run.songs.filter((song) => reviewed.value.has(song.id) || needsReview(run, song, stars, reviewDays.value))
+    return heard.filter((song) => reviewed.value.has(song.id) || needsReview(run, song, stars, reviewDays.value))
   }
-  return filter === 0 ? run.songs : run.songs.filter((song) => (stars[song.id] ?? 0) >= filter)
+  return filter === 0 ? heard : heard.filter((song) => (stars[song.id] ?? 0) >= filter)
 }
 
 /** The runs the search and the rating filter let through, in the chosen order, each with the songs to list. */
@@ -98,7 +101,7 @@ const first = ref(0)
 const list = ref<HTMLElement | null>(null)
 
 // A new search starts on the first page; its hits would otherwise hide behind a page number.
-watch([terms, scope, minRating, reviewDays], () => {
+watch([terms, scope, minRating, trait, reviewDays], () => {
   first.value = 0
 })
 
@@ -141,6 +144,7 @@ watch(
     if (!shownRuns.value.some((entry) => entry.songs.some((song) => song.id === id))) {
       query.value = ''
       minRating.value = 0
+      trait.value = 'all'
       await nextTick()
     }
     const index = shownRuns.value.findIndex((entry) => entry.songs.some((song) => song.id === id))
@@ -260,6 +264,7 @@ async function saveTitle(): Promise<void> {
       v-model:query="query"
       v-model:scope="scope"
       v-model:min-rating="minRating"
+      v-model:trait="trait"
       :runs="runs"
       :shown="shownRuns.length"
     />

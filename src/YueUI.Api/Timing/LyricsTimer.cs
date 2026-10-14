@@ -148,6 +148,7 @@ public sealed class LyricsTimer(
     SongLibrary library,
     TimingFiles files,
     SqliteStemStore stems,
+    SqliteSongTraitStore traits,
     ModelMemory memory,
     IWordListener listener,
     IOptions<TimingOptions> options,
@@ -269,6 +270,7 @@ public sealed class LyricsTimer(
             var heard = await listener.ListenAsync(audio, Language(request!.Style, lyrics), Prompt(lyrics), stoppingToken);
             var timing = LyricsAligner.Align(lyrics, heard, SongLibrary.SecondsOf(directory), source, time.GetUtcNow());
             await files.SaveAsync(run, song, timing, stoppingToken);
+            Clarity(songId, timing);
             _states.TryRemove(songId, out _);
             logger.LogInformation(
                 "Lyrics of {Song} timed from the {Source}, {Coverage} of the words heard",
@@ -278,6 +280,20 @@ public sealed class LyricsTimer(
         {
             logger.LogWarning("Could not time the lyrics of {Song}: {Reason}", songId, exception.Message);
             _states[songId] = new TimingInfo(true, "failed", exception.Message);
+        }
+    }
+
+    /// <summary>How much of the lyrics was understood, for the library; the timing itself is in its file already.</summary>
+    private void Clarity(string songId, LyricsTiming timing)
+    {
+        try
+        {
+            traits.SetClarity(songId, timing.Coverage, timing.Source);
+            hub.LibraryChanged();
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException exception)
+        {
+            logger.LogWarning("Could not keep the clarity of {Song}: {Reason}", songId, exception.Message);
         }
     }
 

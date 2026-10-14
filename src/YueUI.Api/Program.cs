@@ -78,6 +78,7 @@ builder.Services.AddSingleton<SqlitePlaylistStore>();
 builder.Services.AddSingleton<SqliteRunTitleStore>();
 builder.Services.AddSingleton<SqliteSongRatingStore>();
 builder.Services.AddSingleton<SqliteSongNoteStore>();
+builder.Services.AddSingleton<SqliteSongTraitStore>();
 builder.Services.AddSingleton<SqlitePromptTemplateStore>();
 builder.Services.AddSingleton<SqliteVersionStore>();
 builder.Services.AddSingleton<SqliteStemStore>();
@@ -110,6 +111,10 @@ builder.Services.AddSingleton<TimingFiles>();
 builder.Services.AddSingleton<IWordListener, WhisperListener>();
 builder.Services.AddSingleton<LyricsTimer>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<LyricsTimer>());
+builder.Services.Configure<YueUI.Api.Analysis.AnalysisOptions>(builder.Configuration.GetSection(YueUI.Api.Analysis.AnalysisOptions.Section));
+builder.Services.AddSingleton<YueUI.Api.Analysis.ISongListener, YueUI.Api.Analysis.LibrosaListener>();
+builder.Services.AddSingleton<YueUI.Api.Analysis.SongAnalyzer>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<YueUI.Api.Analysis.SongAnalyzer>());
 builder.Services.AddHostedService(provider => provider.GetRequiredService<QuickSongs>());
 
 // Music videos: the browser draws the still layers, ffmpeg animates and encodes them, one at a time.

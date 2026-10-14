@@ -36,6 +36,7 @@ public sealed record RunInfo(
 /// <param name="Note">A note written to the song in this app, null while there is none.</param>
 /// <param name="VideoFormats">The formats the song has a finished music video in; empty while it has none.</param>
 /// <param name="Engine"><c>ace</c> for a song ACE-Step made (Ace/AceComposer.cs), null for YuE2's.</param>
+/// <param name="Traits">Tempo, key and how clearly the lyrics are sung, as far as heard yet (Analysis/SongAnalyzer.cs).</param>
 public sealed record SongInfo(
     string Id,
     int Index,
@@ -51,7 +52,8 @@ public sealed record SongInfo(
     DateTimeOffset? CoverUpdatedAt = null,
     string? Note = null,
     IReadOnlyList<string>? VideoFormats = null,
-    string? Engine = null);
+    string? Engine = null,
+    SongTraits? Traits = null);
 
 /// <summary>
 /// What a song was generated with, from its <c>request.json</c>, in the terms of <see cref="GenerateRequest"/>, so the
@@ -98,7 +100,8 @@ public sealed partial class SongLibrary(
     StreamCopies streams,
     SqliteDatabase database,
     Microsoft.Extensions.Options.IOptions<Ace.AceOptions> ace,
-    Timing.TimingFiles timings)
+    Timing.TimingFiles timings,
+    SqliteSongTraitStore traits)
 {
     public string OutputDir => paths.OutputDir;
 
@@ -148,6 +151,7 @@ public sealed partial class SongLibrary(
         var covered = Read(covers.All) ?? new Dictionary<string, DateTimeOffset>();
         var noted = Read(notes.All) ?? new Dictionary<string, string>();
         var filmed = Read(videos.FinishedFormats) ?? new Dictionary<string, IReadOnlyList<string>>();
+        var heard = Read(traits.All) ?? new Dictionary<string, SongTraits>();
         var sung = (Read(versions.All) ?? [])
             .Where(v => v.Stage != "cancelled")
             .GroupBy(v => v.SongId)
@@ -159,7 +163,7 @@ public sealed partial class SongLibrary(
                 // The same name in both (two runs in the same second) shows YuE's, as RunDirectory finds it.
                 .DistinctBy(d => d.Name)
                 .OrderByDescending(d => d.Name, StringComparer.Ordinal)
-                .Select(d => ReadRun(d, renamed.GetValueOrDefault(d.Name), rated, covered, noted, sung, filmed))
+                .Select(d => ReadRun(d, renamed.GetValueOrDefault(d.Name), rated, covered, noted, sung, filmed, heard))
                 // A run still tokenizing has no song folders yet; the queue shows it.
                 .Where(r => r.Songs.Count > 0),
         ];
@@ -203,6 +207,7 @@ public sealed partial class SongLibrary(
             covers.Remove($"{run}/{song}");
             notes.Remove($"{run}/{song}");
             videos.RemoveSong($"{run}/{song}");
+            traits.Remove($"{run}/{song}");
         });
         streams.ForgetSong(run, song);
         timings.ForgetSong(run, song);
@@ -440,6 +445,7 @@ public sealed partial class SongLibrary(
         covers.RemoveRun(run);
         notes.RemoveRun(run);
         videos.RemoveRun(run);
+        traits.RemoveRun(run);
         streams.ForgetRun(run);
         timings.ForgetRun(run);
     });
@@ -463,7 +469,8 @@ public sealed partial class SongLibrary(
         IReadOnlyDictionary<string, DateTimeOffset> covered,
         IReadOnlyDictionary<string, string> noted,
         IReadOnlyDictionary<string, IReadOnlyList<VersionState>> sung,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> filmed)
+        IReadOnlyDictionary<string, IReadOnlyList<string>> filmed,
+        IReadOnlyDictionary<string, SongTraits> heard)
     {
         var songs = new List<SongInfo>();
         string title = "", style = "", lyrics = "";
@@ -499,7 +506,8 @@ public sealed partial class SongLibrary(
                 covered.TryGetValue(id, out var cover) ? cover : null,
                 noted.GetValueOrDefault(id),
                 filmed.GetValueOrDefault(id) ?? [],
-                File.Exists(Path.Combine(folder.FullName, AceFile)) ? "ace" : null));
+                File.Exists(Path.Combine(folder.FullName, AceFile)) ? "ace" : null,
+                heard.GetValueOrDefault(id)));
         }
 
         var original = title.Length > 0 ? title : TitleFromName(run.Name);

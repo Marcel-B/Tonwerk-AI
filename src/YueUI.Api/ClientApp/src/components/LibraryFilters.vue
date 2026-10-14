@@ -5,7 +5,8 @@ import { t } from '../i18n'
 import { ratings } from '../ratings'
 import { reviewCount, reviewDayChoices, reviewDays } from '../review'
 import { parseQuery, type SearchScope } from '../search'
-import { librarySort, type LibrarySort } from '../sort'
+import { librarySort, sorts } from '../sort'
+import { traitFilters, type TraitFilter } from '../traits'
 import type { RunInfo } from '../types'
 
 /**
@@ -25,6 +26,8 @@ const scope = defineModel<SearchScope>('scope', { required: true })
  * left unrated for longer than `reviewDays`, to be heard again and rated or deleted.
  */
 const minRating = defineModel<number | 'review'>('minRating', { required: true })
+/** Only songs heard to be slow, fast, in minor, sung unclearly, … */
+const trait = defineModel<TraitFilter>('trait', { required: true })
 
 const scopes = computed(() => [
   { value: 'titleStyle', label: t('searchTitleStyle') },
@@ -37,11 +40,12 @@ const ratingFilters = computed(() => [
   { value: 'review', label: t('ratingReview') },
 ])
 const sortOptions = computed(() =>
-  (['newest', 'oldest', 'rating', 'longest', 'shortest'] as LibrarySort[]).map((value) => ({
+  sorts.map((value) => ({
     value,
     label: t(`sort_${value}`),
   })),
 )
+const traitOptions = computed(() => traitFilters.map((value) => ({ value, label: t(`trait_${value}`) })))
 const dayOptions = computed(() =>
   reviewDayChoices.map((days) => ({ value: days, label: t('reviewDays', { n: days }) })),
 )
@@ -49,7 +53,7 @@ const dayOptions = computed(() =>
 const reviewing = computed(() => minRating.value === 'review')
 const toReview = computed(() => reviewCount(props.runs, ratings.value, reviewDays.value))
 /** Some runs are hidden, by the search or the rating filter; the count of hits shows. */
-const filtering = computed(() => parseQuery(query.value).length > 0 || minRating.value !== 0)
+const filtering = computed(() => parseQuery(query.value).length > 0 || minRating.value !== 0 || trait.value !== 'all')
 
 function startReview(): void {
   query.value = ''
@@ -59,6 +63,7 @@ function startReview(): void {
 function clearSearch(): void {
   query.value = ''
   minRating.value = 0
+  trait.value = 'all'
 }
 </script>
 
@@ -115,6 +120,16 @@ function clearSearch(): void {
       option-value="value"
       :aria-label="t('ratingFilter')"
       v-tooltip.top="t('ratingFilter')"
+      size="small"
+      class="shrink-0"
+    />
+    <Select
+      v-model="trait"
+      :options="traitOptions"
+      option-label="label"
+      option-value="value"
+      :aria-label="t('traitFilter')"
+      v-tooltip.top="t('traitFilter')"
       size="small"
       class="shrink-0"
     />

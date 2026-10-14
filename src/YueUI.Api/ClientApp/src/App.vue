@@ -25,6 +25,7 @@ import StemsPanel from './components/StemsPanel.vue'
 import VoiceSwapPanel from './components/VoiceSwapPanel.vue'
 import Message from 'primevue/message'
 import { applyTemplate, fromSongRequest, loadFormState, partsOf, saveFormState, withScore } from './form'
+import { heardTempo } from './traits'
 import { formatBytes, t, workerLabel, type MessageKey } from './i18n'
 import { current, refreshTracks } from './player'
 import { loadPlaylists, playlistIds } from './playlist'
@@ -595,6 +596,8 @@ async function useAsNewSong(songId: string): Promise<void> {
     // The score YuE2 wrote comes along switched off, for a song asked without one.
     const ownScore = request.abc === null && found.song.hasScore ? await songScore(songId) : null
     form.value = fromSongRequest(form.value, request, ownScore)
+    // Offered among the tempo blocks rather than written into the style, which would change the song.
+    heardTempo.value = found.song.traits?.from === 'audio' ? (found.song.traits.tempo ?? null) : null
     fieldErrors.value = {}
     navigate('create')
     const applied = t('newSongApplied', {

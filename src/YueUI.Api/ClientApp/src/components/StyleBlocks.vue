@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { t, type MessageKey } from '../i18n'
 import { loadInsights, provenStyleBlocks } from '../insights'
 import { countTags, hasTag, styleCategories, toggleTag, type StyleCategory } from '../styleTags'
+import { heardTempo, tempoTag } from '../traits'
 import FieldHelp from './FieldHelp.vue'
 
 /** Whether the song is instrumental: voice and timbre then describe nobody. */
@@ -16,6 +17,12 @@ onMounted(() => loadInsights().catch(() => {}))
 
 function label(key: StyleCategory): string {
   return t(`styleBlocks_${key}` as MessageKey)
+}
+
+/** The blocks of a category; the tempo heard in the song taken over goes first, if the list lacks it. */
+function tagsOf(key: StyleCategory, tags: readonly string[]): readonly string[] {
+  const heard = key === 'tempo' && heardTempo.value ? tempoTag(heardTempo.value) : null
+  return heard && !tags.includes(heard) ? [heard, ...tags] : tags
 }
 
 function hint(key: StyleCategory): string {
@@ -62,9 +69,12 @@ function hint(key: StyleCategory): string {
             class="warning block"
             >{{ t('styleBlocksInstrumental') }}</small
           >
+          <small v-if="definition.key === 'tempo' && heardTempo" class="muted block">
+            {{ t('styleBlocks_heard') }}: {{ tempoTag(heardTempo) }}
+          </small>
           <div class="mt-3 flex flex-wrap gap-2" role="group" :aria-label="label(definition.key)">
             <Button
-              v-for="tag in definition.tags"
+              v-for="tag in tagsOf(definition.key, definition.tags)"
               :key="tag"
               type="button"
               size="small"

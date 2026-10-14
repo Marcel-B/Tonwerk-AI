@@ -31,6 +31,7 @@
     <None Update="Images\yueui_image.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="AudioMidi\yueui_basicpitch.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Timing\yueui_whisper.py" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Analysis\yueui_analyze.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Video\yueui_montage.py" CopyToOutputDirectory="PreserveNewest" />
     <!-- Seed-VC's conversion, run with its own Python (SeedVcEngine.Script). -->
     <None Update="Voices\yueui_seedvc.py" CopyToOutputDirectory="PreserveNewest" />

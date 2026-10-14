@@ -6,6 +6,7 @@ import { formatDateTime, formatDuration, t, versionProgress } from '../i18n'
 import { current, play, playing, versionTrack } from '../player'
 import { ratingOf } from '../ratings'
 import type { RunInfo, SongInfo, VersionState } from '../types'
+import { keyLabel, tempoTag, unclearBelow } from '../traits'
 import { openVideo } from '../video'
 import { octaveOptions, stepOptions, strengthOptions } from '../voiceChoices'
 import PlaylistToggle from './PlaylistToggle.vue'
@@ -25,6 +26,21 @@ const props = defineProps<{
   /** Versions as the event stream reports them, newer than the listing while they are in the works. */
   liveVersions: VersionState[]
 }>()
+
+/** Tempo and key as heard (or as the score asked), "92 BPM · A-Moll". */
+const sound = computed(() => {
+  const traits = props.song.traits
+  const parts = [traits?.tempo ? tempoTag(traits.tempo) : null, traits?.key ? keyLabel(traits.key) : null]
+  return parts.filter((part) => part !== null).join(' · ')
+})
+const soundHint = computed(() => (props.song.traits?.from === 'audio' ? t('songTraitsHeard') : t('songTraitsScore')))
+/** How much of the lyrics Whisper understood, in percent; null for a song not timed or without lyrics. */
+const clarity = computed(() =>
+  props.song.traits?.clarity == null ? null : Math.round(props.song.traits.clarity * 100),
+)
+const clarityHint = computed(() =>
+  t(props.song.traits?.clarityFrom === 'vocals' ? 'songClarityVocals' : 'songClarityMix', { n: clarity.value ?? 0 }),
+)
 
 const emit = defineEmits<{
   /** The list starts it, since the songs listed below it are what plays next. */
@@ -220,6 +236,15 @@ const severityByQuality: Record<string, string> = {
         @click="openVideoOf"
       />
       <div v-if="song.seed !== null" class="muted seed">#{{ song.seed }}</div>
+      <div v-if="sound" class="muted text-sm" v-tooltip.top="soundHint">{{ sound }}</div>
+      <div
+        v-if="clarity !== null"
+        class="text-sm"
+        :class="clarity < unclearBelow * 100 ? 'unclear' : 'muted'"
+        v-tooltip.top="clarityHint"
+      >
+        {{ t('songClarity', { n: clarity }) }}
+      </div>
       <Rating
         :model-value="ratingOf(song.id)"
         :aria-label="t('rating')"
@@ -378,5 +403,9 @@ const severityByQuality: Record<string, string> = {
 .seed {
   font-family: var(--font-mono);
   font-size: 0.8rem;
+}
+
+.unclear {
+  color: var(--warning-text);
 }
 </style>

@@ -715,14 +715,19 @@ export interface SpeechVoice {
   createdAt: string
 }
 
-export type SpeechStage = 'queued' | 'loading' | 'speaking' | 'done' | 'failed' | 'cancelled'
+export type SpeechStage = 'queued' | 'loading' | 'speaking' | 'cleaning' | 'done' | 'failed' | 'cancelled'
 
-/** One text spoken by one model; live changes arrive as `speech` events. */
+/** One text spoken by one model, or one recording cleaned by one; live changes arrive as `speech` events. */
 export interface SpeechTake {
   id: string
   modelId: string
   modelLabel: string
+  /** Empty for a cleaned recording. */
   text: string
+  /** The uploaded recording's name when the take cleans it (Sprache säubern); null for a spoken take. */
+  source: string | null
+  /** How much of the recording is cleaned, 0 to 1, while it is. */
+  progress: number | null
   voiceId: string | null
   voiceLabel: string | null
   stage: SpeechStage
@@ -747,6 +752,8 @@ export interface SpeechInfo {
   /** Recordings need ffmpeg on the server. */
   ffmpegInstalled: boolean
   models: SpeechModelInfo[]
+  /** The models that clean a speech recording of noise. */
+  cleanModels: SpeechModelInfo[]
   voices: SpeechVoice[]
   /** Newest first. */
   takes: SpeechTake[]

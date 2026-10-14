@@ -6,13 +6,16 @@ namespace YueUI.Api.Data;
 
 /// <summary>
 /// The speech lab's recorded voices and takes. Their audio lies in <c>speech/voices/</c> and <c>speech/takes/</c> next
-/// to the database, named by id; the rows say what it is.
+/// to the database, named by id; the rows say what it is. A take that cleans a recording keeps the recording in
+/// <c>speech/sources/</c> under the take's id, to compare before and after.
 /// </summary>
 public sealed class SqliteSpeechStore(SqliteDatabase database)
 {
     public string VoicePath(string id) => Path.Combine(database.Directory, "speech", "voices", $"{id}.wav");
 
     public string TakePath(string id) => Path.Combine(database.Directory, "speech", "takes", $"{id}.wav");
+
+    public string SourcePath(string id) => Path.Combine(database.Directory, "speech", "sources", $"{id}.wav");
 
     public IReadOnlyList<SpeechVoice> Voices() => Query("SELECT * FROM speech_voices ORDER BY created_at DESC", ReadVoice);
 
@@ -61,10 +64,10 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
             connection,
             null,
             """
-            INSERT INTO speech_takes (id, model_id, model_label, text, voice_id, voice_label, stage, message, seconds,
-                load_seconds, speak_seconds, peak_memory_gb, created_at, updated_at)
-            VALUES ($id, $model, $modelLabel, $text, $voice, $voiceLabel, $stage, $message, $seconds, $load, $speak, $memory,
-                $created, $updated)
+            INSERT INTO speech_takes (id, model_id, model_label, text, source, voice_id, voice_label, stage, message,
+                progress, seconds, load_seconds, speak_seconds, peak_memory_gb, created_at, updated_at)
+            VALUES ($id, $model, $modelLabel, $text, $source, $voice, $voiceLabel, $stage, $message, $progress, $seconds,
+                $load, $speak, $memory, $created, $updated)
             """,
             TakeParameters(take));
     }
@@ -77,7 +80,7 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
             connection,
             null,
             """
-            UPDATE speech_takes SET stage = $stage, message = $message, seconds = $seconds, load_seconds = $load,
+            UPDATE speech_takes SET stage = $stage, message = $message, progress = $progress, seconds = $seconds, load_seconds = $load,
                 speak_seconds = $speak, peak_memory_gb = $memory, updated_at = $updated
             WHERE id = $id
             """,
@@ -91,6 +94,7 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
             SqliteDatabase.Execute(connection, null, "DELETE FROM speech_takes WHERE id = $id", ("$id", id));
         }
         DeleteFile(TakePath(id));
+        DeleteFile(SourcePath(id));
     }
 
     private static (string, object)[] TakeParameters(SpeechTake take) =>
@@ -99,6 +103,8 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
         ("$model", take.ModelId),
         ("$modelLabel", take.ModelLabel),
         ("$text", take.Text),
+        ("$source", Nullable(take.Source)),
+        ("$progress", Nullable(take.Progress)),
         ("$voice", Nullable(take.VoiceId)),
         ("$voiceLabel", Nullable(take.VoiceLabel)),
         ("$stage", take.Stage),
@@ -155,6 +161,8 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
         ModelId = reader.GetString(reader.GetOrdinal("model_id")),
         ModelLabel = reader.GetString(reader.GetOrdinal("model_label")),
         Text = reader.GetString(reader.GetOrdinal("text")),
+        Source = Text(reader, "source"),
+        Progress = Number(reader, "progress"),
         VoiceId = Text(reader, "voice_id"),
         VoiceLabel = Text(reader, "voice_label"),
         Stage = reader.GetString(reader.GetOrdinal("stage")),

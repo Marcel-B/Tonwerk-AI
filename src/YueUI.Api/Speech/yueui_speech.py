@@ -303,6 +303,39 @@ def reporter():
     return report
 
 
+def mossformer_folder(repo: str) -> str:
+    """
+    Where MossFormer2 SE loads from. mlx-audio 0.5.9 asks its repository for config.json and model.safetensors, but
+    starkdmi/MossFormer2_SE_48K_MLX (the one its README names) holds only model_fp32/fp16/int8/int6/int4.safetensors,
+    so the load ended in a 404 (RemoteEntryNotFoundError). The fp32 file loads into mlx-audio's model as it is (its
+    code came from starkdmi's mossformer_se_mlx, same module tree), and the config's defaults are the 48K model's; so
+    a folder holding the two names the loader wants is made in the model cache and handed over as a local path. A
+    repository that does have config.json is used as it is.
+    """
+    if os.path.isdir(repo):
+        return repo
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.errors import EntryNotFoundError
+
+    try:
+        hf_hub_download(repo_id=repo, filename="config.json")
+        return repo
+    except EntryNotFoundError:
+        pass
+    weights = hf_hub_download(repo_id=repo, filename="model_fp32.safetensors")
+    from huggingface_hub import constants
+
+    folder = os.path.join(constants.HF_HOME, "yueui-local", repo.replace("/", "--"))
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, "config.json"), "w") as config:
+        config.write("{}")
+    link = os.path.join(folder, "model.safetensors")
+    if os.path.lexists(link):
+        os.remove(link)
+    os.symlink(weights, link)
+    return folder
+
+
 def clean(request: dict) -> int:
     emit({"event": "stage", "stage": "loading"})
     started = time.perf_counter()
@@ -316,7 +349,7 @@ def clean(request: dict) -> int:
         else:
             from mlx_audio.sts.models.mossformer2_se import MossFormer2SEModel
 
-            model = MossFormer2SEModel.from_pretrained(repo)
+            model = MossFormer2SEModel.from_pretrained(mossformer_folder(repo))
     except ModuleNotFoundError as missing:
         print(
             f"Error: cleaning needs the Python package '{missing.name}', which the speech lab's environment lacks;"

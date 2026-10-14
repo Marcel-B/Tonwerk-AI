@@ -19,6 +19,7 @@ import { showSong, songHref, stemSong } from '../view'
 import MidiOptions from './MidiOptions.vue'
 import MidiResult from './MidiResult.vue'
 import NumberField from './NumberField.vue'
+import TabRecordButton from './TabRecordButton.vue'
 import WaveformView from './WaveformView.vue'
 
 /**
@@ -120,7 +121,19 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const fileSeconds = ref<number | null>(null)
 
 function pick(event: Event): void {
-  file.value = (event.target as HTMLInputElement).files?.[0] ?? null
+  take((event.target as HTMLInputElement).files?.[0] ?? null)
+}
+
+/** A recorded tab counts as a chosen file. */
+function tabRecorded(recorded: File): void {
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+  take(recorded)
+}
+
+function take(chosenFile: File | null): void {
+  file.value = chosenFile
   fileSeconds.value = null
   if (!file.value) {
     return
@@ -421,6 +434,7 @@ const stageSeverity: Record<string, string | undefined> = { done: 'success', fai
           />
           <span class="muted min-w-0 truncate text-sm">{{ file?.name ?? t('noRecording') }}</span>
         </div>
+        <TabRecordButton :disabled="separating" @recorded="tabRecorded" @error="emit('error', $event)" />
       </div>
       <div v-else class="flex min-w-0 flex-[1_1_16rem] flex-col gap-1">
         <label for="stems-song" class="muted text-sm">{{ t('stemsSong') }}</label>

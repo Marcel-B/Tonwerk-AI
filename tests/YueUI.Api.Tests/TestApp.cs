@@ -82,6 +82,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeListener Listener { get; } = new();
 
+    public FakeSongListener SongListener { get; } = new();
+
+    /// <summary>Whether the songs are heard for tempo and key in the background; off unless a test is about it.</summary>
+    public bool AnalyseSongs { get; set; }
+
     public FakeNextcloud Nextcloud { get; } = new();
 
     public FakeLoki Loki { get; } = new();
@@ -201,6 +206,13 @@ public sealed class TestApp : WebApplicationFactory<Program>
             services.AddSingleton<AudioMidi.IAudioMidiEngine>(AudioMidi);
             services.AddSingleton<Ace.IAceEngine>(Ace);
             services.AddSingleton<Timing.IWordListener>(Listener);
+            services.AddSingleton<Analysis.ISongListener>(SongListener);
+            services.Configure<Analysis.AnalysisOptions>(options =>
+            {
+                options.Auto = AnalyseSongs;
+                options.StartDelay = TimeSpan.Zero;
+                options.IdlePoll = TimeSpan.FromMilliseconds(10);
+            });
             services.Configure<Ace.AceOptions>(options =>
             {
                 options.Root = Path.Combine(Root, "ace");
@@ -1238,6 +1250,31 @@ public sealed class FakeLoki
             }
             return new HttpResponseMessage(HttpStatusCode.NoContent);
         }
+    }
+}
+
+/// <summary>librosa: hears what it is given per song id; off by default.</summary>
+public sealed class FakeSongListener : Analysis.ISongListener
+{
+    public bool Installed { get; set; }
+
+    /// <summary>Tempo and key by song id; a song missing here fails.</summary>
+    public Dictionary<string, (double Tempo, string Key)> Songs { get; } = [];
+
+    public List<IReadOnlyList<Analysis.SongToHear>> Batches { get; } = [];
+
+    public Task<IReadOnlyList<Analysis.HeardSong>> HearAsync(IReadOnlyList<Analysis.SongToHear> songs, CancellationToken cancellationToken)
+    {
+        lock (Batches)
+        {
+            Batches.Add(songs);
+        }
+        return Task.FromResult<IReadOnlyList<Analysis.HeardSong>>(
+        [
+            .. songs.Select(s => Songs.TryGetValue(s.Id, out var heard)
+                ? new Analysis.HeardSong(s.Id, heard.Tempo, heard.Key, null)
+                : new Analysis.HeardSong(s.Id, null, null, "unreadable")),
+        ]);
     }
 }
 

@@ -31,6 +31,7 @@ namespace YueUI.Api.Data;
 /// Version 21: songs asked of ACE-Step, from queued to done (<see cref="SqliteAceStore"/>).
 /// Version 22: the measured loudness of audio files, a cache (<see cref="Share.Loudness"/>).
 /// Version 23: songs asked for from a shortcut, waiting for their lyrics draft (<see cref="Lyrics.QuickSongs"/>).
+/// Version 24: what was heard in songs, tempo, key and how clearly the lyrics are sung (<see cref="SqliteSongTraitStore"/>).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -519,6 +520,25 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                         created_at TEXT NOT NULL
                     );
                     PRAGMA user_version = 23;
+                    """);
+            }
+            if (current < 24)
+            {
+                // Tempo and key from the audio (or the score), clarity from the lyrics timing; each half set on its own.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE song_traits (
+                        song_id TEXT PRIMARY KEY,
+                        tempo REAL NULL,
+                        song_key TEXT NULL,
+                        heard_from TEXT NULL,
+                        clarity REAL NULL,
+                        clarity_from TEXT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 24;
                     """);
             }
             _ready = true;

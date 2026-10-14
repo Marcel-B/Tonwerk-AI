@@ -106,9 +106,14 @@ public sealed class JobQueue(
 
     /// <summary>A lyrics draft or revision; its result arrives as a <c>lyrics</c> event under the id returned.</summary>
     /// <returns>The draft's state: writing, or queued while it waits.</returns>
-    public async Task<LyricsState> LyricsAsync(LyricsRequest request, CancellationToken cancellationToken)
+    /// <param name="named">
+    /// Told the draft's id before it may start, for whoever waits for its result (a quick song): a draft that starts at
+    /// once can be done before this method returns.
+    /// </param>
+    public async Task<LyricsState> LyricsAsync(LyricsRequest request, CancellationToken cancellationToken, Action<string>? named = null)
     {
         var id = LyricsWriter.NewId();
+        named?.Invoke(id);
         var title = request.Keywords?.Trim() ?? "";
         var job = new QueuedJob(id, JobKind.Lyrics, title.Length > 80 ? title[..80] + "…" : title, time.GetUtcNow(), Revision: request.Instruction is not null);
         var queued = await SubmitAsync(job, JsonSerializer.SerializeToNode(request, Json)!.AsObject(), cancellationToken);

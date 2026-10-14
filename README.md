@@ -138,6 +138,12 @@ Danach reicht „Hey Siri, Tonwerk-Song“, dann sagen, worum es gehen soll. Die
 
 Der Server legt beim ersten Mal ein VAPID-Schlüsselpaar an und speichert es mit den Abonnements in `~/Library/Application Support/YuE UI/push.json` (nur für den eigenen Benutzer lesbar). Diese Datei nicht löschen: Mit einem neuen Schlüssel kommt nichts mehr an, bis jedes Gerät die Benachrichtigungen einmal neu einschaltet. Die Nachrichten gehen über die Push-Dienste von Apple, Google oder Mozilla, der Mac braucht dafür Internet.
 
+## Tempo und Tonart
+
+Tonwerk hört jeden Song einmal auf Tempo und Tonart an (librosa: Beat-Tracking und Krumhansl-Tonartprofile über die Chroma) und zeigt beides beim Song, etwa „92 BPM · F♯-Moll“. Die Bibliothek filtert nach langsam (unter 90 BPM), mittel, schnell (ab 120 BPM), Dur und Moll und sortiert nach Tempo. Nach „Alles übernehmen“ steht das gehörte Tempo als erster Baustein unter Stil → Tempo; es kommt nicht von selbst in den Stil, weil der Song sonst anders würde.
+
+Neue Songs werden gehört, sobald sie fertig sind, ältere nach und nach, aber nur solange YuE2 und die anderen großen Modelle ruhen. Tonwerk nimmt dafür das Python der Fotovideos (`--montage`) oder von Audio zu MIDI (`--midi`), beide haben librosa; eine eigene Einrichtung gibt es nicht. Ohne beides zeigt die Bibliothek, was die Partitur (`Q:`, `K:`) oder ACE-Step verlangt hat, mit dem Hinweis „laut Partitur“, und hört nach, sobald eine der beiden Umgebungen da ist. Die Partitur gibt auch die Oktave des Tempos vor, damit ein Song nicht mit halbem oder doppeltem Tempo gehört wird. Abschalten: `Analysis:Auto` auf `false`.
+
 ## Speicherplatz
 
 Jeder Song belegt mit FLAC, Tokens und Zwischendateien einiges an Platz. Die Bibliothek zeigt deshalb, was jeder Lauf belegt und wie viel auf dem Datenträger noch frei ist. Über den Papierkorb lassen sich einzelne Songs, ganze Läufe und Transkriptionen löschen; mit dem letzten Song eines Laufs verschwindet auch sein Ordner. Gelöscht wird nach einer Rückfrage endgültig und nicht in den Papierkorb von macOS, denn dort würde der Platz erst beim Leeren frei. Songs, an denen der Worker von Tonwerk noch arbeitet, lassen sich erst nach dem Abbrechen löschen; was YuE Studio gerade erzeugt, erkennt Tonwerk nicht.
@@ -202,6 +208,8 @@ Tonwerk weiß, welche Zeile gerade gesungen wird: Whisper (`mlx-whisper` mit lar
 
 - **Vollbild-Player:** Der Text läuft mit, die gesungene Zeile ist hell, die anderen gedimmt, und die Ansicht scrollt mit, außer man hat gerade selbst gescrollt. Ein Tipp auf eine Zeile springt dorthin. Ältere Songs werden beim ersten Öffnen im Vollbild angehört.
 - **Musikvideo:** **Songtext einblenden** zeigt die gesungene Zeile groß im Band über dem Analyzer. Daneben gibt es die Zeiten als Untertiteldatei (`.srt`), die YouTube beim Hochladen zum Video nimmt.
+
+- **Bibliothek:** Wie viel vom Text Whisper verstanden hat, steht als „Text 78 %“ beim Song, unter 50 % orange. Aus dem ganzen Song gehört fällt der Wert niedriger aus als aus der Gesangsspur; nach dem Trennen in Stems hört Whisper den Song beim nächsten Anfordern genauer. Der Filter „Text undeutlich“ und die Sortierung „Undeutlichster Text“ finden genuschelte Songs.
 
 Ein Song braucht auf dem Mac deutlich unter einer Minute; Whisper wartet, solange ein anderes großes Modell den Speicher hat. Einrichtung: `deploy/setup-mac.sh --whisper` (oder die gespeicherten Optionen mit `--whisper` dazu), das Modell lädt beim ersten Song. Abschalten des automatischen Anhörens: `Timing:Auto` auf `false`.
 

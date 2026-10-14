@@ -116,8 +116,21 @@ public static class LyricsEndpoints
             {
                 return Results.ValidationProblem(errors);
             }
-            var draft = await queue.LyricsAsync(new LyricsRequest(request.Keywords!.Trim(), style, language), cancellationToken);
-            quick.Expect(draft.Id, song);
+            // Expected before the draft may start: one that starts at once can be done before LyricsAsync returns.
+            string? expected = null;
+            LyricsState draft;
+            try
+            {
+                draft = await queue.LyricsAsync(
+                    new LyricsRequest(request.Keywords!.Trim(), style, language),
+                    cancellationToken,
+                    id => quick.Expect(expected = id, song));
+            }
+            catch when (expected is not null)
+            {
+                quick.Forget(expected);
+                throw;
+            }
             return Results.Accepted(value: new QuickSongStarted(draft.Id, draft.Stage, title, style!));
         });
         return api;

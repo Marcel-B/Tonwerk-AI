@@ -277,6 +277,22 @@ export interface SongInfo {
   videoFormats: VideoFormat[]
   /** `ace` for a song ACE-Step made; absent or null for YuE2's. */
   engine?: 'ace' | null
+  /** Tempo, key and how clearly the lyrics are sung, as far as heard yet; null before anything was. */
+  traits?: SongTraits | null
+}
+
+/** What was heard in a song (Analysis/SongAnalyzer.cs, Timing/LyricsTimer.cs). */
+export interface SongTraits {
+  /** Beats per minute. */
+  tempo: number | null
+  /** As the key picker spells it: `C`, `F#m`, `Bb`. */
+  key: string | null
+  /** `audio` when heard in the song, `score` when only what its score asked for. */
+  from: 'audio' | 'score' | null
+  /** The share of the lyrics Whisper understood, 0 to 1. */
+  clarity: number | null
+  /** `vocals` when Whisper heard a vocal stem, `mix` when the whole song (which scores lower). */
+  clarityFrom: 'vocals' | 'mix' | null
 }
 
 /**

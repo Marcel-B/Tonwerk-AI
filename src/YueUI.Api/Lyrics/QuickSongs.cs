@@ -151,7 +151,8 @@ public sealed class QuickSongs(
         }
     }
 
-    private void Forget(string draftId)
+    /// <summary>The draft was never queued after all.</summary>
+    public void Forget(string draftId)
     {
         using var connection = database.Open();
         SqliteDatabase.Execute(connection, null, "DELETE FROM quick_songs WHERE draft_id = $id", ("$id", draftId));

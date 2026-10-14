@@ -3,6 +3,7 @@ import RadioButton from 'primevue/radiobutton'
 import { ref, watch } from 'vue'
 import { cleanSpeech, speechTakeAudioUrl, speechTakeSourceUrl } from '../api'
 import { formatDuration, locale, t, tMaybe } from '../i18n'
+import TabRecordButton from './TabRecordButton.vue'
 import type { SpeechInfo, SpeechModelInfo, SpeechTake } from '../types'
 
 /**
@@ -37,9 +38,21 @@ watch(
 const file = ref<File | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 const sending = ref(false)
+/** The file came from a tab recording, which the file input cannot show. */
+const fromTab = ref(false)
 
 function chosen(event: Event): void {
   file.value = (event.target as HTMLInputElement).files?.[0] ?? null
+  fromTab.value = false
+}
+
+/** A recorded tab takes the file input's place; the input is cleared so it does not claim another file. */
+function tabRecorded(recorded: File): void {
+  file.value = recorded
+  fromTab.value = true
+  if (input.value) {
+    input.value.value = ''
+  }
 }
 
 async function send(): Promise<void> {
@@ -50,6 +63,7 @@ async function send(): Promise<void> {
   try {
     emit('added', await cleanSpeech(file.value, file.value.name, model.value))
     file.value = null
+    fromTab.value = false
     if (input.value) {
       input.value.value = ''
     }
@@ -96,6 +110,10 @@ function size(gb: number): string {
             :disabled="sending"
             @change="chosen"
           />
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <TabRecordButton :disabled="sending" @recorded="tabRecorded" @error="emit('error', $event)" />
+            <span v-if="file && fromTab" class="muted min-w-0 truncate text-sm">{{ file.name }}</span>
+          </div>
           <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
             <legend class="muted mb-2 p-0 text-sm">{{ t('cleanModel') }}</legend>
             <div v-for="option in info.cleanModels" :key="option.id" class="flex items-start gap-3">

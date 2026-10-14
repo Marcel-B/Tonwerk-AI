@@ -865,6 +865,13 @@ const messages = {
     cleanIntro:
       'Eine Aufnahme von Sprache, etwa ein Vortrag, ein Interview oder eine Sprachnotiz, ohne Rauschen und Störgeräusche. Auch ein Video geht, genommen wird nur der Ton. Sie wartet in derselben Reihe wie die gesprochenen Ergebnisse.',
     cleanFile: 'Sprachaufnahme',
+    tabRecord: 'Tab-Ton aufnehmen',
+    tabRecordHint:
+      'Chrome fragt nach einem Tab. Dort „Tab-Audio teilen“ anhaken; aufgenommen wird nur der Ton, solange du nicht stoppst.',
+    tabRecordStop: 'Aufnahme beenden · {time}',
+    tabRecordNoAudio: 'Der geteilte Tab bringt keinen Ton mit. Wähle einen Tab und hake „Tab-Audio teilen“ an.',
+    tabRecordEmpty: 'Die Aufnahme ist leer.',
+    tabRecordFailed: 'Tab-Aufnahme fehlgeschlagen: {message}',
     cleanModel: 'Modell',
     cleanDownload: '{size} Download',
     cleanStart: 'Säubern',
@@ -1930,6 +1937,13 @@ const messages = {
     cleanIntro:
       'A recording of speech, such as a talk, an interview or a voice memo, without hiss and background noise. A video works too; only its sound is used. It waits in the same line as the spoken results.',
     cleanFile: 'Speech recording',
+    tabRecord: 'Record tab audio',
+    tabRecordHint:
+      'Chrome asks for a tab. Tick “Also share tab audio” there; only the sound is recorded, until you stop.',
+    tabRecordStop: 'Stop recording · {time}',
+    tabRecordNoAudio: 'The shared tab brings no sound. Pick a tab and tick “Also share tab audio”.',
+    tabRecordEmpty: 'The recording is empty.',
+    tabRecordFailed: 'Tab recording failed: {message}',
     cleanModel: 'Model',
     cleanDownload: '{size} download',
     cleanStart: 'Clean up',

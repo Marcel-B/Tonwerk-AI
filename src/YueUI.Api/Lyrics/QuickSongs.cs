@@ -52,7 +52,21 @@ public sealed class QuickSongs(
     public bool Owns(string draftId) => _handled.ContainsKey(draftId) || Pending(draftId) is not null;
 
     /// <summary>Remembers the song to make once the draft <paramref name="draftId"/> is done.</summary>
-    public void Expect(string draftId, GenerateRequest song)
+    /// <remarks>
+    /// The draft is queued before this, and may start at once and finish (a model already loaded, a quick server)
+    /// before the row is there, when the listener has already passed over it; so the draft's state is looked at here
+    /// too. Whichever comes second finds the row gone.
+    /// </remarks>
+    public async Task ExpectAsync(string draftId, GenerateRequest song, CancellationToken cancellationToken)
+    {
+        Insert(draftId, song);
+        if (hub.Lyrics is { } lyrics && lyrics.Id == draftId)
+        {
+            await ConsiderAsync(lyrics, cancellationToken);
+        }
+    }
+
+    private void Insert(string draftId, GenerateRequest song)
     {
         using var connection = database.Open();
         SqliteDatabase.Execute(
@@ -113,11 +127,11 @@ public sealed class QuickSongs(
 
     private async Task ConsiderAsync(LyricsState lyrics, CancellationToken cancellationToken)
     {
-        if (!lyrics.Finished || Pending(lyrics.Id) is not { } song)
+        // Forget is the claim: the listener and ExpectAsync may both get here for one draft.
+        if (!lyrics.Finished || Pending(lyrics.Id) is not { } song || !Forget(lyrics.Id))
         {
             return;
         }
-        Forget(lyrics.Id);
         if (lyrics.Stage != "done" || string.IsNullOrWhiteSpace(lyrics.Lyrics))
         {
             logger.LogWarning("The quick song {Title} is dropped: its lyrics failed ({Message})", song.Title, lyrics.Message);
@@ -151,10 +165,10 @@ public sealed class QuickSongs(
         }
     }
 
-    /// <summary>The draft was never queued after all.</summary>
-    public void Forget(string draftId)
+    /// <returns>Whether this call removed the row.</returns>
+    private bool Forget(string draftId)
     {
         using var connection = database.Open();
-        SqliteDatabase.Execute(connection, null, "DELETE FROM quick_songs WHERE draft_id = $id", ("$id", draftId));
+        return SqliteDatabase.Execute(connection, null, "DELETE FROM quick_songs WHERE draft_id = $id", ("$id", draftId)) > 0;
     }
 }

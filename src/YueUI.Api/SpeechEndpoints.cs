@@ -7,12 +7,15 @@ namespace YueUI.Api;
 
 /// <summary>
 /// The speech lab (<see cref="SpeechLab"/>): record a voice in the browser, have text spoken by local models with it,
-/// and compare the takes. Takes are spoken in the background; their progress arrives as <c>speech</c> events.
+/// and compare the takes; or clean a speech recording of noise (<c>/speech/cleanups</c>). Takes are spoken in the background; their progress arrives as <c>speech</c> events.
 /// </summary>
 public static class SpeechEndpoints
 {
     /// <summary>A browser recording of half a minute is well under a megabyte; an uploaded WAV may be larger.</summary>
     public const long MaxRecordingBytes = 50L * 1024 * 1024;
+
+    /// <summary>A recording to clean: an hour of talk as WAV is 600 MB, as the phone's M4A or a video far less.</summary>
+    public const long MaxCleanupBytes = 1024L * 1024 * 1024;
 
     /// <summary>Anything shorter gives the models too little to go on.</summary>
     public const double MinVoiceSeconds = 2;
@@ -24,7 +27,8 @@ public static class SpeechEndpoints
                 engine.Installed,
                 options.Value.ResolvedPython,
                 engine.CanPrepareVoices,
-                [.. options.Value.ResolvedModels.Select(m => new SpeechModelInfo(m.Id, m.Label, m.Repo, m.DownloadGb, m.Clones, m.License, m.Note, engine.Downloaded(m)))],
+                [.. options.Value.ResolvedModels.Select(m => Info(m, engine))],
+                [.. options.Value.ResolvedCleanModels.Select(m => Info(m, engine))],
                 store.Voices(),
                 store.Takes()));
 
@@ -41,10 +45,19 @@ public static class SpeechEndpoints
             store.RemoveVoice(id) ? Results.NoContent() : Results.NotFound());
 
         api.MapPost("/speech/takes", AddTakes);
+        api.MapPost("/speech/cleanups", AddCleanupAsync)
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(MaxCleanupBytes + 64 * 1024))
+            .WithFormOptions(multipartBodyLengthLimit: MaxCleanupBytes);
+        // The recording as it was uploaded (decoded to WAV), to hear before and after.
+        api.MapGet("/speech/takes/{id}/source", (string id, SqliteSpeechStore store) =>
+            store.Take(id) is { Source: not null } && File.Exists(store.SourcePath(id))
+                ? Results.File(store.SourcePath(id), "audio/wav", enableRangeProcessing: true)
+                : Results.NotFound());
         // Range requests: Safari plays audio only from a source that answers them.
         api.MapGet("/speech/takes/{id}/audio", (string id, bool? download, SqliteSpeechStore store) =>
             store.Take(id) is { Stage: "done" } take && File.Exists(store.TakePath(id))
-                ? Results.File(store.TakePath(id), "audio/wav", download == true ? $"{LibraryEndpoints.FileName(take.ModelLabel, "take")}-{id[..8]}.wav" : null, enableRangeProcessing: true)
+                ? Results.File(store.TakePath(id), "audio/wav", download == true ? DownloadName(take) : null, enableRangeProcessing: true)
                 : Results.NotFound());
         api.MapDelete("/speech/takes/{id}", (string id, SqliteSpeechStore store, SpeechLab lab) =>
         {
@@ -146,6 +159,83 @@ public static class SpeechEndpoints
         // In the order the models are offered, whatever order they were ticked in: the page compares them side by side.
         var models = offered.Where(m => request.Models!.Contains(m.Id));
         return Results.Accepted("/api/speech", lab.Enqueue(request.Text!.Trim(), voice, models));
+    }
+
+    private static SpeechModelInfo Info(SpeechModel model, ISpeechEngine engine) =>
+        new(model.Id, model.Label, model.Repo, model.DownloadGb, model.Clones, model.License, model.Note, engine.Downloaded(model));
+
+    /// <summary>A cleaned recording keeps its own name, so it sits beside the original in the downloads.</summary>
+    private static string DownloadName(SpeechTake take) => take.Source is { } source
+        ? $"{LibraryEndpoints.FileName(Path.GetFileNameWithoutExtension(source), "recording")}-clean.wav"
+        : $"{LibraryEndpoints.FileName(take.ModelLabel, "take")}-{take.Id[..8]}.wav";
+
+    private static async Task<IResult> AddCleanupAsync(
+        [FromForm] string? model,
+        IFormFile? file,
+        SqliteSpeechStore store,
+        ISpeechEngine engine,
+        SpeechLab lab,
+        IOptions<SpeechOptions> options,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var chosen = options.Value.ResolvedCleanModels.FirstOrDefault(m => m.Id == model);
+        if (chosen is null)
+        {
+            errors["model"] = ["One of the clean models GET /api/speech lists."];
+        }
+        if (file is null || file.Length == 0)
+        {
+            errors["file"] = ["A speech recording."];
+        }
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+        if (!engine.Installed)
+        {
+            return Results.Problem(
+                title: $"mlx-audio is not installed ({options.Value.ResolvedPython}); run deploy/install-speech.sh on the Mac.",
+                statusCode: StatusCodes.Status501NotImplemented);
+        }
+        if (!engine.CanPrepareVoices)
+        {
+            return Results.Problem(title: "ffmpeg is not installed; recordings cannot be converted.", statusCode: StatusCodes.Status501NotImplemented);
+        }
+
+        var id = Guid.NewGuid().ToString("N");
+        var upload = Path.Combine(Path.GetTempPath(), $"yueui-speech-upload-{id}{Extension(file!.FileName)}");
+        var target = store.SourcePath(id);
+        try
+        {
+            await using (var stream = File.Create(upload))
+            {
+                await file.CopyToAsync(stream, cancellationToken);
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            await engine.PrepareRecordingAsync(upload, target, cancellationToken);
+            if ((WavInfo.Seconds(target) ?? 0) < 1)
+            {
+                File.Delete(target);
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["file"] = ["The recording holds no audio."] });
+            }
+            var name = Path.GetFileName(file.FileName) is { Length: > 0 and <= 200 } given ? given : "recording";
+            return Results.Accepted("/api/speech", lab.EnqueueCleanup(id, name, chosen!));
+        }
+        catch (SpeechException exception)
+        {
+            File.Delete(target);
+            return Results.Problem(title: exception.Message, statusCode: exception.Status);
+        }
+        catch (OperationCanceledException)
+        {
+            File.Delete(target);
+            throw;
+        }
+        finally
+        {
+            File.Delete(upload);
+        }
     }
 
     /// <summary>ffmpeg reads the container from the content, but a known extension saves it guessing.</summary>

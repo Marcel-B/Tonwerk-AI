@@ -176,10 +176,13 @@ public sealed class StorageScanner(
         Add("images", "work", Files(images.Folder, "*").Sum(f => f.Length), painted.Count, [images.Folder], items: painted);
 
         var takes = (Safe(() => speech.Takes(int.MaxValue)) ?? [])
-            .Select(t => new StorageItem("take", t.Id, null, t.Text.Length > 60 ? t.Text[..60] + "…" : t.Text, t.ModelLabel, Length(speech.TakePath(t.Id)), t.CreatedAt))
+            // A cleaned recording is named by its upload and weighs with its original beside it.
+            .Select(t => new StorageItem("take", t.Id, null, t.Source ?? (t.Text.Length > 60 ? t.Text[..60] + "…" : t.Text), t.ModelLabel,
+                Length(speech.TakePath(t.Id)) + (t.Source is null ? 0 : Length(speech.SourcePath(t.Id))), t.CreatedAt))
             .ToList();
         var speechData = Path.Combine(Data, "speech");
-        Add("speech", "work", Measure(Path.Combine(speechData, "takes")).Bytes + Measure(Path.Combine(speechData, "voices")).Bytes, takes.Count,
+        Add("speech", "work", Measure(Path.Combine(speechData, "takes")).Bytes + Measure(Path.Combine(speechData, "voices")).Bytes
+            + Measure(Path.Combine(speechData, "sources")).Bytes, takes.Count,
             [Path.Combine(speechData, "takes")], items: takes);
 
         var voices = Measure(Path.Combine(Data, "voices"));

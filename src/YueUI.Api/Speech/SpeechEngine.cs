@@ -13,6 +13,11 @@ namespace YueUI.Api.Speech;
 /// <param name="Output">Where the take is written, as WAV.</param>
 public sealed record SpeechJob(SpeechModel Model, string Text, string? RefAudio, string? RefText, string Output);
 
+/// <param name="Input">The recording to clean, as 48 kHz mono WAV.</param>
+/// <param name="Output">Where the cleaned recording is written, as WAV.</param>
+/// <param name="Seconds">How long the recording is, which decides how long the model may take.</param>
+public sealed record CleanJob(SpeechModel Model, string Input, string Output, double Seconds);
+
 /// <summary>The script's measurements; null where it could not tell.</summary>
 public sealed record SpeechResult(double? LoadSeconds, double? SpeakSeconds, double? PeakMemoryGb);
 
@@ -40,6 +45,16 @@ public interface ISpeechEngine
 
     /// <param name="stage">Hears loading and speaking as the script reaches them.</param>
     Task<SpeechResult> SpeakAsync(SpeechJob job, Action<string> stage, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Turns an uploaded speech recording (any format ffmpeg reads, a video too) into the 48 kHz mono WAV the
+    /// enhancement models read, at most <see cref="MlxAudioEngine.MaxRecordingSeconds"/> long.
+    /// </summary>
+    Task PrepareRecordingAsync(string input, string output, CancellationToken cancellationToken);
+
+    /// <param name="stage">Hears loading and cleaning as the script reaches them.</param>
+    /// <param name="progress">How much of the recording is cleaned, 0 to 1.</param>
+    Task<SpeechResult> CleanAsync(CleanJob job, Action<string> stage, Action<double> progress, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -51,6 +66,9 @@ public sealed class MlxAudioEngine(IOptions<SpeechOptions> options, ILogger<MlxA
 {
     /// <summary>Longer recordings do not clone better; the models are trained on 5 to 15 seconds.</summary>
     public const double MaxVoiceSeconds = 30;
+
+    /// <summary>A long talk or lecture; the cleaned WAV of two hours is about 700 MB.</summary>
+    public const double MaxRecordingSeconds = 2 * 60 * 60;
 
     /// <summary>What the script's own events start with; everything else on stdout is mlx-audio talking.</summary>
     private const string EventPrefix = "YUEUI ";
@@ -67,22 +85,32 @@ public sealed class MlxAudioEngine(IOptions<SpeechOptions> options, ILogger<MlxA
     public bool Downloaded(SpeechModel model) =>
         Directory.Exists(Path.Combine(options.Value.ResolvedModelCache, "hub", $"models--{model.Repo.Replace("/", "--", StringComparison.Ordinal)}", "snapshots"));
 
-    public async Task PrepareVoiceAsync(string input, string output, CancellationToken cancellationToken)
+    public Task PrepareVoiceAsync(string input, string output, CancellationToken cancellationToken)
     {
-        var ffmpeg = AacEncoder.FindFfmpeg() ?? throw new SpeechException("ffmpeg is not installed.", StatusCodes.Status501NotImplemented);
         // Silence is cut at both ends (the reversed pass does the end): a recording starts with the tap and ends with
         // the next one, and a model copies the pauses it hears into every sentence.
         const string trim = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.15,"
             + "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.25,areverse";
+        return DecodeAsync(input, output, ["-af", trim, "-ar", "24000"], MaxVoiceSeconds, TimeSpan.FromMinutes(1), cancellationToken);
+    }
+
+    // Nothing cut and no filter: the model is to hear the recording as it was, and the page compares before and after.
+    public Task PrepareRecordingAsync(string input, string output, CancellationToken cancellationToken) =>
+        DecodeAsync(input, output, ["-ar", "48000"], MaxRecordingSeconds, TimeSpan.FromMinutes(10), cancellationToken);
+
+    private static async Task DecodeAsync(
+        string input, string output, string[] filters, double maxSeconds, TimeSpan limit, CancellationToken cancellationToken)
+    {
+        var ffmpeg = AacEncoder.FindFfmpeg() ?? throw new SpeechException("ffmpeg is not installed.", StatusCodes.Status501NotImplemented);
         var start = new ProcessStartInfo(ffmpeg) { RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false };
-        foreach (var argument in (string[])["-nostdin", "-loglevel", "error", "-y", "-i", input, "-vn", "-af", trim, "-ac", "1", "-ar", "24000",
-                     "-sample_fmt", "s16", "-t", MaxVoiceSeconds.ToString(CultureInfo.InvariantCulture), output])
+        foreach (var argument in (string[])["-nostdin", "-loglevel", "error", "-y", "-i", input, "-vn", .. filters, "-ac", "1",
+                     "-sample_fmt", "s16", "-t", maxSeconds.ToString(CultureInfo.InvariantCulture), output])
         {
             start.ArgumentList.Add(argument);
         }
         using var process = Process.Start(start) ?? throw new SpeechException("Could not start ffmpeg.");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(1));
+        timeout.CancelAfter(limit);
         var error = process.StandardError.ReadToEndAsync(timeout.Token);
         _ = process.StandardOutput.ReadToEndAsync(timeout.Token);
         try
@@ -100,7 +128,47 @@ public sealed class MlxAudioEngine(IOptions<SpeechOptions> options, ILogger<MlxA
         }
     }
 
-    public async Task<SpeechResult> SpeakAsync(SpeechJob job, Action<string> stage, CancellationToken cancellationToken)
+    public Task<SpeechResult> SpeakAsync(SpeechJob job, Action<string> stage, CancellationToken cancellationToken)
+    {
+        var request = new JsonObject
+        {
+            ["model"] = job.Model.Repo,
+            ["text"] = job.Text,
+            ["output"] = job.Output,
+            ["refAudio"] = job.RefAudio,
+            ["refText"] = job.RefText,
+            ["langCode"] = job.Model.LangCode,
+            ["options"] = job.Model.Options is { } extra ? JsonSerializer.SerializeToNode(extra) : null,
+            ["chunkCharacters"] = job.Model.ChunkCharacters,
+            ["contextPieces"] = job.Model.ContextPieces,
+        };
+        return RunAsync(job.Model, "Speaking", request, job.Output, stage, _ => { }, options.Value.Timeout, cancellationToken);
+    }
+
+    public Task<SpeechResult> CleanAsync(CleanJob job, Action<string> stage, Action<double> progress, CancellationToken cancellationToken)
+    {
+        var request = new JsonObject
+        {
+            ["model"] = job.Model.Repo,
+            ["subfolder"] = job.Model.Subfolder,
+            ["clean"] = true,
+            ["input"] = job.Input,
+            ["output"] = job.Output,
+        };
+        // An hour of talk is not cleaned in the minutes a take is given; allow the recording's length on top.
+        var limit = options.Value.Timeout + TimeSpan.FromSeconds(job.Seconds);
+        return RunAsync(job.Model, "Cleaning", request, job.Output, stage, progress, limit, cancellationToken);
+    }
+
+    private async Task<SpeechResult> RunAsync(
+        SpeechModel model,
+        string doing,
+        JsonObject request,
+        string output,
+        Action<string> stage,
+        Action<double> progress,
+        TimeSpan limit,
+        CancellationToken cancellationToken)
     {
         var settings = options.Value;
         if (!Installed)
@@ -124,23 +192,10 @@ public sealed class MlxAudioEngine(IOptions<SpeechOptions> options, ILogger<MlxA
         start.Environment["PYTHONUNBUFFERED"] = "1";
         start.Environment["TQDM_DISABLE"] = "1";
 
-        var request = new JsonObject
-        {
-            ["model"] = job.Model.Repo,
-            ["text"] = job.Text,
-            ["output"] = job.Output,
-            ["refAudio"] = job.RefAudio,
-            ["refText"] = job.RefText,
-            ["langCode"] = job.Model.LangCode,
-            ["options"] = job.Model.Options is { } extra ? JsonSerializer.SerializeToNode(extra) : null,
-            ["chunkCharacters"] = job.Model.ChunkCharacters,
-            ["contextPieces"] = job.Model.ContextPieces,
-        };
-
         using var process = Process.Start(start) ?? throw new SpeechException($"Could not start {settings.ResolvedPython}.");
-        logger.LogInformation("Speaking with {Model} (pid {Pid})", job.Model.Repo, process.Id);
+        logger.LogInformation("{Doing} with {Model} (pid {Pid})", doing, model.Repo, process.Id);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(settings.Timeout);
+        timeout.CancelAfter(limit);
         var tail = new Queue<string>();
         SpeechResult? result = null;
         try
@@ -161,11 +216,14 @@ public sealed class MlxAudioEngine(IOptions<SpeechOptions> options, ILogger<MlxA
                     case "stage":
                         stage((string?)data["stage"] ?? "speaking");
                         break;
+                    case "progress":
+                        progress(Math.Clamp((double?)data["share"] ?? 0, 0, 1));
+                        break;
                     case "done":
                         result = new SpeechResult((double?)data["loadSeconds"], (double?)data["speakSeconds"], (double?)data["peakMemoryGb"]);
                         break;
                     case "note":
-                        logger.LogInformation("Speaking with {Model}: {Note}", job.Model.Repo, (string?)data["text"]);
+                        logger.LogInformation("{Doing} with {Model}: {Note}", doing, model.Repo, (string?)data["text"]);
                         break;
                 }
             }, timeout.Token);
@@ -177,15 +235,15 @@ public sealed class MlxAudioEngine(IOptions<SpeechOptions> options, ILogger<MlxA
             process.Kill(entireProcessTree: true);
             if (!cancellationToken.IsCancellationRequested)
             {
-                throw new SpeechException($"The model took longer than {settings.Timeout.TotalMinutes:0} minutes.");
+                throw new SpeechException($"The model took longer than {limit.TotalMinutes:0} minutes.");
             }
             throw;
         }
-        if (process.ExitCode != 0 || result is null || !File.Exists(job.Output))
+        if (process.ExitCode != 0 || result is null || !File.Exists(output))
         {
             lock (tail)
             {
-                logger.LogWarning("Speaking with {Model} failed:\n{Output}", job.Model.Repo, string.Join('\n', tail));
+                logger.LogWarning("{Doing} with {Model} failed:\n{Output}", doing, model.Repo, string.Join('\n', tail));
                 throw new SpeechException(FailureMessage(tail));
             }
         }

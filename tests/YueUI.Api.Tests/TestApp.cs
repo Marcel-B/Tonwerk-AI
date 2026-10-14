@@ -847,6 +847,11 @@ public sealed class FakeSpeech : ISpeechEngine
 
     public List<SpeechJob> Jobs { get; } = [];
 
+    public List<CleanJob> Cleanups { get; } = [];
+
+    /// <summary>How long a prepared recording to clean is.</summary>
+    public double RecordingSeconds { get; set; } = 90;
+
     /// <summary>The first four bytes of each recording posted, in hex.</summary>
     public List<string> Recordings { get; } = [];
 
@@ -859,6 +864,33 @@ public sealed class FakeSpeech : ISpeechEngine
             Recordings.Add(Convert.ToHexString(File.ReadAllBytes(input), 0, 4));
         }
         await File.WriteAllBytesAsync(output, Wav(VoiceSeconds), cancellationToken);
+    }
+
+    public async Task PrepareRecordingAsync(string input, string output, CancellationToken cancellationToken)
+    {
+        lock (Recordings)
+        {
+            Recordings.Add(Convert.ToHexString(File.ReadAllBytes(input), 0, 4));
+        }
+        await File.WriteAllBytesAsync(output, Wav(RecordingSeconds), cancellationToken);
+    }
+
+    public async Task<SpeechResult> CleanAsync(CleanJob job, Action<string> stage, Action<double> progress, CancellationToken cancellationToken)
+    {
+        lock (Cleanups)
+        {
+            Cleanups.Add(job);
+        }
+        stage("loading");
+        stage("cleaning");
+        progress(0.5);
+        await Gate.Task.WaitAsync(cancellationToken);
+        if (Failure is { } failure)
+        {
+            throw new SpeechException(failure);
+        }
+        await File.WriteAllBytesAsync(job.Output, Wav(RecordingSeconds), cancellationToken);
+        return new SpeechResult(1.5, 9.75, 1.2);
     }
 
     public async Task<SpeechResult> SpeakAsync(SpeechJob job, Action<string> stage, CancellationToken cancellationToken)

@@ -31,7 +31,8 @@ namespace YueUI.Api.Data;
 /// Version 21: songs asked of ACE-Step, from queued to done (<see cref="SqliteAceStore"/>).
 /// Version 22: the measured loudness of audio files, a cache (<see cref="Share.Loudness"/>).
 /// Version 23: songs asked for from a shortcut, waiting for their lyrics draft (<see cref="Lyrics.QuickSongs"/>).
-/// Version 24: what was heard in songs, tempo, key and how clearly the lyrics are sung (<see cref="SqliteSongTraitStore"/>).
+/// Version 24: speech takes that clean an uploaded recording, and their progress (<see cref="SqliteSpeechStore"/>).
+/// Version 25: what was heard in songs, tempo, key and how clearly the lyrics are sung (<see cref="SqliteSongTraitStore"/>).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -524,6 +525,19 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
             }
             if (current < 24)
             {
+                // A take that cleans an uploaded recording instead of speaking a text: the recording's name, and how
+                // far the cleaning is, since a long talk takes minutes.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    ALTER TABLE speech_takes ADD COLUMN source TEXT;
+                    ALTER TABLE speech_takes ADD COLUMN progress REAL;
+                    PRAGMA user_version = 24;
+                    """);
+            }
+            if (current < 25)
+            {
                 // Tempo and key from the audio (or the score), clarity from the lyrics timing; each half set on its own.
                 Execute(
                     connection,
@@ -538,7 +552,7 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                         clarity_from TEXT NULL,
                         updated_at TEXT NOT NULL
                     );
-                    PRAGMA user_version = 24;
+                    PRAGMA user_version = 25;
                     """);
             }
             _ready = true;

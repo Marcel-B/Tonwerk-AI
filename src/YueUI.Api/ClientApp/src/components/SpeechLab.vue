@@ -14,6 +14,7 @@ import {
 } from '../api'
 import { formatDateTime, formatDuration, locale, t, tMaybe } from '../i18n'
 import type { SpeechInfo, SpeechModelInfo, SpeechTake, SpeechVoice } from '../types'
+import SpeechCleanPanel from './SpeechCleanPanel.vue'
 import TextActions from './TextActions.vue'
 
 /**
@@ -76,6 +77,16 @@ const takes = computed<SpeechTake[]>(() => {
     .filter((take) => take.stage !== 'cancelled')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 })
+
+/** Spoken takes and cleaned recordings share the lab's line, but not its list. */
+const spoken = computed(() => takes.value.filter((take) => take.source === null))
+const cleanups = computed(() => takes.value.filter((take) => take.source !== null))
+
+function added(take: SpeechTake): void {
+  if (info.value) {
+    info.value = { ...info.value, takes: [take, ...info.value.takes] }
+  }
+}
 
 // ---- Voices ------------------------------------------------------------------------------------------
 
@@ -274,7 +285,7 @@ async function send(): Promise<void> {
 
 async function removeTake(take: SpeechTake): Promise<void> {
   try {
-    if (listening.value === take.id) {
+    if (listening.value?.startsWith(take.id)) {
       stopListening()
     }
     await deleteSpeechTake(take.id)
@@ -492,9 +503,9 @@ function message(caught: unknown): string {
 
     <div v-if="info">
       <h3 class="mt-0 mb-2 text-base">{{ t('labTakes') }}</h3>
-      <p v-if="takes.length === 0" class="muted m-0">{{ t('labTakesEmpty') }}</p>
+      <p v-if="spoken.length === 0" class="muted m-0">{{ t('labTakesEmpty') }}</p>
       <ul class="m-0 flex list-none flex-col gap-3 p-0">
-        <li v-for="take in takes" :key="take.id" class="take flex flex-col gap-1 rounded-lg p-3">
+        <li v-for="take in spoken" :key="take.id" class="take flex flex-col gap-1 rounded-lg p-3">
           <!-- One line on a phone too: the play button, what spoke, its state and the actions. -->
           <div class="flex items-center gap-2">
             <Button
@@ -557,6 +568,17 @@ function message(caught: unknown): string {
         </li>
       </ul>
     </div>
+
+    <SpeechCleanPanel
+      v-if="info && info.cleanModels.length > 0"
+      :info="info"
+      :cleanups="cleanups"
+      :listening="listening"
+      @listen="listen"
+      @added="added"
+      @remove="removeTake"
+      @error="(text) => emit('error', text)"
+    />
   </section>
 </template>
 

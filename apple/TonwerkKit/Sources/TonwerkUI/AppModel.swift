@@ -30,6 +30,8 @@ public final class AppModel {
     var page: Page? = .library
     /// The song the share dialog is open for, from a song's menu.
     var sharing: Song?
+    /// The Logic page's state, made when it is first opened.
+    var logic: LogicSession?
     /// The song the painting dialog is open for, from a song's menu.
     var painting: Song?
     /// Painted covers in the works or finished since, by id, from `image` events.

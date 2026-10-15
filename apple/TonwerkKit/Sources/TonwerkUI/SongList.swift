@@ -336,6 +336,7 @@ struct SongRow: View {
 /// Five stars; tapping the given rating again clears it.
 struct RatingView: View {
     let rating: Int?
+    var font: Font = .caption
     let rate: (Int?) -> Void
 
     var body: some View {
@@ -345,7 +346,7 @@ struct RatingView: View {
                     rate(rating == stars ? nil : stars)
                 } label: {
                     Image(systemName: stars <= (rating ?? 0) ? "star.fill" : "star")
-                        .font(.caption)
+                        .font(font)
                         .foregroundStyle(stars <= (rating ?? 0) ? AnyShapeStyle(.yellow) : AnyShapeStyle(.tertiary))
                 }
                 .buttonStyle(.plain)

@@ -22,109 +22,34 @@ struct SongDetail: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        ScrollView {
+            VStack(spacing: 14) {
+                header
                 VStack(spacing: 12) {
-                    CoverView(song: song)
-                        .aspectRatio(1, contentMode: .fit)
-                        .frame(maxWidth: 220)
-                        .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
-                    RatingView(rating: song.rating) { stars in
-                        Task { await model.rate(song, stars) }
+                    infos
+                    if !song.versions.isEmpty {
+                        versions
                     }
-                    .font(.title3)
-                    HStack {
-                        Button {
-                            player.play(song, in: list)
-                        } label: {
-                            Label("Abspielen", systemImage: "play.fill")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!song.hasAudio)
-                        Button {
-                            Task { await model.useInForm(song) }
-                        } label: {
-                            Label("Ins Formular", systemImage: "square.and.pencil")
-                        }
-                        .buttonStyle(.bordered)
+                    noteCard
+                    if !song.style.isEmpty {
+                        textCard("Stil", systemImage: "paintpalette", text: song.style)
+                    }
+                    if !song.lyrics.isEmpty {
+                        textCard("Songtext", systemImage: "text.quote", text: song.lyrics)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                TextField("Titel", text: $title)
-                    .onSubmit { Task { await rename() } }
-                if song.originalTitle != song.title {
-                    LabeledContent("Ursprünglich", value: song.originalTitle)
-                        .foregroundStyle(.secondary)
-                }
-                if song.number != nil {
-                    Text("Der Titel gilt für alle Songs dieses Durchlaufs.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let problem {
-                    Label(problem, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                }
-            }
-
-            Section("Infos") {
-                if let created = song.createdAt {
-                    LabeledContent("Erstellt", value: created.formatted(date: .abbreviated, time: .shortened))
-                }
-                if let duration = song.duration {
-                    LabeledContent("Länge", value: duration)
-                }
-                LabeledContent("Modell", value: song.engine == "ace" ? "ACE-Step" : "YuE2")
-                if let quality = song.quality {
-                    LabeledContent("Qualität", value: quality == "full" ? String(localized: "Voll") : String(localized: "Entwurf"))
-                }
-                if let seed = song.seed {
-                    LabeledContent("Seed") {
-                        Text(String(seed)).textSelection(.enabled).monospacedDigit()
-                    }
-                }
-                if let tempo = song.tempo {
-                    LabeledContent("Tempo", value: "\(Int(tempo.rounded())) BPM")
-                }
-                if let key = song.key {
-                    LabeledContent("Tonart", value: AbcScore.keyLabel(key))
-                }
-            }
-
-            if !song.versions.isEmpty {
-                Section("Andere Stimmen") {
-                    ForEach(song.versions) { version in
-                        VersionRow(song: song, version: version)
-                    }
-                }
-            }
-
-            Section {
-                TextEditor(text: $note)
-                    .frame(minHeight: 70)
-                    .scrollContentBackground(.hidden)
-            } header: {
-                Text("Notiz")
-            } footer: {
-                Text("Wird beim Tippen gespeichert, für alle Geräte.")
-            }
-
-            if !song.style.isEmpty {
-                Section("Stil") {
-                    Text(song.style)
-                        .textSelection(.enabled)
-                }
-            }
-
-            if !song.lyrics.isEmpty {
-                Section("Songtext") {
-                    Text(song.lyrics)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 20)
             }
         }
-        .formStyle(.grouped)
+        .background {
+            // The cover blurred behind the whole panel, as the web page's full-screen player does it.
+            ZStack {
+                Rectangle().fill(.background)
+                CoverBackdrop(song: song, opacity: 0.35)
+            }
+            .ignoresSafeArea()
+        }
         // Saved a moment after the last keystroke, like the web page's note (`SongNote.vue`), and when the song
         // changes or the panel closes.
         .task(id: note) {
@@ -136,6 +61,140 @@ struct SongDetail: View {
             let text = note
             Task { try? await model.setNote(song, text) }
         }
+    }
+
+    private var playing: Bool {
+        player.current?.id == song.id && player.current?.version == nil && player.isPlaying
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        VStack(spacing: 12) {
+            CoverView(song: song)
+                .aspectRatio(1, contentMode: .fit)
+                .frame(maxWidth: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
+                .padding(.bottom, 4)
+            TextField("Titel", text: $title)
+                .textFieldStyle(.plain)
+                .font(.title2.weight(.bold))
+                .multilineTextAlignment(.center)
+                .onSubmit { Task { await rename() } }
+            if song.originalTitle != song.title {
+                Text("Ursprünglich „\(song.originalTitle)“")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if song.number != nil {
+                Text("Der Titel gilt für alle Songs dieses Durchlaufs.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            RatingView(rating: song.rating, font: .title3) { stars in
+                Task { await model.rate(song, stars) }
+            }
+            actions
+            if let problem {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var actions: some View {
+        HStack(spacing: 14) {
+            Button {
+                if player.current?.id == song.id && player.current?.version == nil {
+                    player.toggle()
+                } else {
+                    player.play(song, in: list)
+                }
+            } label: {
+                Image(systemName: playing ? "pause.fill" : "play.fill")
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(PlayButtonStyle(size: 50))
+            .disabled(!song.hasAudio)
+            .accessibilityLabel(playing ? "Pause" : "Abspielen")
+            Button {
+                Task { await model.useInForm(song) }
+            } label: {
+                Label("Ins Formular", systemImage: "square.and.pencil")
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: Cards
+
+    private var infos: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
+            if let duration = song.duration {
+                InfoTile(label: "Länge", symbol: "clock", value: duration)
+            }
+            if let tempo = song.tempo {
+                InfoTile(label: "Tempo", symbol: "metronome", value: "\(Int(tempo.rounded())) BPM")
+            }
+            if let key = song.key {
+                InfoTile(label: "Tonart", symbol: "music.quarternote.3", value: AbcScore.keyLabel(key))
+            }
+            InfoTile(label: "Modell", symbol: "cpu", value: song.engine == "ace" ? "ACE-Step" : "YuE2")
+            if let quality = song.quality {
+                InfoTile(
+                    label: "Qualität", symbol: "dial.medium",
+                    value: quality == "full" ? String(localized: "Voll") : String(localized: "Entwurf"))
+            }
+            if let seed = song.seed {
+                InfoTile(label: "Seed", symbol: "number", value: String(seed), selectable: true)
+            }
+            if let created = song.createdAt {
+                InfoTile(label: "Erstellt", symbol: "calendar", value: created.formatted(date: .abbreviated, time: .shortened))
+            }
+        }
+    }
+
+    private var versions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CardHeading("Andere Stimmen", systemImage: "person.wave.2")
+            ForEach(song.versions) { version in
+                VersionRow(song: song, version: version)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(onBackdrop: true)
+    }
+
+    private var noteCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            CardHeading("Notiz", systemImage: "note.text")
+            TextField("Was dir zu diesem Song einfällt", text: $note, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(2...10)
+            Text("Wird beim Tippen gespeichert, für alle Geräte.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(onBackdrop: true)
+    }
+
+    private func textCard(_ title: LocalizedStringKey, systemImage: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            CardHeading(title, systemImage: systemImage)
+            Text(text)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .card(onBackdrop: true)
     }
 
     private func rename() async {
@@ -155,6 +214,54 @@ struct SongDetail: View {
         } catch {
             problem = error.localizedDescription
         }
+    }
+}
+
+/// A small heading inside a card: an accent symbol and the name.
+struct CardHeading: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+
+    init(_ title: LocalizedStringKey, systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(Theme.accent)
+        }
+        .font(.subheadline.weight(.semibold))
+    }
+}
+
+/// One fact about the song in a small tile of the grid under the header.
+private struct InfoTile: View {
+    let label: LocalizedStringKey
+    let symbol: String
+    let value: String
+    var selectable = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(label, systemImage: symbol)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Group {
+                if selectable {
+                    Text(value).textSelection(.enabled)
+                } else {
+                    Text(value)
+                }
+            }
+            .font(.callout.weight(.semibold).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(padding: 10, onBackdrop: true)
     }
 }
 

@@ -13,14 +13,20 @@ struct CreateView: View {
     var body: some View {
         @Bindable var model = model
         Form {
-            Section("Song") {
+            Section {
                 TextField("Titel (optional)", text: $model.form.title)
-                TextField("Stil", text: $model.form.style, prompt: Text("German, pop, female vocal, warm piano, 90 bpm"), axis: .vertical)
-                    .lineLimit(2...6)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Stil")
+                    TextField("Stil", text: $model.form.style, prompt: Text("German, pop, female vocal, warm piano, 90 bpm"), axis: .vertical)
+                        .labelsHidden()
+                        .lineLimit(2...6)
+                }
                 StyleBlocksView(style: $model.form.style, instrumental: model.form.instrumental)
+            } header: {
+                CardHeading("Song", systemImage: "music.note")
             }
 
-            Section("Songtext") {
+            Section {
                 Toggle("Instrumental", isOn: $model.form.instrumental)
                 TextEditor(text: $model.form.lyrics)
                     .font(.body.monospaced())
@@ -30,11 +36,13 @@ struct CreateView: View {
                 if !model.form.instrumental {
                     draft
                 }
+            } header: {
+                CardHeading("Songtext", systemImage: "text.quote")
             }
 
             ScoreSection()
 
-            Section("Erzeugen") {
+            Section {
                 Stepper(value: $model.form.batch, in: 1...10) {
                     LabeledContent("Anzahl", value: "\(model.form.batch)")
                 }
@@ -47,38 +55,14 @@ struct CreateView: View {
                     #if os(iOS)
                     .keyboardType(.numberPad)
                     #endif
+            } header: {
+                CardHeading("Erzeugen", systemImage: "wand.and.stars")
             }
 
             AdvancedSection()
-
-            Section {
-                Button(action: generate) {
-                    HStack {
-                        if sending { ProgressView().controlSize(.small) }
-                        Text(model.form.batch == 1 ? "Song erzeugen" : "\(model.form.batch) Songs erzeugen")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(sending || model.form.problem != nil)
-                .keyboardShortcut(.return, modifiers: .command)
-                if let problem = model.form.problem {
-                    Text(problem).foregroundStyle(.secondary)
-                }
-                if let sent {
-                    HStack {
-                        Label(sent, systemImage: "checkmark.circle").foregroundStyle(.green)
-                        Spacer()
-                        Button("Zur Warteschlange") { model.page = .queue }
-                    }
-                }
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-                }
-            }
         }
         .formStyle(.grouped)
+        .safeAreaInset(edge: .bottom, spacing: 0) { generateBar }
         .navigationTitle("Erstellen")
         .toolbar {
             ToolbarItem {
@@ -98,6 +82,55 @@ struct CreateView: View {
         .confirmationDialog("Den Songtext durch einen neuen Entwurf ersetzen?", isPresented: $replacing) {
             Button("Ersetzen", role: .destructive) { startDraft() }
         }
+    }
+
+    // MARK: Generate
+
+    /// The button under the form, always in reach, with what came of the last request above it.
+    private var generateBar: some View {
+        VStack(spacing: 8) {
+            if let problem = model.form.problem {
+                Text(problem)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            if let sent {
+                HStack {
+                    Label(sent, systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(Theme.accent)
+                    Spacer()
+                    Button("Zur Warteschlange") { model.page = .queue }
+                        .buttonStyle(.borderless)
+                }
+                .font(.callout)
+            }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+            }
+            Button(action: generate) {
+                HStack(spacing: 8) {
+                    if sending {
+                        ProgressView().controlSize(.small).tint(.white)
+                    } else {
+                        Image(systemName: "waveform")
+                    }
+                    Text(model.form.batch == 1 ? "Song erzeugen" : "\(model.form.batch) Songs erzeugen")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(GenerateButtonStyle())
+            .disabled(sending || model.form.problem != nil)
+            .keyboardShortcut(.return, modifiers: .command)
+        }
+        .frame(maxWidth: 640)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
     }
 
     // MARK: Lyrics draft

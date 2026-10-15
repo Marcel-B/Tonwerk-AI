@@ -67,7 +67,7 @@ struct ScoreSection: View {
                     .foregroundStyle(failed ? Color.red : Color.secondary)
             }
         } header: {
-            Text("Partitur")
+            CardHeading("Partitur", systemImage: "music.note.list")
         } footer: {
             Text("Ersetzt die Planung durch eine eigene Partitur: Melodie, Akkorde, Tempo und Form stehen dann fest. Eine Tonart im anderen Tongeschlecht schreibt Terz, Sexte und Septime um.")
         }

@@ -10,9 +10,27 @@ struct SongList: View {
     var playlist: Components.Schemas.PlaylistInfo?
     var empty: String = "Noch keine Songs."
     @State private var query = ""
+    @State private var scope = Song.SearchScope.titleStyle
+    @State private var selected: Song.ID?
+    @AppStorage("librarySort") private var sort = LibrarySort.newest
+    @AppStorage("ratingFilter") private var storedFilter = 0
+    #if os(macOS)
+    @AppStorage("detailsOpen") private var details = true
+    #else
+    @State private var details = false
+    #endif
 
+    private var filter: RatingFilter { RatingFilter(stored: storedFilter) }
+
+    /// A playlist keeps its own order and every song; the library and the review list take order and filter.
     private var shown: [Song] {
-        songs.filter { $0.matches(query) }
+        let found = songs.filter { $0.matches(query, in: scope) }
+        guard playlist == nil else { return found }
+        return sort.apply(to: found.filter(filter.admits))
+    }
+
+    private var chosen: Song? {
+        selected.flatMap { id in songs.first { $0.id == id } }
     }
 
     var body: some View {
@@ -28,16 +46,32 @@ struct SongList: View {
             } else if songs.isEmpty {
                 ContentUnavailableView(title, systemImage: "music.note", description: Text(empty))
             } else if shown.isEmpty {
-                ContentUnavailableView.search(text: query)
+                if query.isEmpty {
+                    ContentUnavailableView {
+                        Label("Keine Songs mit dieser Bewertung", systemImage: "star.slash")
+                    } actions: {
+                        Button("Alle zeigen") { storedFilter = RatingFilter.all.stored }
+                    }
+                } else {
+                    ContentUnavailableView.search(text: query)
+                }
             } else {
-                List {
+                List(selection: $selected) {
                     ForEach(shown) { song in
-                        SongRow(song: song, playing: player.current?.id == song.id) {
-                            player.play(song, in: shown)
-                        }
-                        .contextMenu { menu(for: song) }
+                        SongRow(song: song, playing: player.current?.id == song.id)
+                            .tag(song.id)
                     }
                     .onDelete(perform: playlist == nil ? nil : { remove($0) })
+                }
+                .contextMenu(forSelectionType: Song.ID.self) { ids in
+                    if let song = ids.first.flatMap({ model.song($0) }) {
+                        menu(for: song)
+                    }
+                } primaryAction: { ids in
+                    // A double click on the Mac, a tap on the iPhone.
+                    if let song = ids.first.flatMap({ model.song($0) }), song.hasAudio {
+                        player.play(song, in: shown)
+                    }
                 }
                 #if os(macOS)
                 .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -47,10 +81,27 @@ struct SongList: View {
             }
         }
         .navigationTitle(title)
-        .searchable(text: $query, prompt: "Titel oder Stil")
+        .searchable(text: $query, prompt: scope == .lyrics ? "Im Songtext suchen" : "Titel oder Stil")
+        .searchScopes($scope) {
+            Text("Titel und Stil").tag(Song.SearchScope.titleStyle)
+            Text("Songtext").tag(Song.SearchScope.lyrics)
+        }
         .refreshable { await model.reloadLibrary() }
+        .inspector(isPresented: $details) {
+            Group {
+                if let chosen {
+                    SongDetail(song: chosen, list: shown)
+                        .id(chosen.id)
+                } else {
+                    ContentUnavailableView(
+                        "Kein Song gewählt", systemImage: "music.note",
+                        description: Text("Wähle einen Song, um Songtext, Notiz und Versionen zu sehen."))
+                }
+            }
+            .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
+        }
         .toolbar {
-            ToolbarItem {
+            ToolbarItemGroup {
                 Button {
                     if let first = shown.first(where: \.hasAudio) {
                         player.play(first, in: shown)
@@ -59,7 +110,35 @@ struct SongList: View {
                     Label("Alle abspielen", systemImage: "play.fill")
                 }
                 .disabled(!shown.contains(where: \.hasAudio))
+                if playlist == nil {
+                    orderMenu
+                }
+                Button {
+                    details.toggle()
+                } label: {
+                    Label("Details", systemImage: "info.circle")
+                }
             }
+        }
+    }
+
+    private var orderMenu: some View {
+        Menu {
+            Picker("Reihenfolge", selection: $sort) {
+                ForEach(LibrarySort.allCases) { sort in
+                    Text(sort.name).tag(sort)
+                }
+            }
+            Picker("Bewertung", selection: $storedFilter) {
+                ForEach(RatingFilter.choices, id: \.self) { filter in
+                    Text(filter.name).tag(filter.stored)
+                }
+            }
+        } label: {
+            Label(
+                "Ordnen und filtern",
+                systemImage: filter == .all
+                    ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
         }
     }
 
@@ -71,6 +150,12 @@ struct SongList: View {
             Label("Abspielen", systemImage: "play")
         }
         .disabled(!song.hasAudio)
+        Button {
+            selected = song.id
+            details = true
+        } label: {
+            Label("Details", systemImage: "info.circle")
+        }
         Button {
             Task { await model.useInForm(song) }
         } label: {
@@ -125,46 +210,51 @@ struct SongRow: View {
     @Environment(AppModel.self) private var model
     let song: Song
     let playing: Bool
-    let play: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Button(action: play) {
-                HStack(spacing: 12) {
-                    CoverView(song: song)
-                        .frame(width: 44, height: 44)
-                        .overlay {
-                            if playing {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .foregroundStyle(.white)
-                                    .shadow(radius: 2)
-                            }
-                        }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(song.displayTitle)
-                            .fontWeight(playing ? .semibold : .regular)
-                            .lineLimit(1)
-                        Text(song.style)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
-                    if let duration = song.duration {
-                        Text(duration)
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+            CoverView(song: song)
+                .frame(width: 44, height: 44)
+                .overlay {
+                    if playing {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .foregroundStyle(.white)
+                            .shadow(radius: 2)
                     }
                 }
-                .contentShape(Rectangle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.displayTitle)
+                    .fontWeight(playing ? .semibold : .regular)
+                    .lineLimit(1)
+                Text(song.style)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .disabled(!song.hasAudio)
+            Spacer(minLength: 8)
+            if song.note != nil {
+                Image(systemName: "text.bubble")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help("Hat eine Notiz")
+            }
+            if !song.versions.isEmpty {
+                Image(systemName: "person.wave.2")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help("Hat Versionen mit anderer Stimme")
+            }
+            if let duration = song.duration {
+                Text(duration)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
             RatingView(rating: song.rating) { stars in
                 Task { await model.rate(song, stars) }
             }
         }
         .padding(.vertical, 2)
+        .opacity(song.hasAudio ? 1 : 0.5)
     }
 }
 

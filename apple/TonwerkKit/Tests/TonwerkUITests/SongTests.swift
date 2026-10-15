@@ -47,10 +47,74 @@ final class SongTests: XCTestCase {
         XCTAssertFalse(song.matches("meer rock"))
     }
 
+    func testTheSearchFoldsAccentsKeepsQuotesAndCanLookInTheLyrics() {
+        let song = Song(
+            run: "r", name: "song1", title: "Träume", number: nil, style: "pop",
+            lyrics: "[Verse]\nIch gehe durch die\nNacht allein", originalTitle: "Neon")
+        XCTAssertTrue(song.matches("traume"))
+        XCTAssertTrue(song.matches("neon"))
+        XCTAssertFalse(song.matches("nacht"))
+        XCTAssertTrue(song.matches("\"die nacht\"", in: .lyrics))
+        XCTAssertFalse(song.matches("\"nacht die\"", in: .lyrics))
+        XCTAssertEqual(Song.terms(of: " a  \"b  c\" d"), ["a", "b c", "d"])
+        XCTAssertEqual(Song.terms(of: "\"offen"), ["offen"])
+    }
+
+    func testAVersionPlaysFromItsOwnCopyUnderTheSongsId() {
+        let song = Song(
+            run: "r", name: "song2", title: "Herbst", number: nil,
+            versions: [.init(id: "v1", voice: "Anna", semitones: 12)])
+        let track = song.with(version: .some(song.versions[0]))
+        XCTAssertEqual(track.id, song.id)
+        XCTAssertEqual(track.displayTitle, "Herbst (Anna)")
+        XCTAssertEqual(
+            track.streamURL(on: server).absoluteString, "https://tonwerk.test:8443/api/songs/r/song2/versions/v1/stream")
+        XCTAssertEqual(track.with(rating: .some(3)).version?.id, "v1")
+        XCTAssertNil(track.with(rating: .some(nil)).rating)
+    }
+
     func testTheClock() {
         XCTAssertEqual(Song.clock(0), "0:00")
         XCTAssertEqual(Song.clock(61.9), "1:01")
         XCTAssertEqual(Song.clock(.nan), "0:00")
+    }
+}
+
+final class LibraryOrderTests: XCTestCase {
+    private func song(_ run: String, _ name: String, rating: Int? = nil, seconds: Double? = nil, tempo: Double? = nil) -> Song {
+        Song(run: run, name: name, title: run, number: nil, seconds: seconds, rating: rating, tempo: tempo)
+    }
+
+    func testRunsStayTogetherAndMoveByTheirBestSong() {
+        let songs = [
+            song("c", "song1", rating: 3), song("c", "song2", rating: 3),
+            song("b", "song1", rating: 2), song("b", "song2", rating: 5),
+            song("a", "song1"),
+        ]
+        XCTAssertEqual(LibrarySort.newest.apply(to: songs).map(\.id), songs.map(\.id))
+        XCTAssertEqual(
+            LibrarySort.oldest.apply(to: songs).map(\.id), ["a/song1", "b/song1", "b/song2", "c/song1", "c/song2"])
+        XCTAssertEqual(
+            LibrarySort.rating.apply(to: songs).map(\.id), ["b/song2", "b/song1", "c/song1", "c/song2", "a/song1"])
+    }
+
+    func testUnknownValuesGoLastEitherWay() {
+        let songs = [song("a", "song1"), song("b", "song1", seconds: 200, tempo: 90), song("c", "song1", seconds: 100, tempo: 120)]
+        XCTAssertEqual(LibrarySort.longest.apply(to: songs).map(\.run), ["b", "c", "a"])
+        XCTAssertEqual(LibrarySort.shortest.apply(to: songs).map(\.run), ["c", "b", "a"])
+        XCTAssertEqual(LibrarySort.fastest.apply(to: songs).map(\.run), ["c", "b", "a"])
+        XCTAssertEqual(LibrarySort.slowest.apply(to: songs).map(\.run), ["b", "c", "a"])
+    }
+
+    func testTheRatingFilter() {
+        let songs = [song("a", "song1", rating: 5), song("b", "song1", rating: 3), song("c", "song1")]
+        XCTAssertEqual(songs.filter(RatingFilter.atLeast(5).admits).map(\.run), ["a"])
+        XCTAssertEqual(songs.filter(RatingFilter.atLeast(3).admits).map(\.run), ["a", "b"])
+        XCTAssertEqual(songs.filter(RatingFilter.unrated.admits).map(\.run), ["c"])
+        XCTAssertEqual(songs.filter(RatingFilter.all.admits).count, 3)
+        for filter in RatingFilter.choices {
+            XCTAssertEqual(RatingFilter(stored: filter.stored), filter)
+        }
     }
 }
 

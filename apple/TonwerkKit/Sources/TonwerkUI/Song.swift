@@ -10,6 +10,8 @@ public struct Song: Identifiable, Hashable, Sendable {
     /// The folder's `songN`.
     public let name: String
     public let title: String
+    /// The title the worker gave the run, when it was renamed since.
+    public let originalTitle: String
     /// Which of the run's songs, shown only when the run has several.
     public let number: Int?
     public let style: String
@@ -22,11 +24,43 @@ public struct Song: Identifiable, Hashable, Sendable {
     public let hasAudio: Bool
     /// Whether YuE2 wrote a score.abc for it (not with planning off).
     public let hasScore: Bool
+    public let seed: Int64?
+    public let quality: String?
+    /// `ace` for ACE-Step's songs, nil for YuE2's.
+    public let engine: String?
+    /// Heard tempo and key (`SongTraits`), once the analyzer had the song.
+    public let tempo: Double?
+    public let key: String?
+    /// The song sung again with other voices.
+    public let versions: [Version]
+    /// Set on the copy the player plays when it plays a version: the id stays the song's, as on the web page, so
+    /// rating and playlists keep meaning the song.
+    public let version: Version?
+
+    /// A version of the song with another voice (`VersionState`).
+    public struct Version: Identifiable, Hashable, Sendable {
+        public let id: String
+        public let voice: String
+        public let semitones: Int
+        /// `done`, `failed`, `cancelled`, or a stage while it is made.
+        public let stage: String
+
+        public init(id: String, voice: String, semitones: Int = 0, stage: String = "done") {
+            self.id = id
+            self.voice = voice
+            self.semitones = semitones
+            self.stage = stage
+        }
+
+        public var playable: Bool { stage == "done" }
+    }
 
     public init(
         run: String, name: String, title: String, number: Int?, style: String = "", lyrics: String = "",
         createdAt: Date? = nil, seconds: Double? = nil, rating: Int? = nil, note: String? = nil,
-        coverUpdatedAt: Date? = nil, hasAudio: Bool = true, hasScore: Bool = false
+        coverUpdatedAt: Date? = nil, hasAudio: Bool = true, hasScore: Bool = false, originalTitle: String? = nil,
+        seed: Int64? = nil, quality: String? = nil, engine: String? = nil, tempo: Double? = nil, key: String? = nil,
+        versions: [Version] = [], version: Version? = nil
     ) {
         id = "\(run)/\(name)"
         self.run = run
@@ -42,16 +76,41 @@ public struct Song: Identifiable, Hashable, Sendable {
         self.coverUpdatedAt = coverUpdatedAt
         self.hasAudio = hasAudio
         self.hasScore = hasScore
+        self.originalTitle = originalTitle ?? title
+        self.seed = seed
+        self.quality = quality
+        self.engine = engine
+        self.tempo = tempo
+        self.key = key
+        self.versions = versions
+        self.version = version
     }
 
-    /// The run's title, with the song's number when the run made several.
+    /// A copy with some fields changed; the rest stays as it was.
+    public func with(
+        title: String? = nil, rating: Int?? = nil, note: String?? = nil, version: Version?? = nil
+    ) -> Song {
+        Song(
+            run: run, name: name, title: title ?? self.title, number: number, style: style, lyrics: lyrics,
+            createdAt: createdAt, seconds: seconds, rating: rating ?? self.rating, note: note ?? self.note,
+            coverUpdatedAt: coverUpdatedAt, hasAudio: hasAudio, hasScore: hasScore, originalTitle: originalTitle,
+            seed: seed, quality: quality, engine: engine, tempo: tempo, key: key, versions: versions,
+            version: version ?? self.version)
+    }
+
+    /// The run's title, with the song's number when the run made several, and the voice when a version plays.
     public var displayTitle: String {
-        number.map { "\(title) · \($0)" } ?? title
+        let base = number.map { "\(title) · \($0)" } ?? title
+        return version.map { "\(base) (\($0.voice))" } ?? base
     }
 
-    /// The 192 kbit/s AAC copy the web player streams too (the FLAC is too large for the home upload).
+    /// The 192 kbit/s AAC copy the web player streams too (the FLAC is too large for the home upload); a version's
+    /// own copy when the player plays one.
     public func streamURL(on server: URL) -> URL {
-        server.appending(path: "api/songs/\(run)/\(name)/stream")
+        if let version {
+            return server.appending(path: "api/songs/\(run)/\(name)/versions/\(version.id)/stream")
+        }
+        return server.appending(path: "api/songs/\(run)/\(name)/stream")
     }
 
     /// Only songs with a cover of their own have one; the others get a drawn one (``CoverView``). The date makes a new
@@ -82,17 +141,68 @@ public struct Song: Identifiable, Hashable, Sendable {
                     note: info.note,
                     coverUpdatedAt: info.coverUpdatedAt,
                     hasAudio: info.hasAudio,
-                    hasScore: info.hasScore)
+                    hasScore: info.hasScore,
+                    originalTitle: run.originalTitle,
+                    seed: info.seed,
+                    quality: info.quality,
+                    engine: info.engine,
+                    tempo: info.traits?.tempo,
+                    key: info.traits?.key,
+                    versions: info.versions.map {
+                        Version(
+                            id: $0.id, voice: $0.voiceLabel, semitones: Int($0.semiToneShift ?? 0),
+                            stage: $0.stage ?? "done")
+                    })
             }
         }
     }
 
-    /// The text search of the web page's library (`search.ts`): every word in title or style.
-    public func matches(_ query: String) -> Bool {
-        let words = query.lowercased().split(whereSeparator: \.isWhitespace)
-        guard !words.isEmpty else { return true }
-        let text = (title + " " + style).lowercased()
-        return words.allSatisfy { text.contains($0) }
+    /// Where the search looks, as on the web page (`search.ts`): lyrics share most words with every other song, so
+    /// searched together with the title they would bury the hits that matter.
+    public enum SearchScope: String, CaseIterable, Sendable {
+        case titleStyle
+        case lyrics
+    }
+
+    /// Every word must occur, in any order; a quoted part as written. Case and accents do not count, so "traume" finds
+    /// "Träume".
+    public func matches(_ query: String, in scope: SearchScope = .titleStyle) -> Bool {
+        let terms = Self.terms(of: query)
+        guard !terms.isEmpty else { return true }
+        let text = Self.fold(scope == .lyrics ? lyrics : [title, originalTitle, style].joined(separator: "\n"))
+        return terms.allSatisfy { text.contains($0) }
+    }
+
+    /// The query's words, a quoted part kept whole (`parseQuery` in `search.ts`).
+    static func terms(of query: String) -> [String] {
+        var terms: [String] = []
+        var rest = Substring(query)
+        while let start = rest.firstIndex(where: { !$0.isWhitespace }) {
+            rest = rest[start...]
+            let term: Substring
+            if rest.first == "\"" {
+                let body = rest.dropFirst()
+                let end = body.firstIndex(of: "\"") ?? body.endIndex
+                term = body[..<end]
+                rest = end < body.endIndex ? body[body.index(after: end)...] : body[end...]
+            } else {
+                let end = rest.firstIndex(where: \.isWhitespace) ?? rest.endIndex
+                term = rest[..<end]
+                rest = rest[end...]
+            }
+            let folded = fold(String(term)).trimmingCharacters(in: .whitespaces)
+            if !folded.isEmpty {
+                terms.append(folded)
+            }
+        }
+        return terms
+    }
+
+    /// Case and accents folded, every run of whitespace one space, so a quoted phrase also finds a wrapped line.
+    static func fold(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
     }
 }
 

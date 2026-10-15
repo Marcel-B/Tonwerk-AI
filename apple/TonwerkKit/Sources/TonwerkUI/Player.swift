@@ -119,7 +119,7 @@ public final class Player {
     func refresh(from songs: [Song]) {
         guard !queue.isEmpty else { return }
         let byId = Dictionary(songs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        queue = queue.map { byId[$0.id] ?? $0 }
+        queue = queue.map { old in byId[old.id].map { $0.with(version: .some(old.version)) } ?? old }
         updateNowPlaying()
     }
 

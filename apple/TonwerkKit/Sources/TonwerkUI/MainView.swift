@@ -88,6 +88,7 @@ struct MainView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PlayerBar()
         }
+        .exportSheet(for: $model.sharing)
         .alert("Neue Playlist", isPresented: $naming) {
             TextField("Name", text: $newName)
             Button("Anlegen") { Task { await model.createPlaylist(named: newName) } }

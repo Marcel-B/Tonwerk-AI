@@ -9,6 +9,7 @@ struct NowPlayingView: View {
     @AppStorage("nowPlayingLyrics") private var showLyrics = true
     @State private var times: [LineTimes]?
     @State private var scrubbing: Double?
+    @State private var sharing: Song?
 
     var body: some View {
         if let song = player.current {
@@ -45,6 +46,7 @@ struct NowPlayingView: View {
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
+        .exportSheet(for: $sharing)
     }
 
     private func backdrop(_ song: Song) -> some View {
@@ -70,6 +72,16 @@ struct NowPlayingView: View {
             .keyboardShortcut(.cancelAction)
             .accessibilityLabel("Schließen")
             Spacer()
+            Button {
+                sharing = song
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.title3)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Teilen")
             if !song.lyrics.isEmpty {
                 Button {
                     showLyrics.toggle()

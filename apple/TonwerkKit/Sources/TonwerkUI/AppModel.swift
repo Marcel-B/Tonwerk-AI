@@ -28,6 +28,8 @@ public final class AppModel {
     public private(set) var libraryError: String?
     /// The page in the sidebar; here rather than in the view, so "use in the form" can switch to the form.
     var page: Page? = .library
+    /// The song the share dialog is open for, from a song's menu.
+    var sharing: Song?
     /// The create form, kept across starts like the web page's `form.ts`.
     var form = CreateForm()
     /// Lyrics drafts by id, from `lyrics` events; the form waits for the one it asked for.

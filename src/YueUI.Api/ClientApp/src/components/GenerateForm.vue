@@ -307,6 +307,7 @@ const lyricsModelOptions = computed(() =>
   (lyricsModels.value?.models ?? []).map((m) => {
     const name = m.id === lyricsModels.value?.default ? t('lyricsModelDefault', { name: m.name }) : m.name
     const details = [
+      m.cloud ? t('lyricsModelCloud') : '',
       m.sizeBytes ? formatBytes(m.sizeBytes) : '',
       m.vision ? t('lyricsModelVision') : '',
       m.loaded ? t('lyricsModelLoaded') : '',
@@ -314,6 +315,9 @@ const lyricsModelOptions = computed(() =>
     return { value: m.id, label: [name, ...details.filter((d) => d)].join(' · ') }
   }),
 )
+
+/** Claude writes beside a running song, so the form need not say the draft waits for it. */
+const cloudModel = computed(() => lyricsModels.value?.models.find((m) => m.id === lyricsModel.value)?.cloud === true)
 
 /** The default is kept as "none chosen", so that a new default on the server reaches this form too. */
 const lyricsModel = computed({
@@ -455,6 +459,7 @@ const batchOptions = Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label
       size="small"
       class="mt-2 w-full"
     />
+    <small v-if="cloudModel" class="muted mt-1 block">{{ t('lyricsCloudHint') }}</small>
     <div v-if="photo" class="mt-2 flex items-center gap-2">
       <img :src="photo" :alt="t('photoAlt')" class="h-16 w-16 rounded-md object-cover" />
       <small class="muted min-w-0 flex-1">{{ blind ? t('photoBlindModel') : t('photoHint') }}</small>

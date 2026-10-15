@@ -71,7 +71,7 @@ public sealed class ClaudeSketchModelTests
     }
 
     /// <summary>Server-sent events as the Messages API streams them, the text cut into pieces.</summary>
-    private static string Stream(string text, string stopReason)
+    internal static string Stream(string text, string stopReason)
     {
         var events = new StringBuilder();
         void Event(string name, object data) =>
@@ -107,7 +107,7 @@ public sealed class ClaudeSketchModelTests
         return events.ToString();
     }
 
-    private sealed class FakeAnthropic(string body, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
+    internal sealed class FakeAnthropic(string body, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
     {
         public JsonObject? Request { get; private set; }
 

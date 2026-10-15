@@ -29,7 +29,10 @@ public sealed partial class SketchMaker(
     private string? _running;
     private CancellationTokenSource? _cancel;
 
-    public SketchInfo Info => new(options.Value.ResolveApiKey() is not null, options.Value.Model);
+    public SketchInfo Info => new(
+        options.Value.ResolveApiKey() is not null,
+        options.Value.Model,
+        [.. options.Value.Offered.Select(ClaudeModelChoice.Of)]);
 
     /// <summary>Every sketch, newest first.</summary>
     public IReadOnlyList<SketchJob> Jobs()
@@ -48,7 +51,8 @@ public sealed partial class SketchMaker(
         }
     }
 
-    public SketchJob Enqueue(string text, string? instruction)
+    /// <param name="model">One of <see cref="SketchOptions.Offered"/>; checked by the endpoint.</param>
+    public SketchJob Enqueue(string text, string? instruction, string? model = null)
     {
         var now = time.GetUtcNow();
         var job = new SketchJob
@@ -57,6 +61,8 @@ public sealed partial class SketchMaker(
             Title = TitleOf(text),
             Source = text.Trim(),
             Instruction = string.IsNullOrWhiteSpace(instruction) ? null : instruction.Trim(),
+            // Kept from the start, so that a restart plans with the same model and "again" offers it.
+            Model = string.IsNullOrWhiteSpace(model) ? options.Value.Model : model.Trim(),
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -155,7 +161,7 @@ public sealed partial class SketchMaker(
         try
         {
             job = Save(job with { Stage = "writing", UpdatedAt = time.GetUtcNow() });
-            var answer = await model.PlanAsync(job.Source, job.Instruction, cancel.Token);
+            var answer = await model.PlanAsync(job.Source, job.Instruction, job.Model ?? options.Value.Model, cancel.Token);
             job = Save(job with
             {
                 Stage = "done",

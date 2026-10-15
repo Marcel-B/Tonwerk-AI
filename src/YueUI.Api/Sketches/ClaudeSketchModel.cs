@@ -10,7 +10,7 @@ namespace YueUI.Api.Sketches;
 /// <summary>Writes a song plan from a sketch; <see cref="ClaudeSketchModel"/>, faked in tests.</summary>
 public interface ISketchModel
 {
-    Task<SketchAnswer> PlanAsync(string sketch, string? instruction, CancellationToken cancellationToken);
+    Task<SketchAnswer> PlanAsync(string sketch, string? instruction, string model, CancellationToken cancellationToken);
 }
 
 public sealed record SketchAnswer(SketchPlan Plan, string Model, int? InputTokens, int? OutputTokens);
@@ -29,7 +29,7 @@ public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClie
     /// <summary>The named client the SDK sends through, so tests can answer in Anthropic's place.</summary>
     public const string HttpClientName = "anthropic";
 
-    public async Task<SketchAnswer> PlanAsync(string sketch, string? instruction, CancellationToken cancellationToken)
+    public async Task<SketchAnswer> PlanAsync(string sketch, string? instruction, string model, CancellationToken cancellationToken)
     {
         var settings = options.Value;
         var key = settings.ResolveApiKey() ?? throw new SketchModelException("No Anthropic API key is set.");
@@ -55,7 +55,7 @@ public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClie
 
         var parameters = new MessageCreateParams
         {
-            Model = settings.Model,
+            Model = model,
             MaxTokens = settings.MaxTokens,
             System = SystemPrompt,
             Thinking = new ThinkingConfigAdaptive(),
@@ -116,7 +116,7 @@ public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClie
         {
             throw new SketchModelException("Claude's answer held no sections.");
         }
-        return new SketchAnswer(plan, settings.Model, inputTokens, outputTokens);
+        return new SketchAnswer(plan, model, inputTokens, outputTokens);
     }
 
     private static Effort ParseEffort(string effort) => effort.Trim().ToLowerInvariant() switch

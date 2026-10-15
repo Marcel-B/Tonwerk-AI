@@ -82,6 +82,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeSketchModel Sketches { get; } = new();
 
+    public FakeCloudLyrics CloudLyrics { get; } = new();
+
     /// <summary>The Anthropic key the sketches see; null leaves them unconfigured.</summary>
     public string? SketchKey { get; set; } = "sketch-key";
 
@@ -211,6 +213,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
             services.AddSingleton<AudioMidi.IAudioMidiEngine>(AudioMidi);
             services.AddSingleton<Ace.IAceEngine>(Ace);
             services.AddSingleton<Sketches.ISketchModel>(Sketches);
+            services.AddSingleton<ICloudLyricsModel>(CloudLyrics);
             services.Configure<Sketches.SketchOptions>(options =>
             {
                 options.ApiKey = SketchKey;
@@ -1149,6 +1152,37 @@ public sealed class FakeImages : Images.IImageEngine
     }
 }
 
+/// <summary>Claude writing lyrics: off (no key) unless a test switches it on; can be held back or made to fail.</summary>
+public sealed class FakeCloudLyrics : ICloudLyricsModel
+{
+    public bool Configured { get; set; }
+
+    public string Answer { get; set; } = "**Verse:**\nCloud line\n\n[Chorus]\nSky line";
+
+    public TaskCompletionSource Gate { get; set; } = CompletedGate();
+
+    public string? Failure { get; set; }
+
+    public List<(string Model, string System, string Prompt, string? Image)> Calls { get; } = [];
+
+    public async Task<string> WriteAsync(string model, string system, string prompt, string? image, CancellationToken cancellationToken)
+    {
+        lock (Calls)
+        {
+            Calls.Add((model, system, prompt, image));
+        }
+        await Gate.Task.WaitAsync(cancellationToken);
+        return Failure is { } failure ? throw new LyricsUnavailableException(failure) : Answer;
+    }
+
+    private static TaskCompletionSource CompletedGate()
+    {
+        var gate = new TaskCompletionSource();
+        gate.SetResult();
+        return gate;
+    }
+}
+
 /// <summary>Claude: answers every sketch with <see cref="Plan"/>; can be held back or made to fail.</summary>
 public sealed class FakeSketchModel : Sketches.ISketchModel
 {
@@ -1160,11 +1194,14 @@ public sealed class FakeSketchModel : Sketches.ISketchModel
 
     public List<(string Sketch, string? Instruction)> Calls { get; } = [];
 
-    public async Task<Sketches.SketchAnswer> PlanAsync(string sketch, string? instruction, CancellationToken cancellationToken)
+    public List<string> Models { get; } = [];
+
+    public async Task<Sketches.SketchAnswer> PlanAsync(string sketch, string? instruction, string model, CancellationToken cancellationToken)
     {
         lock (Calls)
         {
             Calls.Add((sketch, instruction));
+            Models.Add(model);
         }
         await Gate.Task.WaitAsync(cancellationToken);
         if (Failure is { } failure)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Message from 'primevue/message'
+import Select from 'primevue/select'
 import { useConfirm } from 'primevue/useconfirm'
 import { ApiError, deleteSketch, getSketch, getSketches, getSketchInfo, planSketch, sketchFileUrl } from '../api'
 import { formatDuration, locale, t, type MessageKey } from '../i18n'
@@ -27,6 +28,40 @@ let poll: ReturnType<typeof setTimeout> | undefined
 
 const working = computed(() => sketches.value.some((s) => s.stage === 'queued' || s.stage === 'writing'))
 const keyFile = '~/.config/tonwerk/anthropic.key'
+
+/** The Claude model chosen on this browser; empty for the server's default, so a new default reaches it. */
+const modelKey = 'yue-ui.sketchModel'
+const chosen = ref(readModel())
+const model = computed({
+  get: () => (info.value?.models.some((m) => m.id === chosen.value) ? chosen.value : (info.value?.model ?? '')),
+  set: (value: string) => {
+    chosen.value = value === info.value?.model ? '' : value
+    try {
+      localStorage.setItem(modelKey, chosen.value)
+    } catch {
+      // Only a convenience.
+    }
+  },
+})
+const modelOptions = computed(() =>
+  (info.value?.models ?? []).map((m) => ({
+    value: m.id,
+    label: m.id === info.value?.model ? t('sketchModelDefault', { name: m.name }) : m.name,
+  })),
+)
+
+function readModel(): string {
+  try {
+    return localStorage.getItem(modelKey) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** A model the server no longer offers goes to the default rather than to a refusal. */
+function offered(id: string | null | undefined): string | null {
+  return id && info.value?.models.some((m) => m.id === id) ? id : null
+}
 
 function message(caught: unknown): string {
   return caught instanceof ApiError && caught.status === 0
@@ -86,13 +121,13 @@ async function pick(event: Event): Promise<void> {
   input.value = ''
 }
 
-async function send(source = text.value, instruction = wishes.value): Promise<void> {
+async function send(source = text.value, instruction = wishes.value, withModel = model.value): Promise<void> {
   if (!source.trim() || sending.value) {
     return
   }
   sending.value = true
   try {
-    const queued = await planSketch(source, instruction.trim())
+    const queued = await planSketch(source, instruction.trim(), offered(withModel))
     sketches.value = [queued, ...sketches.value.filter((s) => s.id !== queued.id)]
     selected.value = await getSketch(queued.id)
     schedule()
@@ -173,7 +208,7 @@ function chordLine(chords: string[]): string {
     <Message v-if="info && !info.configured" severity="warn" role="note">{{
       t('sketchNoKey', { path: keyFile })
     }}</Message>
-    <p v-else-if="info" class="muted m-0 text-sm">{{ t('sketchCloud', { model: info.model }) }}</p>
+    <p v-else-if="info" class="muted m-0 text-sm">{{ t('sketchCloud') }}</p>
 
     <form class="flex flex-col gap-3" @submit.prevent="send()">
       <div class="flex flex-col gap-1">
@@ -195,6 +230,18 @@ function chordLine(chords: string[]): string {
       <div class="flex flex-col gap-1">
         <label for="sketch-wishes" class="text-sm font-semibold">{{ t('sketchWishes') }}</label>
         <InputText id="sketch-wishes" v-model="wishes" :placeholder="t('sketchWishesPlaceholder')" fluid />
+      </div>
+      <div v-if="modelOptions.length > 1" class="flex flex-col gap-1">
+        <label for="sketch-model" class="text-sm font-semibold">{{ t('sketchModel') }}</label>
+        <Select
+          v-model="model"
+          input-id="sketch-model"
+          :options="modelOptions"
+          option-value="value"
+          option-label="label"
+          size="small"
+          fluid
+        />
       </div>
       <div>
         <Button
@@ -302,7 +349,7 @@ function chordLine(chords: string[]): string {
           severity="secondary"
           text
           :disabled="info?.configured === false"
-          @click="send(selected.job.source, selected.job.instruction ?? '')"
+          @click="send(selected.job.source, selected.job.instruction ?? '', selected.job.model ?? model)"
         />
         <Button icon="pi pi-trash" :label="t('sketchDelete')" severity="danger" text @click="remove(selected)" />
       </div>

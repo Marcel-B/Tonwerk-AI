@@ -109,6 +109,11 @@ public sealed class JobQueue(
     public async Task<LyricsState> LyricsAsync(LyricsRequest request, CancellationToken cancellationToken)
     {
         var id = LyricsWriter.NewId();
+        if (lyrics.IsCloud(request.Model))
+        {
+            // Claude writes at Anthropic: nothing on the Mac to wait for, so it starts at once, beside songs.
+            return StartLyricsNow(request, id);
+        }
         var title = request.Keywords?.Trim() ?? "";
         var job = new QueuedJob(id, JobKind.Lyrics, title.Length > 80 ? title[..80] + "…" : title, time.GetUtcNow(), Revision: request.Instruction is not null);
         var queued = await SubmitAsync(job, JsonSerializer.SerializeToNode(request, Json)!.AsObject(), cancellationToken);
@@ -493,23 +498,29 @@ public sealed class JobQueue(
     private bool StartLyrics(QueuedJob job, JsonObject payload)
     {
         var request = payload.Deserialize<LyricsRequest>(Json) ?? throw new JsonException("The lyrics request is unreadable.");
-        var revision = request.Lyrics is not null && request.Instruction is not null ? new LyricsRevision(request.Lyrics, request.Instruction) : null;
         try
         {
-            lyrics.Start(
-                request.Keywords,
-                request.Style,
-                request.Language ?? LyricsLanguage.English,
-                request.Model,
-                request.Image,
-                revision,
-                job.Id);
+            StartLyricsNow(request, job.Id);
             return true;
         }
         catch (LyricsBusyException)
         {
             return false;
         }
+    }
+
+    /// <exception cref="LyricsBusyException">A local model would not fit now.</exception>
+    private LyricsState StartLyricsNow(LyricsRequest request, string id)
+    {
+        var revision = request.Lyrics is not null && request.Instruction is not null ? new LyricsRevision(request.Lyrics, request.Instruction) : null;
+        return lyrics.Start(
+            request.Keywords,
+            request.Style,
+            request.Language ?? LyricsLanguage.English,
+            request.Model,
+            request.Image,
+            revision,
+            id);
     }
 
     /// <summary>A job that could not start leaves the queue; the log says why, and a draft's form hears it too.</summary>

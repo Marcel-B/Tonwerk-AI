@@ -117,7 +117,32 @@ public sealed record SketchResult(
     double Seconds);
 
 /// <param name="Instruction">Optional wishes for this attempt.</param>
-public sealed record SketchRequest(string Text, string? Instruction = null);
+/// <param name="Model">One of <see cref="SketchInfo.Models"/>; <see cref="SketchOptions.Model"/> when left out.</param>
+public sealed record SketchRequest(string Text, string? Instruction = null, string? Model = null);
 
-/// <summary>Whether Claude can be asked (a key is set), and with which model.</summary>
-public sealed record SketchInfo(bool Configured, string Model);
+/// <summary>Whether Claude can be asked (a key is set), with which model by default and which to choose from.</summary>
+public sealed record SketchInfo(bool Configured, string Model, IReadOnlyList<ClaudeModelChoice> Models);
+
+/// <summary>A Claude model a picker offers, by its API id and the name Anthropic gives it.</summary>
+public sealed record ClaudeModelChoice(string Id, string Name)
+{
+    public static ClaudeModelChoice Of(string id) => new(id, NameOf(id));
+
+    /// <summary>"claude-opus-5-5" → "Claude Opus 5.5".</summary>
+    public static string NameOf(string id)
+    {
+        var words = new List<string>();
+        foreach (var part in id.Split('-', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.All(char.IsAsciiDigit) && words.Count > 0 && words[^1].All(c => char.IsAsciiDigit(c) || c == '.'))
+            {
+                words[^1] += "." + part;
+            }
+            else
+            {
+                words.Add(char.ToUpperInvariant(part[0]) + part[1..]);
+            }
+        }
+        return string.Join(' ', words);
+    }
+}

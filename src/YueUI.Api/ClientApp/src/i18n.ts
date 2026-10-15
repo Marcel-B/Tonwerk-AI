@@ -88,6 +88,8 @@ const messages = {
     lyricsModelDefault: '{name} (Standard)',
     lyricsModelLoaded: 'geladen',
     lyricsModelVision: 'sieht Fotos',
+    lyricsModelCloud: 'Cloud',
+    lyricsCloudHint: 'Schreibt bei Anthropic: läuft neben YuE2, Stichworte und Text gehen dafür ins Netz.',
     photoPick: 'Foto als Vorlage',
     photoAlt: 'Foto für den Songtext',
     photoHint: 'Der Entwurf erzählt von diesem Foto; Stichwörter lenken, was er daraus nimmt.',
@@ -636,12 +638,14 @@ const messages = {
     sketchIntro:
       'Eine schriftliche Ausarbeitung (Form, Tempo, Akkorde, Text, Melodieideen) wird von Claude zu einer vollständigen Partitur: jede Zeile mit Melodie, jeder Takt mit Akkorden. Daraus macht Tonwerk einen MIDI-Entwurf und einen YuE-Song.',
     sketchCloud:
-      'Die Ausarbeitung geht dazu an Anthropic ({model}); das kostet je Plan einige Cent bis rund einen Euro und dauert ein paar Minuten.',
+      'Die Ausarbeitung geht dazu an Anthropic; das kostet je Plan einige Cent bis rund einen Euro (mit Fable gut das Doppelte) und dauert ein paar Minuten.',
     sketchNoKey:
       'Es ist noch kein Anthropic-API-Schlüssel hinterlegt. Er gehört in {path} (eine Zeile) oder in ANTHROPIC_API_KEY.',
     sketchFile: 'Datei laden',
     sketchText: 'Ausarbeitung (Markdown oder Text)',
     sketchWishes: 'Wünsche für diesen Versuch (optional)',
+    sketchModel: 'Claude-Modell',
+    sketchModelDefault: '{name} (Standard)',
     sketchWishesPlaceholder: 'z. B. Refrainmelodie höher, Strophe ruhiger',
     sketchPlan: 'Mit Claude ausarbeiten',
     sketchList: 'Ausarbeitungen',
@@ -1207,6 +1211,8 @@ const messages = {
     lyricsModelDefault: '{name} (default)',
     lyricsModelLoaded: 'loaded',
     lyricsModelVision: 'sees photos',
+    lyricsModelCloud: 'cloud',
+    lyricsCloudHint: 'Writes at Anthropic: runs beside YuE2, keywords and lyrics go online for it.',
     photoPick: 'Photo as a starting point',
     photoAlt: 'Photo for the lyrics',
     photoHint: 'The draft tells of this photo; keywords steer what it takes from it.',
@@ -1752,11 +1758,13 @@ const messages = {
     sketchIntro:
       'Claude turns a written song sketch (form, tempo, chords, lyrics, ideas for the melody) into a complete score: a melody for every line, chords for every bar. Tonwerk makes a MIDI draft and a YuE song from it.',
     sketchCloud:
-      'The sketch goes to Anthropic for this ({model}); a plan costs from a few cents to about a dollar and takes a few minutes.',
+      'The sketch goes to Anthropic for this; a plan costs from a few cents to about a dollar (well over twice that with Fable) and takes a few minutes.',
     sketchNoKey: 'No Anthropic API key is set yet. Put it in {path} (one line) or in ANTHROPIC_API_KEY.',
     sketchFile: 'Load file',
     sketchText: 'Sketch (Markdown or text)',
     sketchWishes: 'Wishes for this attempt (optional)',
+    sketchModel: 'Claude model',
+    sketchModelDefault: '{name} (default)',
     sketchWishesPlaceholder: 'e.g. chorus melody higher, calmer verse',
     sketchPlan: 'Plan with Claude',
     sketchList: 'Sketches',

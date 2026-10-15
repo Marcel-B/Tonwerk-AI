@@ -242,6 +242,31 @@ public sealed class SketchEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task The_model_can_be_chosen_and_stays_with_the_sketch()
+    {
+        var info = (await Client.GetFromJsonAsync<SketchInfo>("/api/sketches/info", TestApp.Json))!;
+        Assert.Equal("claude-opus-5-5", info.Model);
+        Assert.Equal(["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5"], info.Models.Select(m => m.Id));
+        Assert.Equal("Claude Fable 5.1", info.Models[1].Name);
+
+        var queued = await (await Client.PostAsJsonAsync("/api/sketches", new { text = "Something", model = "claude-fable-5-1" }))
+            .Content.ReadFromJsonAsync<JsonObject>();
+        await WaitForStage((string)queued!["id"]!, "done");
+
+        Assert.Equal(["claude-fable-5-1"], _app.Sketches.Models);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client.PostAsJsonAsync("/api/sketches", new { text = "Something", model = "gpt-5" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Without_a_choice_the_default_model_plans()
+    {
+        var queued = await (await Client.PostAsJsonAsync("/api/sketches", new { text = "Something" })).Content.ReadFromJsonAsync<JsonObject>();
+        await WaitForStage((string)queued!["id"]!, "done");
+
+        Assert.Equal(["claude-opus-5-5"], _app.Sketches.Models);
+    }
+
+    [Fact]
     public async Task An_empty_sketch_is_refused()
     {
         var response = await Client.PostAsJsonAsync("/api/sketches", new { text = "  " });

@@ -403,7 +403,7 @@ export interface PromptTemplate {
 /** What a lyrics draft is written in (Lyrics/LyricsLanguage.cs). */
 export type LyricsLanguage = 'english' | 'german'
 
-/** A language model LM Studio offers for drafts (Lyrics/LyricsModels.cs). */
+/** A language model LM Studio, or Claude in the cloud, offers for drafts (Lyrics/LyricsModels.cs). */
 export interface LyricsModel {
   id: string
   name: string
@@ -413,6 +413,8 @@ export interface LyricsModel {
   loaded: boolean
   /** Can read a photo, as LM Studio says; null when the server does not say. */
   vision: boolean | null
+  /** Runs at Anthropic: the draft neither waits for nor stops a song, and the text leaves the Mac. */
+  cloud: boolean
 }
 
 /** What the lyrics model picker offers; `default` is the configured model, used when a draft names none. */
@@ -995,5 +997,14 @@ export interface SketchResult {
 
 export interface SketchInfo {
   configured: boolean
+  /** The default model. */
   model: string
+  /** The Claude models to choose from, the default first. */
+  models: ClaudeModelChoice[]
+}
+
+/** A Claude model a picker offers (Sketches/SketchModels.cs). */
+export interface ClaudeModelChoice {
+  id: string
+  name: string
 }

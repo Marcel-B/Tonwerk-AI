@@ -9,8 +9,17 @@ public sealed class SketchOptions
 {
     public const string Section = "Sketch";
 
-    /// <summary>Claude's model id.</summary>
+    /// <summary>Claude's model id, the default of the page's choice.</summary>
     public string Model { get; set; } = "claude-opus-5-5";
+
+    /// <summary>
+    /// The models the page offers besides <see cref="Model"/>. Fable 5.1 thinks deeper and costs about two and a half
+    /// times as much; Sonnet 5.5 half. Haiku is left out: a whole melody bar by bar asks too much of it.
+    /// </summary>
+    public string[] Models { get; set; } = ["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5"];
+
+    /// <summary><see cref="Model"/> first, then the others, each once.</summary>
+    public IReadOnlyList<string> Offered => [.. new[] { Model }.Concat(Models).Where(m => !string.IsNullOrWhiteSpace(m)).Distinct()];
 
     /// <summary>How hard the model thinks: low, medium, high, xhigh or max. A whole melody repays more than the default.</summary>
     public string Effort { get; set; } = "high";

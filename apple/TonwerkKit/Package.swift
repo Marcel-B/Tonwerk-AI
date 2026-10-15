@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "TonwerkKit", targets: ["TonwerkKit"]),
+        .library(name: "TonwerkUI", targets: ["TonwerkUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.7.0"),
@@ -28,6 +29,19 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
             ]
+        ),
+        // The apps' screens and player, so the Xcode project only holds the app's entry point and a CI `swift build`
+        // compiles nearly everything. Swift 5 mode: AVFoundation's and MediaPlayer's callbacks are not yet annotated
+        // for strict concurrency.
+        .target(
+            name: "TonwerkUI",
+            dependencies: ["TonwerkKit"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "TonwerkUITests",
+            dependencies: ["TonwerkUI"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
             name: "TonwerkKitTests",

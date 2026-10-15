@@ -13,6 +13,7 @@ struct SongDetail: View {
     @State private var title: String
     @State private var note: String
     @State private var problem: String?
+    @State private var sharing: Song?
 
     init(song: Song, list: [Song]) {
         self.song = song
@@ -130,8 +131,19 @@ struct SongDetail: View {
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
             .controlSize(.large)
+            Button {
+                sharing = song
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.circle)
+            .controlSize(.large)
+            .disabled(!song.hasAudio)
+            .accessibilityLabel("Teilen")
         }
         .padding(.top, 4)
+        .exportSheet(for: $sharing)
     }
 
     // MARK: Cards

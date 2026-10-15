@@ -228,6 +228,12 @@ struct SongList: View {
             Label("Als Partitur übernehmen", systemImage: "music.quarternote.3")
         }
         .disabled(!song.hasScore)
+        Button {
+            model.sharing = song
+        } label: {
+            Label("Teilen …", systemImage: "square.and.arrow.up")
+        }
+        .disabled(!song.hasAudio)
         Menu {
             ForEach(model.playlists, id: \.id) { list in
                 Button {
@@ -385,6 +391,8 @@ struct CoverView: View {
 /// The cover a song without its own gets: a gradient hued by the id, as the web page draws it (`export.ts`).
 struct DrawnCover: View {
     let id: String
+    /// The note in the middle; the exported cover has the title instead and square corners.
+    var symbol = true
 
     var body: some View {
         let hue = Double(id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % 360) / 360
@@ -396,9 +404,11 @@ struct DrawnCover: View {
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         .overlay {
-            Image(systemName: "music.note")
-                .foregroundStyle(.white.opacity(0.7))
+            if symbol {
+                Image(systemName: "music.note")
+                    .foregroundStyle(.white.opacity(0.7))
+            }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: symbol ? 6 : 0, style: .continuous))
     }
 }

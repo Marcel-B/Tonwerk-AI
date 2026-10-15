@@ -234,6 +234,11 @@ struct SongList: View {
             Label("Teilen …", systemImage: "square.and.arrow.up")
         }
         .disabled(!song.hasAudio)
+        Button {
+            model.painting = song
+        } label: {
+            Label("Cover malen …", systemImage: "paintbrush.pointed")
+        }
         Menu {
             ForEach(model.playlists, id: \.id) { list in
                 Button {

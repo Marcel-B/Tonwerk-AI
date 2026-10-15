@@ -38,6 +38,14 @@ public static class ApiDocument
             {
                 operation.Tags?.Clear();
                 FlattenForm(operation);
+                foreach (var media in (operation.RequestBody?.Content ?? new Dictionary<string, OpenApiMediaType>()).Values)
+                {
+                    media.Schema = WithoutNull(media.Schema);
+                }
+            }
+            foreach (var schema in (document.Components?.Schemas ?? new Dictionary<string, IOpenApiSchema>()).Values)
+            {
+                OptionalNotNull(schema);
             }
             return Task.CompletedTask;
         });
@@ -63,6 +71,52 @@ public static class ApiDocument
     /// </summary>
     public static RouteHandlerBuilder ProducesFile(this RouteHandlerBuilder builder, string contentType, params string[] moreContentTypes) =>
         builder.Produces(StatusCodes.Status200OK, typeof(Stream), contentType, moreContentTypes);
+
+    /// <summary>
+    /// A nullable object is described as <c>oneOf: [null, $ref]</c> and a nullable enum lists <c>null</c> among its values;
+    /// Swift's generator skips the null and turns the rest into a one-case wrapper. Such a property becomes the plain
+    /// reference and leaves <c>required</c>, since an optional property decodes a <c>null</c> as well.
+    /// </summary>
+    private static void OptionalNotNull(IOpenApiSchema schema)
+    {
+        if (schema is not OpenApiSchema concrete)
+        {
+            return;
+        }
+        if (concrete.Enum is { } values)
+        {
+            for (var i = values.Count - 1; i >= 0; i--)
+            {
+                if (values[i] is null || values[i]!.GetValueKind() == System.Text.Json.JsonValueKind.Null)
+                {
+                    values.RemoveAt(i);
+                }
+            }
+        }
+        foreach (var name in (concrete.Properties ?? new Dictionary<string, IOpenApiSchema>()).Keys.ToList())
+        {
+            var property = concrete.Properties![name];
+            var plain = WithoutNull(property);
+            if (!ReferenceEquals(plain, property))
+            {
+                concrete.Properties[name] = plain;
+                concrete.Required?.Remove(name);
+            }
+            OptionalNotNull(plain);
+        }
+        if (concrete.Items is { } items)
+        {
+            concrete.Items = WithoutNull(items);
+            OptionalNotNull(concrete.Items);
+        }
+    }
+
+    /// <summary>The other schema of a <c>oneOf</c> of null and one schema, else the schema itself.</summary>
+    private static IOpenApiSchema? WithoutNull(IOpenApiSchema? schema) =>
+        schema is OpenApiSchema { OneOf: { Count: 2 } choices }
+        && choices.Count(choice => choice is OpenApiSchema { Type: JsonSchemaType.Null }) == 1
+            ? choices.First(choice => choice is not OpenApiSchema { Type: JsonSchemaType.Null })
+            : schema;
 
     /// <summary>
     /// ASP.NET describes a form of several <c>[FromForm]</c> parameters as an <c>allOf</c> of one-property objects;

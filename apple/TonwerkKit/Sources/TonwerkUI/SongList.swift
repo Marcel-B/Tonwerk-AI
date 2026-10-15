@@ -71,6 +71,11 @@ struct SongList: View {
             Label("Abspielen", systemImage: "play")
         }
         .disabled(!song.hasAudio)
+        Button {
+            Task { await model.useInForm(song) }
+        } label: {
+            Label("Ins Formular übernehmen", systemImage: "square.and.pencil")
+        }
         Menu {
             ForEach(model.playlists, id: \.id) { list in
                 Button {

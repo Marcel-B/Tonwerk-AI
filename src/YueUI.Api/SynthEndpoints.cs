@@ -13,27 +13,48 @@ public static class SynthEndpoints
     public static RouteGroupBuilder MapSynthEndpoints(this RouteGroupBuilder api)
     {
         var synths = api.MapGroup("/logic/synths");
-        synths.MapGet("/presets", (SqliteSynthStore store) => Results.Ok(store.ListPresets()));
-        synths.MapPut("/presets/{name}", SavePreset);
+        synths.MapGet("/presets", (SqliteSynthStore store) => Results.Ok(store.ListPresets()))
+            .WithName("ListSynthPresets")
+            .Produces<IReadOnlyList<SynthPreset>>(StatusCodes.Status200OK);
+        synths.MapPut("/presets/{name}", SavePreset)
+            .WithName("SaveSynthPreset")
+            .Produces<SynthPreset>(StatusCodes.Status200OK)
+            .Produces<SynthPreset>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
         synths.MapDelete("/presets/{name}", (string name, SqliteSynthStore store) =>
             store.DeletePreset(name.Trim())
                 ? Results.NoContent()
-                : Results.Problem(title: "Unknown sound", detail: $"There is no sound named '{name}'.", statusCode: StatusCodes.Status404NotFound));
+                : Results.Problem(title: "Unknown sound", detail: $"There is no sound named '{name}'.", statusCode: StatusCodes.Status404NotFound))
+            .WithName("DeleteSynthPreset")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
-        synths.MapGet("/tracks", (SqliteSynthStore store) => Results.Ok(store.ListTracks()));
-        synths.MapPut("/tracks/{track}", SetTrack);
+        synths.MapGet("/tracks", (SqliteSynthStore store) => Results.Ok(store.ListTracks()))
+            .WithName("ListTrackSynths")
+            .Produces<IReadOnlyList<TrackSynth>>(StatusCodes.Status200OK);
+        synths.MapPut("/tracks/{track}", SetTrack)
+            .WithName("SetTrackSynth")
+            .Produces<TrackSynth>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
         // Idempotent: a track without a sound of its own already plays the default.
         synths.MapDelete("/tracks/{track}", (string track, SqliteSynthStore store) =>
         {
             store.RemoveTrack(track.Trim());
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteTrackSynth")
+            .Produces(StatusCodes.Status204NoContent);
 
-        synths.MapGet("/mixer", (SqliteSynthStore store) => Results.Ok(store.GetMixer()));
+        synths.MapGet("/mixer", (SqliteSynthStore store) => Results.Ok(store.GetMixer()))
+            .WithName("GetSynthMixer")
+            .Produces<MixerSettings>(StatusCodes.Status200OK);
         synths.MapPut("/mixer", ([FromBody] MixerInput input, SqliteSynthStore store) =>
             input.Problems() is { Count: > 0 } problems
                 ? BadRequest("Invalid mixer", problems)
-                : Results.Ok(store.SetMixer(input.Settings!.Value)));
+                : Results.Ok(store.SetMixer(input.Settings!.Value)))
+            .WithName("SetSynthMixer")
+            .Produces<MixerSettings>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
         return api;
     }
 

@@ -186,9 +186,16 @@ struct CreateView: View {
         Task {
             do {
                 let job = try await model.generate(model.form)
-                sent = model.form.batch == 1
-                    ? String(localized: "„\(job.title)“ ist bestellt.")
-                    : String(localized: "\(model.form.batch) Songs „\(job.title)“ sind bestellt.")
+                let title = job?.title ?? model.form.request.title ?? String(localized: "Der Song")
+                if job == nil {
+                    sent = model.form.batch == 1
+                        ? String(localized: "„\(title)“ wird erzeugt.")
+                        : String(localized: "\(model.form.batch) Songs „\(title)“ werden erzeugt.")
+                } else {
+                    sent = model.form.batch == 1
+                        ? String(localized: "„\(title)“ wartet in der Warteschlange.")
+                        : String(localized: "\(model.form.batch) Songs „\(title)“ warten in der Warteschlange.")
+                }
             } catch {
                 self.error = error.localizedDescription
             }
@@ -198,20 +205,20 @@ struct CreateView: View {
 }
 
 extension AppModel {
-    func generate(_ form: CreateForm) async throws -> Components.Schemas.QueuedJob {
-        guard let tonwerk else { throw ServerError(String(localized: "Kein Server verbunden.")) }
-        switch try await tonwerk.api.generate(body: .json(form.request)) {
-        case .accepted(let accepted):
-            return try accepted.body.json
-        case .badRequest(let refused):
-            throw ServerError(problem: try? refused.body.applicationProblemJson.detail)
-        case .notImplemented(let refused):
-            throw ServerError(problem: try? refused.body.applicationProblemJson.detail)
-        case .serviceUnavailable(let refused):
-            throw ServerError(problem: try? refused.body.applicationProblemJson.detail)
-        case .undocumented(let status, _):
-            throw ServerError(String(localized: "Der Server antwortete \(status)."))
+    /// Asks for the song. Nil when it started at once: the server answers 202 then without a body (only a job that
+    /// waits comes back), which the generated client cannot decode, so this call goes by hand.
+    func generate(_ form: CreateForm) async throws -> Components.Schemas.QueuedJob? {
+        guard let server = tonwerk?.server else { throw ServerError(String(localized: "Kein Server verbunden.")) }
+        var request = URLRequest(url: server.appending(path: "api/generate"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(form.request)
+        let (answer, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 202 else {
+            throw ServerError(problem: ServerError.text(of: answer) ?? String(localized: "Der Server antwortete \(status)."))
         }
+        return answer.isEmpty ? nil : try JSONDecoder.tonwerk().decode(Components.Schemas.QueuedJob.self, from: answer)
     }
 
     /// Starts a draft and answers its id; the text arrives as `lyrics` events.
@@ -261,5 +268,16 @@ struct ServerError: LocalizedError {
 
     init(problem: String??) {
         errorDescription = (problem ?? nil) ?? String(localized: "Der Server hat abgelehnt.")
+    }
+
+    /// The words of a problem answer: the first field error of a validation problem, else its detail or title.
+    static func text(of problem: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: problem) as? [String: Any] else { return nil }
+        if let errors = object["errors"] as? [String: [String]],
+           let first = errors.keys.sorted().first.flatMap({ errors[$0]?.first })
+        {
+            return first
+        }
+        return (object["detail"] as? String) ?? (object["title"] as? String)
     }
 }

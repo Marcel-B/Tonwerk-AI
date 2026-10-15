@@ -16,8 +16,26 @@ struct MainView: View {
     @State private var newName = ""
 
     var body: some View {
+        // On the Mac the player takes its own row under the window's content, so nothing ends behind it; on the
+        // iPhone and iPad the content scrolls under the bar's material, as Apple's own players do.
+        #if os(macOS)
+        VStack(spacing: 0) {
+            split
+            PlayerBar()
+        }
+        .modifier(Dialogs(naming: $naming, newName: $newName))
+        #else
+        split
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PlayerBar()
+            }
+            .modifier(Dialogs(naming: $naming, newName: $newName))
+        #endif
+    }
+
+    private var split: some View {
         @Bindable var model = model
-        NavigationSplitView {
+        return NavigationSplitView {
             List(selection: $model.page) {
                 Section {
                     Label("Erstellen", systemImage: "wand.and.stars").tag(Page.create)
@@ -85,16 +103,25 @@ struct MainView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            PlayerBar()
-        }
-        .exportSheet(for: $model.sharing)
-        .paintSheet(for: $model.painting)
-        .alert("Neue Playlist", isPresented: $naming) {
-            TextField("Name", text: $newName)
-            Button("Anlegen") { Task { await model.createPlaylist(named: newName) } }
-            Button("Abbrechen", role: .cancel) {}
-        }
+    }
+}
+
+/// The sheets and alerts the whole window shares.
+private struct Dialogs: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var naming: Bool
+    @Binding var newName: String
+
+    func body(content: Content) -> some View {
+        @Bindable var model = model
+        content
+            .exportSheet(for: $model.sharing)
+            .paintSheet(for: $model.painting)
+            .alert("Neue Playlist", isPresented: $naming) {
+                TextField("Name", text: $newName)
+                Button("Anlegen") { Task { await model.createPlaylist(named: newName) } }
+                Button("Abbrechen", role: .cancel) {}
+            }
     }
 }
 

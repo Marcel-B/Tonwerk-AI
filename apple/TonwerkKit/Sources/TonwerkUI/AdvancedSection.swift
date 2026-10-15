@@ -47,7 +47,11 @@ struct AdvancedSection: View {
                 .padding(.top, 4)
             } label: {
                 HStack {
-                    Text("Erweiterte Parameter")
+                    Label {
+                        Text("Erweiterte Parameter")
+                    } icon: {
+                        Image(systemName: "slider.horizontal.3").foregroundStyle(Theme.accent)
+                    }
                     if !model.form.useAdvanced {
                         Text("aus").foregroundStyle(.secondary)
                     } else if model.form.advancedChanged {

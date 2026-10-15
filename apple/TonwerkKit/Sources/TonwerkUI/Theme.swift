@@ -36,11 +36,20 @@ extension Color {
 /// A card: a rounded material with a hairline, like the web page's `Card`.
 struct CardStyle: ViewModifier {
     var padding: CGFloat = 14
+    /// Over a blurred cover the card is a material, so the cover's colour shows through.
+    var onBackdrop = false
 
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(.background.secondary, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                if onBackdrop {
+                    shape.fill(.regularMaterial)
+                } else {
+                    shape.fill(.background.secondary)
+                }
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
@@ -49,8 +58,8 @@ struct CardStyle: ViewModifier {
 }
 
 extension View {
-    func card(padding: CGFloat = 14) -> some View {
-        modifier(CardStyle(padding: padding))
+    func card(padding: CGFloat = 14, onBackdrop: Bool = false) -> some View {
+        modifier(CardStyle(padding: padding, onBackdrop: onBackdrop))
     }
 }
 
@@ -66,6 +75,22 @@ struct PlayButtonStyle: ButtonStyle {
             .background(Theme.accent, in: Circle())
             .shadow(color: Theme.accent.opacity(0.35), radius: configuration.isPressed ? 2 : 6, y: 2)
             .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .animation(.spring(duration: 0.25), value: configuration.isPressed)
+    }
+}
+
+/// The wide button that asks for songs: a capsule in the accent with a soft glow, dimmed while it cannot be pressed.
+struct GenerateButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 20)
+            .background(Theme.accent.opacity(enabled ? 1 : 0.4), in: Capsule())
+            .shadow(color: Theme.accent.opacity(enabled ? 0.4 : 0), radius: configuration.isPressed ? 3 : 10, y: 3)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(duration: 0.25), value: configuration.isPressed)
     }
 }

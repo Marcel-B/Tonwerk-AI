@@ -20,12 +20,19 @@ public static class SwapEndpoints
 
     public static RouteGroupBuilder MapSwapEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/swaps", (SqliteSwapStore store) => Results.Ok(store.All()));
+        api.MapGet("/swaps", (SqliteSwapStore store) => Results.Ok(store.All()))
+            .WithName("ListSwaps")
+            .Produces<IReadOnlyList<SwapState>>(StatusCodes.Status200OK);
         api.MapPost("/swaps", AddAsync)
             // Posted from a plain form; there is no login and no cookie that a forged request could use.
             .DisableAntiforgery()
             .WithFormOptions(multipartBodyLengthLimit: MaxUploadBytes)
-            .WithMetadata(new RequestSizeLimitAttribute(MaxUploadBytes + 64 * 1024));
+            .WithMetadata(new RequestSizeLimitAttribute(MaxUploadBytes + 64 * 1024))
+            .WithName("CreateSwap")
+            .Produces<SwapState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
         // Range requests: the page seeks, and Safari plays only from a source that answers them.
         api.MapGet("/swaps/{id}/audio", (string id, bool? download, SqliteSwapStore store) =>
         {
@@ -37,11 +44,18 @@ public static class SwapEndpoints
                 ? $"{LibraryEndpoints.FileName(Path.GetFileNameWithoutExtension(swap.FileName), "upload")}-{LibraryEndpoints.FileName(swap.VoiceLabel, "voice")}.flac"
                 : null;
             return Results.File(store.ResultPath(id), "audio/flac", name, enableRangeProcessing: true);
-        });
+        })
+            .WithName("GetSwapAudio")
+            .ProducesFile("audio/flac")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapGet("/swaps/{id}/source", (string id, SqliteSwapStore store) =>
             store.Get(id) is not null && store.SourcePath(id) is { } path
                 ? Results.File(path, ContentTypes.TryGetContentType(path, out var type) ? type : "application/octet-stream", enableRangeProcessing: true)
-                : Results.NotFound());
+                : Results.NotFound())
+            // The upload as it came, typed by its file name's ending (the usual ones; anything else is octet-stream).
+            .WithName("GetSwapSource")
+            .ProducesFile("audio/wav", "audio/mpeg", "audio/flac", "audio/mp4", "audio/ogg", "application/octet-stream")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/swaps/{id}", (string id, SqliteSwapStore store, VoiceConverter converter) =>
         {
             if (store.Get(id) is not { } swap)
@@ -50,7 +64,10 @@ public static class SwapEndpoints
             }
             converter.DeleteSwap(swap);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteSwap")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

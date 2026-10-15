@@ -22,15 +22,25 @@ public static class VideoEndpoints
     public static RouteGroupBuilder MapVideoEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/songs/{run}/{song}/videos", (string run, string song, SongLibrary library, SqliteVideoStore store) =>
-            library.SongDirectory(run, song) is null ? Results.NotFound() : Results.Ok(store.ForSong($"{run}/{song}")));
+            library.SongDirectory(run, song) is null ? Results.NotFound() : Results.Ok(store.ForSong($"{run}/{song}")))
+            .WithName("ListSongVideos")
+            .Produces<IReadOnlyList<VideoState>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
         // The folders a photo video can take its pictures from, and whether the planner is installed at all.
         api.MapGet("/videos/media", (IMontageBuilder montage, IOptions<MontageOptions> options) =>
-            new MediaInfo(montage.Installed, options.Value.ResolvedMediaRoot, MediaFolders.List(options.Value.ResolvedMediaRoot)));
+            new MediaInfo(montage.Installed, options.Value.ResolvedMediaRoot, MediaFolders.List(options.Value.ResolvedMediaRoot)))
+            .WithName("GetVideoMedia")
+            .Produces<MediaInfo>(StatusCodes.Status200OK);
         api.MapPost("/songs/{run}/{song}/videos", AddAsync)
             // Posted from a plain form; there is no login and no cookie that a forged request could use.
             .DisableAntiforgery()
             .WithFormOptions(multipartBodyLengthLimit: 4 * MaxLayerBytes)
-            .WithMetadata(new RequestSizeLimitAttribute(4 * MaxLayerBytes + 64 * 1024));
+            .WithMetadata(new RequestSizeLimitAttribute(4 * MaxLayerBytes + 64 * 1024))
+            .WithName("CreateVideo")
+            .Produces<VideoState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         // Range requests: Safari plays a video only from a source that answers them.
         api.MapGet("/videos/{id}/file", (string id, bool? download, SqliteVideoStore store) =>
         {
@@ -39,7 +49,10 @@ public static class VideoEndpoints
                 return Results.NotFound();
             }
             return Results.File(store.VideoPath(id), "video/mp4", download == true ? FileName(video) : null, enableRangeProcessing: true);
-        });
+        })
+            .WithName("GetVideoFile")
+            .ProducesFile("video/mp4")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/videos/{id}", (string id, SqliteVideoStore store, VideoMaker maker) =>
         {
             if (store.Get(id) is not { } video)
@@ -48,7 +61,10 @@ public static class VideoEndpoints
             }
             maker.Delete(video);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteVideo")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

@@ -1,0 +1,49 @@
+[
+  {
+    "id": "20260921-165850-Neon-Night",
+    "title": "Neon Night",
+    "originalTitle": "Neon Night",
+    "createdAt": "2026-09-21T16:58:50+00:00",
+    "style": "Dark synthwave",
+    "lyrics": "[verse]\nLa la",
+    "songs": [
+      {
+        "id": "20260921-165850-Neon-Night/song1",
+        "index": 1,
+        "seed": 42,
+        "quality": "draft",
+        "seconds": 187.5,
+        "hasAudio": true,
+        "hasScore": true,
+        "canRender": false,
+        "bytes": 290,
+        "rating": 4,
+        "versions": [],
+        "coverUpdatedAt": null,
+        "note": null,
+        "videoFormats": [],
+        "engine": null,
+        "traits": null
+      },
+      {
+        "id": "20260921-165850-Neon-Night/song2",
+        "index": 2,
+        "seed": 42,
+        "quality": "draft",
+        "seconds": 187.5,
+        "hasAudio": true,
+        "hasScore": true,
+        "canRender": false,
+        "bytes": 290,
+        "rating": null,
+        "versions": [],
+        "coverUpdatedAt": null,
+        "note": null,
+        "videoFormats": [],
+        "engine": null,
+        "traits": null
+      }
+    ],
+    "bytes": 580
+  }
+]

@@ -87,6 +87,28 @@ jobs:
           test -f out/publish/wwwroot/ui/index.html
           ls out/publish/wwwroot/ui/assets/*.js
 
+  swift-kit:
+    name: TonwerkKit (Swift)
+    # The apps' shared package: the client generated from the OpenAPI description must build and decode real answers.
+    runs-on: macos-15
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apple/TonwerkKit
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
   frontend-tests:
     name: Frontend tests
     runs-on: ubuntu-latest

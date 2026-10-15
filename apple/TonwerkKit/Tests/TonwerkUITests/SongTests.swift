@@ -140,5 +140,12 @@ final class CreateFormTests: XCTestCase {
         XCTAssertEqual(form.abcSampling, .abcDefaults)
         XCTAssertTrue(form.useAdvanced)
     }
-}
 
+    func testAProblemAnswerSaysWhatWentWrong() {
+        let validation = #"{"title":"One or more validation errors occurred.","status":400,"errors":{"style":["Style is required."]}}"#
+        XCTAssertEqual(ServerError.text(of: Data(validation.utf8)), "Style is required.")
+        let missing = #"{"title":"YuE Studio not found","status":503,"detail":"No worker at /x."}"#
+        XCTAssertEqual(ServerError.text(of: Data(missing.utf8)), "No worker at /x.")
+        XCTAssertNil(ServerError.text(of: Data()))
+    }
+}

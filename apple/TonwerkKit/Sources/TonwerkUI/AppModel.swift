@@ -26,15 +26,22 @@ public final class AppModel {
     /// Songs and renders the worker has, by id; finished ones leave once the library has them.
     public private(set) var working: [String: Components.Schemas.SongState] = [:]
     public private(set) var libraryError: String?
+    /// The page in the sidebar; here rather than in the view, so "use in the form" can switch to the form.
+    var page: Page? = .library
+    /// The create form, kept across starts like the web page's `form.ts`.
+    var form = CreateForm()
+    /// Lyrics drafts by id, from `lyrics` events; the form waits for the one it asked for.
+    public private(set) var drafts: [String: Components.Schemas.LyricsState] = [:]
 
     public let player = Player()
 
-    private var tonwerk: Tonwerk?
+    private(set) var tonwerk: Tonwerk?
     private var live: Task<Void, Never>?
     private let defaults: UserDefaults
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        form = CreateForm.load(from: defaults)
         if let saved = defaults.string(forKey: Self.serverKey), let url = URL(string: saved) {
             use(url)
         }
@@ -101,6 +108,9 @@ public final class AppModel {
         switch event {
         case .snapshot(let snapshot):
             queue = snapshot.queue ?? []
+            if let draft = snapshot.lyrics {
+                drafts[draft.id] = draft
+            }
             working = Dictionary(snapshot.songs.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
@@ -109,6 +119,8 @@ public final class AppModel {
             if state.finished == true {
                 Task { await reloadLibrary() }
             }
+        case .lyrics(let draft):
+            drafts[draft.id] = draft
         case .library:
             Task { await reloadLibrary() }
         default:
@@ -134,6 +146,17 @@ public final class AppModel {
         } catch {
             libraryError = error.localizedDescription
         }
+    }
+
+    /// The answer to the request, unless its events were faster.
+    func noteDraft(_ draft: Components.Schemas.LyricsState) {
+        if drafts[draft.id] == nil {
+            drafts[draft.id] = draft
+        }
+    }
+
+    func saveForm() {
+        form.save(to: defaults)
     }
 
     public func song(_ id: String) -> Song? {

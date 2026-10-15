@@ -53,3 +53,45 @@ final class SongTests: XCTestCase {
         XCTAssertEqual(Song.clock(.nan), "0:00")
     }
 }
+
+final class CreateFormTests: XCTestCase {
+    func testAnEmptyFormNamesWhatIsMissing() {
+        var form = CreateForm()
+        XCTAssertNotNil(form.problem)
+        form.style = "German, pop"
+        XCTAssertNotNil(form.problem, "lyrics missing")
+        form.instrumental = true
+        XCTAssertNil(form.problem)
+        form.seed = "abc"
+        XCTAssertNotNil(form.problem)
+    }
+
+    func testTheRequestCarriesTheForm() {
+        var form = CreateForm()
+        form.style = " German, pop "
+        form.lyrics = "[verse]\nHallo"
+        form.batch = 12
+        form.full = true
+        form.planning = .melody
+        form.seed = "42"
+
+        let request = form.request
+
+        XCTAssertEqual(request.style, "German, pop")
+        XCTAssertNil(request.title)
+        XCTAssertEqual(request.batch, 10)
+        XCTAssertEqual(request.quality, "full")
+        XCTAssertEqual(request.cot, "melody")
+        XCTAssertEqual(request.seed, 42)
+    }
+
+    func testTheFormSurvivesARestart() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "CreateFormTests"))
+        defaults.removePersistentDomain(forName: "CreateFormTests")
+        var form = CreateForm()
+        form.title = "Herbst"
+        form.save(to: defaults)
+
+        XCTAssertEqual(CreateForm.load(from: defaults), form)
+    }
+}

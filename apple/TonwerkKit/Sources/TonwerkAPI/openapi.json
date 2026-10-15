@@ -161,14 +161,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RenderRequest"
-                  }
-                ]
+                "$ref": "#/components/schemas/RenderRequest"
               }
             }
           }
@@ -2614,14 +2607,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StemRequest"
-                  }
-                ]
+                "$ref": "#/components/schemas/StemRequest"
               }
             }
           }
@@ -4371,14 +4357,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AudioMidiSettings"
-                  }
-                ]
+                "$ref": "#/components/schemas/AudioMidiSettings"
               }
             }
           }
@@ -4481,14 +4460,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AudioMidiSettings"
-                  }
-                ]
+                "$ref": "#/components/schemas/AudioMidiSettings"
               }
             }
           }
@@ -6152,7 +6124,6 @@
           "running",
           "done",
           "total",
-          "last",
           "nextRun",
           "files"
         ],
@@ -6173,14 +6144,7 @@
             "format": "int32"
           },
           "last": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BackupRun"
-              }
-            ]
+            "$ref": "#/components/schemas/BackupRun"
           },
           "nextRun": {
             "type": [
@@ -6336,34 +6300,13 @@
             "format": "int32"
           },
           "abcSampling": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SamplingOverrides"
-              }
-            ]
+            "$ref": "#/components/schemas/SamplingOverrides"
           },
           "semanticSampling": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SamplingOverrides"
-              }
-            ]
+            "$ref": "#/components/schemas/SamplingOverrides"
           },
           "voice": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/VersionRequest"
-              }
-            ]
+            "$ref": "#/components/schemas/VersionRequest"
           },
           "lora": {
             "type": [
@@ -6708,14 +6651,7 @@
             "$ref": "#/components/schemas/InstrumentKind"
           },
           "drums": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DrumNotes"
-              }
-            ]
+            "$ref": "#/components/schemas/DrumNotes"
           },
           "note": {
             "type": [
@@ -6758,24 +6694,10 @@
             "format": "int32"
           },
           "kind": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/InstrumentKind"
-              }
-            ]
+            "$ref": "#/components/schemas/InstrumentKind"
           },
           "drums": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DrumNotes"
-              }
-            ]
+            "$ref": "#/components/schemas/DrumNotes"
           }
         }
       },
@@ -6807,33 +6729,19 @@
             "format": "int32"
           },
           "kind": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/InstrumentKind"
-              }
-            ]
+            "$ref": "#/components/schemas/InstrumentKind"
           },
           "drums": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DrumNotes"
-              }
-            ]
+            "$ref": "#/components/schemas/DrumNotes"
           }
         }
       },
       "InstrumentKind": {
         "enum": [
           "Synth",
-          "DrumMachine",
-          null
-        ]
+          "DrumMachine"
+        ],
+        "type": "string"
       },
       "JobKind": {
         "enum": [
@@ -6841,7 +6749,8 @@
           "render",
           "lyrics",
           "transcription"
-        ]
+        ],
+        "type": "string"
       },
       "JsonElement": {},
       "LargeModel": {
@@ -6850,9 +6759,9 @@
           "voices",
           "speech",
           "images",
-          "ace",
-          null
-        ]
+          "ace"
+        ],
+        "type": "string"
       },
       "LogEntry": {
         "required": [
@@ -6966,20 +6875,10 @@
         }
       },
       "LogicPresetInput": {
-        "required": [
-          "form"
-        ],
         "type": "object",
         "properties": {
           "form": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            ]
+            "$ref": "#/components/schemas/JsonElement"
           }
         }
       },
@@ -7104,9 +7003,9 @@
       "LyricsLanguage": {
         "enum": [
           "english",
-          "german",
-          null
-        ]
+          "german"
+        ],
+        "type": "string"
       },
       "LyricsModel": {
         "required": [
@@ -7184,14 +7083,7 @@
             ]
           },
           "language": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LyricsLanguage"
-              }
-            ]
+            "$ref": "#/components/schemas/LyricsLanguage"
           },
           "model": {
             "type": [
@@ -7324,20 +7216,10 @@
         }
       },
       "MemoryInfo": {
-        "required": [
-          "holder"
-        ],
         "type": "object",
         "properties": {
           "holder": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LargeModel"
-              }
-            ]
+            "$ref": "#/components/schemas/LargeModel"
           }
         }
       },
@@ -7360,39 +7242,21 @@
         }
       },
       "MixerInput": {
-        "required": [
-          "settings"
-        ],
         "type": "object",
         "properties": {
           "settings": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            ]
+            "$ref": "#/components/schemas/JsonElement"
           }
         }
       },
       "MixerSettings": {
         "required": [
-          "settings",
           "updatedAt"
         ],
         "type": "object",
         "properties": {
           "settings": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            ]
+            "$ref": "#/components/schemas/JsonElement"
           },
           "updatedAt": {
             "type": [
@@ -7484,8 +7348,7 @@
       },
       "PresetImport": {
         "required": [
-          "name",
-          "form"
+          "name"
         ],
         "type": "object",
         "properties": {
@@ -7496,14 +7359,7 @@
             ]
           },
           "form": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            ]
+            "$ref": "#/components/schemas/JsonElement"
           }
         }
       },
@@ -7620,7 +7476,6 @@
       "PushSubscriptionRequest": {
         "required": [
           "endpoint",
-          "keys",
           "language"
         ],
         "type": "object",
@@ -7632,14 +7487,7 @@
             ]
           },
           "keys": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PushKeys"
-              }
-            ]
+            "$ref": "#/components/schemas/PushKeys"
           },
           "language": {
             "type": [
@@ -8114,14 +7962,7 @@
             ]
           },
           "plan": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SketchPlan"
-              }
-            ]
+            "$ref": "#/components/schemas/SketchPlan"
           },
           "inputTokens": {
             "type": [
@@ -8471,14 +8312,7 @@
             ]
           },
           "traits": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SongTraits"
-              }
-            ]
+            "$ref": "#/components/schemas/SongTraits"
           }
         }
       },
@@ -8495,9 +8329,7 @@
           "draftSteps",
           "maxTokens",
           "abc",
-          "fullSteps",
-          "abcSampling",
-          "semanticSampling"
+          "fullSteps"
         ],
         "type": "object",
         "properties": {
@@ -8569,24 +8401,10 @@
             "format": "int32"
           },
           "abcSampling": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SamplingOverrides"
-              }
-            ]
+            "$ref": "#/components/schemas/SamplingOverrides"
           },
           "semanticSampling": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SamplingOverrides"
-              }
-            ]
+            "$ref": "#/components/schemas/SamplingOverrides"
           },
           "lora": {
             "type": [
@@ -8679,14 +8497,7 @@
             "type": "boolean"
           },
           "voice": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SongVoice"
-              }
-            ]
+            "$ref": "#/components/schemas/SongVoice"
           },
           "finished": {
             "type": "boolean"
@@ -9063,14 +8874,7 @@
             }
           },
           "lyrics": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LyricsState"
-              }
-            ]
+            "$ref": "#/components/schemas/LyricsState"
           },
           "versions": {
             "type": [
@@ -9143,14 +8947,7 @@
             }
           },
           "memory": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MemoryInfo"
-              }
-            ]
+            "$ref": "#/components/schemas/MemoryInfo"
           },
           "ace": {
             "type": [
@@ -9579,27 +9376,16 @@
         }
       },
       "SynthPresetInput": {
-        "required": [
-          "patch"
-        ],
         "type": "object",
         "properties": {
           "patch": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            ]
+            "$ref": "#/components/schemas/JsonElement"
           }
         }
       },
       "TemplateRequest": {
         "required": [
-          "name",
-          "settings"
+          "name"
         ],
         "type": "object",
         "properties": {
@@ -9610,14 +9396,7 @@
             ]
           },
           "settings": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            ]
+            "$ref": "#/components/schemas/JsonElement"
           }
         }
       },
@@ -9656,20 +9435,12 @@
       },
       "TimingAnswer": {
         "required": [
-          "timing",
           "info"
         ],
         "type": "object",
         "properties": {
           "timing": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LyricsTiming"
-              }
-            ]
+            "$ref": "#/components/schemas/LyricsTiming"
           },
           "info": {
             "$ref": "#/components/schemas/TimingInfo"
@@ -9760,20 +9531,12 @@
       },
       "TrackSynthInput": {
         "required": [
-          "patch",
           "preset"
         ],
         "type": "object",
         "properties": {
           "patch": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            ]
+            "$ref": "#/components/schemas/JsonElement"
           },
           "preset": {
             "type": [
@@ -10161,7 +9924,8 @@
           "stopped",
           "starting",
           "ready"
-        ]
+        ],
+        "type": "string"
       }
     }
   }

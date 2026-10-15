@@ -1,8 +1,9 @@
 import SwiftUI
 import TonwerkKit
 
-/// The pages in the sidebar (on the iPhone a list to go into): library, queue and each playlist.
+/// The pages in the sidebar (on the iPhone a list to go into): the form, library, queue and each playlist.
 enum Page: Hashable {
+    case create
     case library
     case review
     case queue
@@ -11,14 +12,15 @@ enum Page: Hashable {
 
 struct MainView: View {
     @Environment(AppModel.self) private var model
-    @State private var page: Page? = .library
     @State private var naming = false
     @State private var newName = ""
 
     var body: some View {
+        @Bindable var model = model
         NavigationSplitView {
-            List(selection: $page) {
+            List(selection: $model.page) {
                 Section {
+                    Label("Erstellen", systemImage: "wand.and.stars").tag(Page.create)
                     Label("Bibliothek", systemImage: "music.note.list").tag(Page.library)
                     Label("Zum Anhören", systemImage: "star.leadinghalf.filled")
                         .badge(model.unrated.count)
@@ -64,7 +66,9 @@ struct MainView: View {
             }
             #endif
         } detail: {
-            switch page ?? .library {
+            switch model.page ?? .library {
+            case .create:
+                CreateView()
             case .library:
                 SongList(title: "Bibliothek", songs: model.songs)
             case .review:

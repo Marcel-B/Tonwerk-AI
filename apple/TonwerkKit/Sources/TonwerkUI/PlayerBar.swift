@@ -6,25 +6,19 @@ struct PlayerBar: View {
     @Environment(AppModel.self) private var model
     @Environment(Player.self) private var player
     @State private var scrubbing: Double?
+    @State private var expanded = false
 
     var body: some View {
         if let song = player.current {
             VStack(spacing: 6) {
                 HStack(spacing: 12) {
-                    CoverView(song: song)
-                        .frame(width: 46, height: 46)
-                        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-                        .id(song.id)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(song.displayTitle)
-                            .font(.callout.weight(.semibold))
-                            .lineLimit(1)
-                        Text(song.style)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    Button {
+                        expanded = true
+                    } label: {
+                        nowPlayingLabel(song)
                     }
+                    .buttonStyle(.plain)
+                    .help("Player groß öffnen")
                     Spacer(minLength: 8)
                     #if os(macOS)
                     RatingView(rating: model.song(song.id)?.rating ?? song.rating) { stars in
@@ -63,7 +57,29 @@ struct PlayerBar: View {
             }
             .overlay(alignment: .top) { Divider() }
             .animation(.easeInOut(duration: 0.3), value: song.id)
+            .nowPlaying(isPresented: $expanded)
         }
+    }
+
+    /// Cover and title; a tap opens the full-screen player.
+    private func nowPlayingLabel(_ song: Song) -> some View {
+        HStack(spacing: 12) {
+            CoverView(song: song)
+                .frame(width: 46, height: 46)
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                .id(song.id)
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.displayTitle)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(song.style)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     private var controls: some View {

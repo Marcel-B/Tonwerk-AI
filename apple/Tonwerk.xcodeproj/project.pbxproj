@@ -153,6 +153,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1F3C5A7E9B2D4F6081A3C5E7 /* Signing.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Support/Tonwerk.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
@@ -242,6 +243,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1F3C5A7E9B2D4F6081A3C5E7 /* Signing.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Support/Tonwerk.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";

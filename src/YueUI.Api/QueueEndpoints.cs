@@ -13,11 +13,18 @@ public static class QueueEndpoints
 {
     public static RouteGroupBuilder MapQueueEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/queue", (JobQueue queue) => queue.Jobs);
+        api.MapGet("/queue", (JobQueue queue) => queue.Jobs)
+            .WithName("ListQueue");
         api.MapDelete("/queue/{id}", (string id, JobQueue queue) =>
-            queue.Cancel(id) ? Results.NoContent() : NotWaiting());
+            queue.Cancel(id) ? Results.NoContent() : NotWaiting())
+            .WithName("RemoveFromQueue")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
         api.MapPost("/queue/{id}/move", (string id, MoveRequest request, JobQueue queue) =>
-            queue.Move(id, request.Offset) ? Results.NoContent() : NotWaiting());
+            queue.Move(id, request.Offset) ? Results.NoContent() : NotWaiting())
+            .WithName("MoveInQueue")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
         return api;
     }
 

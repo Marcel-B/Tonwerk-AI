@@ -19,7 +19,8 @@ public static class TemplateEndpoints
 
     public static RouteGroupBuilder MapTemplateEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/templates", (SqlitePromptTemplateStore store) => store.List());
+        api.MapGet("/templates", (SqlitePromptTemplateStore store) => store.List())
+            .WithName("ListTemplates");
 
         api.MapPost("/templates", (TemplateRequest request, SqlitePromptTemplateStore store) =>
         {
@@ -33,7 +34,11 @@ public static class TemplateEndpoints
             return store.Create(name!, settings!.Value) is { } created
                 ? Results.Created($"/api/templates/{created.Id}", created)
                 : NameTaken(name!);
-        });
+        })
+            .WithName("CreateTemplate")
+            .Produces<PromptTemplate>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         api.MapPut("/templates/{id:long}", (long id, TemplateRequest request, SqlitePromptTemplateStore store) =>
         {
@@ -50,10 +55,18 @@ public static class TemplateEndpoints
                 TemplateChange.NameTaken => NameTaken(name!),
                 _ => Results.NotFound(),
             };
-        });
+        })
+            .WithName("UpdateTemplate")
+            .Produces<PromptTemplate>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         api.MapDelete("/templates/{id:long}", (long id, SqlitePromptTemplateStore store) =>
-            store.Delete(id) ? Results.NoContent() : Results.NotFound());
+            store.Delete(id) ? Results.NoContent() : Results.NotFound())
+            .WithName("DeleteTemplate")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

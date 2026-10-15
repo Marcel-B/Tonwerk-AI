@@ -28,7 +28,13 @@ public static class ExportEndpoints
 
     public static RouteGroupBuilder MapExportEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/songs/{run}/{song}/export", ExportAsync).DisableAntiforgery();
+        api.MapPost("/songs/{run}/{song}/export", ExportAsync).DisableAntiforgery()
+            .WithName("ExportSong")
+            .ProducesFile("audio/mp4", "audio/mpeg", "audio/flac")
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
         return api;
     }
 

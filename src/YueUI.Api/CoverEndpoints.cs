@@ -14,8 +14,15 @@ public static class CoverEndpoints
         api.MapGet("/songs/{run}/{song}/cover", (string run, string song, SongLibrary library) =>
             library.CoverOf(run, song) is { } cover
                 ? Results.File(cover.Path, cover.ContentType, lastModified: cover.UpdatedAt)
-                : Results.NotFound());
-        api.MapPut("/songs/{run}/{song}/cover", PutAsync).DisableAntiforgery();
+                : Results.NotFound())
+            .WithName("GetSongCover")
+            .ProducesFile("image/jpeg", "image/png")
+            .Produces(StatusCodes.Status404NotFound);
+        api.MapPut("/songs/{run}/{song}/cover", PutAsync).DisableAntiforgery()
+            .WithName("SetSongCover")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
         api.MapDelete("/songs/{run}/{song}/cover", (string run, string song, SongLibrary library, Status.StatusHub hub) =>
         {
             if (!library.SetCover(run, song, null))
@@ -24,7 +31,10 @@ public static class CoverEndpoints
             }
             hub.LibraryChanged();
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteSongCover")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

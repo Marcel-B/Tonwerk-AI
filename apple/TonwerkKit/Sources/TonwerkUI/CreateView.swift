@@ -202,7 +202,7 @@ extension AppModel {
         guard let tonwerk else { throw ServerError(String(localized: "Kein Server verbunden.")) }
         switch try await tonwerk.api.generate(body: .json(form.request)) {
         case .accepted(let accepted):
-            return try accepted.body.json
+            return accepted.body.json
         case .badRequest(let refused):
             throw ServerError(problem: try? refused.body.applicationProblemJson.detail)
         case .notImplemented(let refused):
@@ -224,7 +224,7 @@ extension AppModel {
             model: form.lyricsModel.isEmpty ? nil : form.lyricsModel)
         switch try await tonwerk.api.writeLyrics(body: .json(request)) {
         case .accepted(let accepted):
-            let state = try accepted.body.json
+            let state = accepted.body.json
             noteDraft(state)
             return state.id
         case .badRequest(let refused):

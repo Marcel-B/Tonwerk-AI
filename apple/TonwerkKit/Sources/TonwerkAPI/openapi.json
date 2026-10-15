@@ -6740,7 +6740,8 @@
         "enum": [
           "Synth",
           "DrumMachine"
-        ]
+        ],
+        "type": "string"
       },
       "JobKind": {
         "enum": [
@@ -6748,7 +6749,8 @@
           "render",
           "lyrics",
           "transcription"
-        ]
+        ],
+        "type": "string"
       },
       "JsonElement": {},
       "LargeModel": {
@@ -6758,7 +6760,8 @@
           "speech",
           "images",
           "ace"
-        ]
+        ],
+        "type": "string"
       },
       "LogEntry": {
         "required": [
@@ -7001,7 +7004,8 @@
         "enum": [
           "english",
           "german"
-        ]
+        ],
+        "type": "string"
       },
       "LyricsModel": {
         "required": [
@@ -9920,7 +9924,8 @@
           "stopped",
           "starting",
           "ready"
-        ]
+        ],
+        "type": "string"
       }
     }
   }

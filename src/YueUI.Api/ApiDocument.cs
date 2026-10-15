@@ -92,6 +92,11 @@ public static class ApiDocument
                     values.RemoveAt(i);
                 }
             }
+            // ASP.NET leaves an enum's type out; without one the generator makes an untyped container, not an enum.
+            if (concrete.Type is null && values.Count > 0 && values.All(value => value?.GetValueKind() == System.Text.Json.JsonValueKind.String))
+            {
+                concrete.Type = JsonSchemaType.String;
+            }
         }
         foreach (var name in (concrete.Properties ?? new Dictionary<string, IOpenApiSchema>()).Keys.ToList())
         {

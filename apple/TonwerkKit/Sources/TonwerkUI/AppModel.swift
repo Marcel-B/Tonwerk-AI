@@ -30,6 +30,10 @@ public final class AppModel {
     var page: Page? = .library
     /// The song the share dialog is open for, from a song's menu.
     var sharing: Song?
+    /// The song the painting dialog is open for, from a song's menu.
+    var painting: Song?
+    /// Painted covers in the works or finished since, by id, from `image` events.
+    var images: [String: Components.Schemas.ImageState] = [:]
     /// The create form, kept across starts like the web page's `form.ts`.
     var form = CreateForm()
     /// Lyrics drafts by id, from `lyrics` events; the form waits for the one it asked for.
@@ -114,6 +118,9 @@ public final class AppModel {
                 drafts[draft.id] = draft
             }
             working = Dictionary(snapshot.songs.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            for image in snapshot.images ?? [] {
+                images[image.id] = image
+            }
         case .queue(let jobs):
             queue = jobs
         case .song(let state):
@@ -123,6 +130,8 @@ public final class AppModel {
             }
         case .lyrics(let draft):
             drafts[draft.id] = draft
+        case .image(let image):
+            images[image.id] = image
         case .library:
             Task { await reloadLibrary() }
         default:
@@ -154,6 +163,13 @@ public final class AppModel {
     func noteDraft(_ draft: Components.Schemas.LyricsState) {
         if drafts[draft.id] == nil {
             drafts[draft.id] = draft
+        }
+    }
+
+    /// The answer to the request, unless its events were faster.
+    func noteImage(_ image: Components.Schemas.ImageState) {
+        if images[image.id] == nil {
+            images[image.id] = image
         }
     }
 

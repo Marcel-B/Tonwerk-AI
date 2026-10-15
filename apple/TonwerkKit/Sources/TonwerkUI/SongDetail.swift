@@ -72,11 +72,7 @@ struct SongDetail: View {
 
     private var header: some View {
         VStack(spacing: 12) {
-            CoverView(song: song)
-                .aspectRatio(1, contentMode: .fit)
-                .frame(maxWidth: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
+            CoverEditor(song: song)
                 .padding(.bottom, 4)
             TextField("Titel", text: $title)
                 .textFieldStyle(.plain)

@@ -89,6 +89,7 @@ struct MainView: View {
             PlayerBar()
         }
         .exportSheet(for: $model.sharing)
+        .paintSheet(for: $model.painting)
         .alert("Neue Playlist", isPresented: $naming) {
             TextField("Name", text: $newName)
             Button("Anlegen") { Task { await model.createPlaylist(named: newName) } }

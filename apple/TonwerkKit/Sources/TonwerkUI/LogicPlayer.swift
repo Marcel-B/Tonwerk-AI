@@ -6,8 +6,8 @@ import Observation
 /// a sequencer track of its own, which sends it to its instrument's MIDI output or to a sampler in the app (one per
 /// track, so volume and pan apply per track), and the song's recording beside it from the count-in on.
 ///
-/// The app's own sound is Apple's sampler for now (General MIDI on the Mac, a plain tone on the iPhone) until
-/// Tonwerk's synthesizers come into the app.
+/// The app's own sound is Tonwerk's synthesizers (``TonwerkSynthUnit``), each track with its sound; drums play on
+/// Apple's sampler (General MIDI's kit on the Mac, a plain tone on the iPhone, which has no sound bank).
 @MainActor
 @Observable
 final class LogicPlayer {
@@ -22,6 +22,23 @@ final class LogicPlayer {
         var route: Route
         var muted = false
         var soloed = false
+        /// What the synthesizer plays when the track sounds in the app; nil for drums.
+        var sound: SynthSound?
+    }
+
+    /// The app's instrument for one track.
+    private enum Instrument {
+        case sampler(AVAudioUnitSampler)
+        case synth(AVAudioUnitMIDIInstrument, TonwerkSynthUnit)
+
+        var node: AVAudioUnitMIDIInstrument {
+            switch self {
+            case .sampler(let sampler):
+                return sampler
+            case .synth(let node, _):
+                return node
+            }
+        }
     }
 
     private(set) var isPlaying = false
@@ -35,7 +52,7 @@ final class LogicPlayer {
 
     private let engine = AVAudioEngine()
     private var sequencer: AVAudioSequencer?
-    private var samplers: [String: AVAudioUnitSampler] = [:]
+    private var instruments: [String: Instrument] = [:]
     private var tracks: [Track] = []
     private var sequenced: [String: AVMusicTrack] = [:]
     private let recordingNode = AVAudioPlayerNode()
@@ -63,18 +80,18 @@ final class LogicPlayer {
         countIn = score.countInSeconds
         problem = nil
 
-        // Samplers stay attached for the tracks that keep their name, so a change of options does not reload sounds.
-        for (name, sampler) in samplers where !tracks.contains(where: { $0.voice.id == name }) {
-            engine.detach(sampler)
-            samplers[name] = nil
+        // Instruments stay attached for the tracks that keep their name, so a change of options does not reload them.
+        for (name, instrument) in instruments where !tracks.contains(where: { $0.voice.id == name }) {
+            engine.detach(instrument.node)
+            instruments[name] = nil
         }
-        for track in tracks where samplers[track.voice.id] == nil {
-            let sampler = AVAudioUnitSampler()
-            engine.attach(sampler)
-            engine.connect(sampler, to: engine.mainMixerNode, format: nil)
-            Self.loadSound(into: sampler, drums: track.voice.isDrums, kind: track.voice.kind)
-            samplers[track.voice.id] = sampler
+        for track in tracks where instruments[track.voice.id] == nil {
+            let instrument = makeInstrument(for: track)
+            engine.attach(instrument.node)
+            engine.connect(instrument.node, to: engine.mainMixerNode, format: nil)
+            instruments[track.voice.id] = instrument
         }
+        playSounds()
         if recording != nil {
             engine.connect(recordingNode, to: engine.mainMixerNode, format: recording?.processingFormat)
         }
@@ -117,18 +134,32 @@ final class LogicPlayer {
         }
     }
 
-    private static func loadSound(into sampler: AVAudioUnitSampler, drums: Bool, kind: String) {
+    /// The synthesizer for a pitched track, the sampler for drums or if the synthesizer cannot be made.
+    private func makeInstrument(for track: Track) -> Instrument {
+        if let sound = track.sound, case let (node, unit)? = TonwerkSynthUnit.instrument(playing: sound) {
+            return .synth(node, unit)
+        }
+        let sampler = AVAudioUnitSampler()
         #if os(macOS)
         let bank = URL(fileURLWithPath: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls")
-        guard FileManager.default.fileExists(atPath: bank.path) else { return }
-        // General MIDI: drums on the percussion bank, the rest by what the track is.
-        let programs: [String: UInt8] = ["Bass": 33, "Chords": 4, "GuideTones": 11, "Melody": 80, "Doubling": 80, "Harmony": 80]
-        let program = drums ? 0 : programs[kind] ?? 0
-        try? sampler.loadSoundBankInstrument(
-            at: bank, program: program,
-            bankMSB: UInt8(drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB),
-            bankLSB: UInt8(kAUSampler_DefaultBankLSB))
+        if FileManager.default.fileExists(atPath: bank.path) {
+            let drums = track.voice.isDrums
+            try? sampler.loadSoundBankInstrument(
+                at: bank, program: drums ? 0 : 80,
+                bankMSB: UInt8(drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB))
+        }
         #endif
+        return .sampler(sampler)
+    }
+
+    /// Every synthesizer takes its track's sound; heard at once, sounding notes included.
+    private func playSounds() {
+        for track in tracks {
+            if case .synth(_, let unit) = instruments[track.voice.id], let sound = track.sound {
+                unit.play(sound)
+            }
+        }
     }
 
     // MARK: Routing and mixing
@@ -140,6 +171,7 @@ final class LogicPlayer {
         if channelsChanged, let score {
             load(score, tracks: tracks, mixer: currentMixer)
         } else {
+            playSounds()
             route()
         }
     }
@@ -149,9 +181,9 @@ final class LogicPlayer {
     func apply(_ mixer: LogicMixer) {
         currentMixer = mixer
         engine.mainMixerNode.outputVolume = mixer.master
-        for (name, sampler) in samplers {
-            sampler.volume = mixer[name].volume
-            sampler.pan = mixer[name].pan
+        for (name, instrument) in instruments {
+            instrument.node.volume = mixer[name].volume
+            instrument.node.pan = mixer[name].pan
         }
     }
 
@@ -161,8 +193,8 @@ final class LogicPlayer {
             guard let musicTrack = sequenced[track.voice.id] else { continue }
             switch track.route {
             case .app:
-                if let sampler = samplers[track.voice.id] {
-                    musicTrack.destinationAudioUnit = sampler
+                if let instrument = instruments[track.voice.id] {
+                    musicTrack.destinationAudioUnit = instrument.node
                 }
             case .midi(let endpoint, _):
                 musicTrack.destinationMIDIEndpoint = endpoint
@@ -258,9 +290,9 @@ final class LogicPlayer {
 
     /// Notes cut off by a pause would otherwise hang on hardware synthesizers: all notes off on every channel used.
     private func silence() {
-        for sampler in samplers.values {
+        for instrument in instruments.values {
             for channel: UInt8 in 0...15 {
-                sampler.sendController(123, withValue: 0, onChannel: channel)
+                instrument.node.sendController(123, withValue: 0, onChannel: channel)
             }
         }
         var endpoints: Set<MIDIEndpointRef> = []
@@ -272,22 +304,28 @@ final class LogicPlayer {
     }
 }
 
-/// All notes off on every channel of the given outputs, through an output port of its own.
+/// MIDI straight to outputs, through an output port of its own: all notes off on every channel, or any message.
 enum MidiPanic {
     nonisolated(unsafe) private static var client = MIDIClientRef()
     nonisolated(unsafe) private static var port = MIDIPortRef()
 
     @MainActor
     static func send(to endpoints: Set<MIDIEndpointRef>) {
-        if port == 0 {
-            MIDIClientCreateWithBlock("Tonwerk Panic" as CFString, &client, nil)
-            MIDIOutputPortCreate(client, "Tonwerk" as CFString, &port)
-        }
-        guard port != 0 else { return }
         var bytes: [UInt8] = []
         for channel: UInt8 in 0...15 {
             bytes += [0xB0 | channel, 123, 0, 0xB0 | channel, 64, 0]
         }
+        send(bytes, to: endpoints)
+    }
+
+    /// MIDI 1.0 bytes as they are, now; the instruments page's keyboard plays MIDI instruments through it.
+    @MainActor
+    static func send(_ bytes: [UInt8], to endpoints: Set<MIDIEndpointRef>) {
+        if port == 0 {
+            MIDIClientCreateWithBlock("Tonwerk Panic" as CFString, &client, nil)
+            MIDIOutputPortCreate(client, "Tonwerk" as CFString, &port)
+        }
+        guard port != 0, !bytes.isEmpty else { return }
         var packets = MIDIPacketList()
         let packet = MIDIPacketListInit(&packets)
         _ = MIDIPacketListAdd(&packets, MemoryLayout<MIDIPacketList>.size, packet, 0, bytes.count, bytes)

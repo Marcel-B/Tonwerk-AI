@@ -2,13 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- The server is reached through Tailscale's HTTPS; plain HTTP only to the Mac itself (127.0.0.1:5090). -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<!-- iPhone: keep playing with the screen locked. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

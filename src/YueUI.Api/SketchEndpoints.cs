@@ -12,12 +12,16 @@ public static class SketchEndpoints
 {
     public static RouteGroupBuilder MapSketchEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/sketches/info", (SketchMaker maker) => maker.Info);
+        api.MapGet("/sketches/info", (SketchMaker maker) => maker.Info)
+            .WithName("GetSketchInfo")
+            .Produces<SketchInfo>(StatusCodes.Status200OK);
         api.MapGet("/sketches", async (SketchMaker maker) =>
         {
             await maker.Loaded;
             return maker.Jobs().Select(SketchSummary.Of).ToList();
-        });
+        })
+            .WithName("ListSketches")
+            .Produces<List<SketchSummary>>(StatusCodes.Status200OK);
         api.MapPost("/sketches", (SketchRequest request, SketchMaker maker, IOptions<SketchOptions> options) =>
         {
             var limit = options.Value.MaxSketchCharacters;
@@ -44,7 +48,11 @@ public static class SketchEndpoints
             }
             var job = maker.Enqueue(request.Text, request.Instruction, request.Model);
             return Results.Accepted($"/api/sketches/{job.Id}", SketchSummary.Of(job));
-        });
+        })
+            .WithName("CreateSketch")
+            .Produces<SketchSummary>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         api.MapGet("/sketches/{id}", async (string id, SketchMaker maker) =>
         {
             await maker.Loaded;
@@ -54,7 +62,11 @@ public static class SketchEndpoints
             }
             // A sketch still being written has no plan to make anything from yet.
             return job.Plan is null ? Results.Ok(new { job }) : Results.Ok(SketchScore.Result(job));
-        });
+        })
+            .WithName("GetSketch")
+            // Before the plan only its job is there; the rest of the result follows with the plan.
+            .Produces<SketchResult>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
         api.MapGet("/sketches/{id}/midi", async (string id, SketchMaker maker) =>
         {
             await maker.Loaded;
@@ -63,7 +75,10 @@ public static class SketchEndpoints
                 return Results.NotFound();
             }
             return Results.File(SketchArranger.Midi(plan), "audio/midi", $"{FileName(job.Title)}.mid");
-        });
+        })
+            .WithName("DownloadSketchMidi")
+            .ProducesFile("audio/midi")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapGet("/sketches/{id}/score", async (string id, SketchMaker maker) =>
         {
             await maker.Loaded;
@@ -73,7 +88,10 @@ public static class SketchEndpoints
             }
             var abc = SketchScore.Result(job).Abc;
             return Results.File(Encoding.UTF8.GetBytes(abc), "text/plain; charset=utf-8", $"{FileName(job.Title)}.abc");
-        });
+        })
+            .WithName("DownloadSketchScore")
+            .ProducesFile("text/plain")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/sketches/{id}", async (string id, SketchMaker maker) =>
         {
             await maker.Loaded;
@@ -83,7 +101,10 @@ public static class SketchEndpoints
             }
             maker.Delete(job);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteSketch")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

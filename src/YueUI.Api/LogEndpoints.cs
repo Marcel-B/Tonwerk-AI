@@ -7,9 +7,14 @@ public static class LogEndpoints
 {
     public static RouteGroupBuilder MapLogEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/logs", Query);
+        api.MapGet("/logs", Query)
+            .WithName("ListLogs")
+            .Produces<LogPage>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
         api.MapGet("/logs/report", (LogReport report, double? hours) =>
-            Results.Text(report.Build(TimeSpan.FromHours(Math.Clamp(hours ?? 24, 1, 24 * 14))), "text/plain; charset=utf-8"));
+            Results.Text(report.Build(TimeSpan.FromHours(Math.Clamp(hours ?? 24, 1, 24 * 14))), "text/plain; charset=utf-8"))
+            .WithName("GetLogReport")
+            .Produces<string>(StatusCodes.Status200OK, "text/plain");
         return api;
     }
 

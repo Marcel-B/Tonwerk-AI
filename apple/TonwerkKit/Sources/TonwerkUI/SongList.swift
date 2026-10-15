@@ -17,7 +17,9 @@ struct SongList: View {
     #if os(macOS)
     @AppStorage("detailsOpen") private var details = true
     #else
-    @State private var details = false
+    /// On the iPhone the details come up as a sheet over the list, opened from the row's ⓘ or its menu; nothing stays
+    /// selected, as in the Music app.
+    @State private var sheetSong: Song.ID?
     #endif
 
     private var filter: RatingFilter { RatingFilter(stored: storedFilter) }
@@ -56,6 +58,7 @@ struct SongList: View {
                     ContentUnavailableView.search(text: query)
                 }
             } else {
+                #if os(macOS)
                 List(selection: $selected) {
                     ForEach(shown) { song in
                         SongRow(song: song, playing: player.current?.id == song.id)
@@ -68,11 +71,28 @@ struct SongList: View {
                         menu(for: song)
                     }
                 } primaryAction: { ids in
-                    // A double click on the Mac, a tap on the iPhone.
+                    // A double click.
                     if let song = ids.first.flatMap({ model.song($0) }), song.hasAudio {
                         player.play(song, in: shown)
                     }
                 }
+                #else
+                List {
+                    ForEach(shown) { song in
+                        SongRow(song: song, playing: player.current?.id == song.id) {
+                            sheetSong = song.id
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if song.hasAudio {
+                                player.play(song, in: shown)
+                            }
+                        }
+                        .contextMenu { menu(for: song) }
+                    }
+                    .onDelete(perform: playlist == nil ? nil : { remove($0) })
+                }
+                #endif
                 #if os(macOS)
                 .listStyle(.inset(alternatesRowBackgrounds: true))
                 #else
@@ -87,6 +107,7 @@ struct SongList: View {
             Text("Songtext").tag(Song.SearchScope.lyrics)
         }
         .refreshable { await model.reloadLibrary() }
+        #if os(macOS)
         .inspector(isPresented: $details) {
             Group {
                 if let chosen {
@@ -100,6 +121,24 @@ struct SongList: View {
             }
             .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
         }
+        #else
+        .sheet(isPresented: Binding(get: { sheetSong != nil }, set: { if !$0 { sheetSong = nil } })) {
+            if let song = sheetSong.flatMap({ model.song($0) }) {
+                NavigationStack {
+                    SongDetail(song: song, list: shown)
+                        .id(song.id)
+                        .navigationTitle(song.displayTitle)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Fertig") { sheetSong = nil }
+                            }
+                        }
+                }
+                .presentationDetents([.medium, .large])
+            }
+        }
+        #endif
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -113,11 +152,13 @@ struct SongList: View {
                 if playlist == nil {
                     orderMenu
                 }
+                #if os(macOS)
                 Button {
                     details.toggle()
                 } label: {
                     Label("Details", systemImage: "info.circle")
                 }
+                #endif
             }
         }
     }
@@ -151,8 +192,12 @@ struct SongList: View {
         }
         .disabled(!song.hasAudio)
         Button {
+            #if os(macOS)
             selected = song.id
             details = true
+            #else
+            sheetSong = song.id
+            #endif
         } label: {
             Label("Details", systemImage: "info.circle")
         }
@@ -210,6 +255,8 @@ struct SongRow: View {
     @Environment(AppModel.self) private var model
     let song: Song
     let playing: Bool
+    /// The iPhone's ⓘ, which opens the details; the Mac shows them beside the list.
+    var info: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -251,6 +298,14 @@ struct SongRow: View {
             }
             RatingView(rating: song.rating) { stars in
                 Task { await model.rate(song, stars) }
+            }
+            if let info {
+                Button(action: info) {
+                    Image(systemName: "info.circle")
+                        .imageScale(.large)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Details")
             }
         }
         .padding(.vertical, 2)

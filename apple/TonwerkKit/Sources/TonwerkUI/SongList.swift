@@ -76,6 +76,12 @@ struct SongList: View {
         } label: {
             Label("Ins Formular übernehmen", systemImage: "square.and.pencil")
         }
+        Button {
+            Task { await model.useScoreInForm(song) }
+        } label: {
+            Label("Als Partitur übernehmen", systemImage: "music.quarternote.3")
+        }
+        .disabled(!song.hasScore)
         Menu {
             ForEach(model.playlists, id: \.id) { list in
                 Button {

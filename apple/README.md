@@ -15,8 +15,15 @@ Der Mac-Build wird lokal ad hoc signiert und braucht kein Apple-Konto.
 
 ## iPhone
 
-Braucht ein Team unter *Signing & Capabilities* (für mehr als 7 Tage Laufzeit, TestFlight, Push und CarPlay das
-Apple Developer Program). Ziel auf das iPhone stellen, ⌘R.
+Braucht ein Team (für mehr als 7 Tage Laufzeit, TestFlight, Push und CarPlay das Apple Developer Program). Das Repo
+ist öffentlich, deshalb kommt die Team-ID nicht ins Projekt, sondern in `Support/Local.xcconfig` (von git ignoriert):
+
+```
+DEVELOPMENT_TEAM = ABCDE12345
+```
+
+Die ID steht unter developer.apple.com → Account → Membership. In *Signing & Capabilities* das Team leer lassen, sonst
+schreibt Xcode es in `project.pbxproj`. Ziel auf das iPhone stellen, ⌘R.
 
 ## Aufbau
 

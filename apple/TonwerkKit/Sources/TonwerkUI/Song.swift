@@ -20,11 +20,13 @@ public struct Song: Identifiable, Hashable, Sendable {
     public let note: String?
     public let coverUpdatedAt: Date?
     public let hasAudio: Bool
+    /// Whether YuE2 wrote a score.abc for it (not with planning off).
+    public let hasScore: Bool
 
     public init(
         run: String, name: String, title: String, number: Int?, style: String = "", lyrics: String = "",
         createdAt: Date? = nil, seconds: Double? = nil, rating: Int? = nil, note: String? = nil,
-        coverUpdatedAt: Date? = nil, hasAudio: Bool = true
+        coverUpdatedAt: Date? = nil, hasAudio: Bool = true, hasScore: Bool = false
     ) {
         id = "\(run)/\(name)"
         self.run = run
@@ -39,6 +41,7 @@ public struct Song: Identifiable, Hashable, Sendable {
         self.note = note
         self.coverUpdatedAt = coverUpdatedAt
         self.hasAudio = hasAudio
+        self.hasScore = hasScore
     }
 
     /// The run's title, with the song's number when the run made several.
@@ -78,7 +81,8 @@ public struct Song: Identifiable, Hashable, Sendable {
                     rating: info.rating.map { Int($0) },
                     note: info.note,
                     coverUpdatedAt: info.coverUpdatedAt,
-                    hasAudio: info.hasAudio)
+                    hasAudio: info.hasAudio,
+                    hasScore: info.hasScore)
             }
         }
     }

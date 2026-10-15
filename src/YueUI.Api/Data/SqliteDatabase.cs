@@ -33,6 +33,7 @@ namespace YueUI.Api.Data;
 /// Version 23: songs asked for from a shortcut, waiting for their lyrics draft (<see cref="Lyrics.QuickSongs"/>).
 /// Version 24: speech takes that clean an uploaded recording, and their progress (<see cref="SqliteSpeechStore"/>).
 /// Version 25: what was heard in songs, tempo, key and how clearly the lyrics are sung (<see cref="SqliteSongTraitStore"/>).
+/// Version 26: written song sketches and their plans (<see cref="SqliteSketchStore"/>).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -553,6 +554,21 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                         updated_at TEXT NOT NULL
                     );
                     PRAGMA user_version = 25;
+                    """);
+            }
+            if (current < 26)
+            {
+                // Written song sketches and the plans Claude made of them (Sketches/SketchMaker.cs), one JSON each.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE song_sketches (
+                        id TEXT PRIMARY KEY,
+                        sketch TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 26;
                     """);
             }
             _ready = true;

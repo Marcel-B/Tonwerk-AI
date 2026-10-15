@@ -17,6 +17,7 @@ export type View =
   | 'templates'
   | 'ace'
   | 'insights'
+  | 'sketch'
 
 const views: readonly View[] = [
   'create',
@@ -34,6 +35,7 @@ const views: readonly View[] = [
   'templates',
   'ace',
   'insights',
+  'sketch',
 ]
 
 /**

@@ -245,6 +245,18 @@ Darunter lässt sich das Sprachmodell wählen: Die Liste zeigt alle Modelle, die
 
 LM Studio muss dafür nicht geöffnet sein: Antwortet sein Server nicht, startet Tonwerk ihn mit `~/.lmstudio/bin/lms daemon up` und `lms server start`. Tonwerk lädt das Modell (Standard: `google/gemma-4-26b-a4b-qat`) erst für die Anfrage, mit einem Kontext von 30000 Tokens, und entlädt es gleich danach wieder; ein Modell, das in LM Studio schon geladen ist, nutzt es mit und lässt es geladen. Dieses Modell (rund 15 GB) hat einen Mac mit 24 GB zusammen mit den üblichen offenen Apps schon bis zum Einfrieren in den Swap getrieben; vor einem Entwurf also möglichst viel schließen, oder das kleine `google/gemma-4-e4b` eintragen. Weigert sich LM Studio wegen zu wenig Speicher (seine Schutzgrenze „insufficient system resources“, etwa bei dichten Modellen wie Qwen 27B), entlädt Tonwerk zuerst andere noch geladene Modelle und versucht es dann mit halbem Kontext, bis hinunter zu `Lyrics:MinContextLength`; erst dann zeigt die Oberfläche seine Meldung. Die Schutzgrenze selbst bleibt an. Außerdem gilt: Solange YuE2 rechnet, gibt es keinen Entwurf; ein ruhender Worker wird vorher beendet; und solange ein Entwurf entsteht, startet kein Song. Der erste Entwurf dauert durch das Laden des Modells etwas länger.
 
+## Ausarbeitung mit Claude
+
+Eine geschriebene Song-Ausarbeitung (Aufbau, Akkorde, Text, Ideen für die Melodie, auch als Markdown-Datei) macht **Werkzeuge → Ausarbeitung** zu einem Song. Die lokalen Sprachmodelle schaffen das nicht verlässlich, deshalb geht der Text an Claude (Anthropic API, Standard `claude-opus-5-5`). Claude antwortet mit einem Songplan: Tempo, Tonart, Stil, Abschnitte mit ihren Instrumenten und je Takt Akkorde, Gesangsmelodie und Silben. Alles Weitere rechnet Tonwerk selbst, immer gleich aus demselben Plan:
+
+- **Als YuE-Song** füllt das Formular mit Stil, Songtext (mit `[Verse]`, `[Chorus]` …) und der Partitur im Dialekt von YuE2, Planung „voll“ und passender Tokenzahl; Partitur und Gesang stimmen damit Takt für Takt.
+- **MIDI-Entwurf** lädt eine MIDI-Datei mit Gesang, Instrumentallinie, Klavier, Pad, Bass und Schlagzeug, die abschnittsweise kommen und gehen, wie der Plan es sagt.
+- **Partitur** lädt die `score.abc`, **Logic-Seite** öffnet sie dort.
+
+Ein Feld für Wünsche („Refrain höher“, „Bridge nur Klavier“) geht mit; **Neu ausarbeiten** schickt dieselbe Ausarbeitung noch einmal. Hinweise (ein Takt zu lang, ein Akkord, den YuE2 nicht kennt und der vereinfacht wurde, eine Zeile mit deutlich mehr Silben als Noten) stehen unter dem Plan. Ein Plan dauert einige Minuten und läuft auf dem Mac weiter, wenn das Handy sperrt; eine Benachrichtigung meldet, wenn er fertig ist.
+
+Dafür braucht Tonwerk einen API-Schlüssel von Anthropic (console.anthropic.com), am einfachsten in `~/.config/tonwerk/anthropic.key` (eine Zeile, `chmod 600`), sonst in `ANTHROPIC_API_KEY` oder `Sketch:ApiKey`; die Datei wird bei jedem Plan gelesen, ein Neustart ist nicht nötig. Jeder Plan kostet nach der Preisliste von Anthropic; die Seite zeigt die verbrauchten Tokens (ein Song von hundert Takten braucht samt Denkphase grob 20000 bis 40000 Ausgabe-Tokens). Die Ausarbeitung verlässt dafür den Mac, Songs und Aufnahmen nicht.
+
 ## Als Logic-Projekt laden
 
 Die Bibliothek zeigt bei jedem Song mit Partitur einen Knopf **Auf der Logic-Seite öffnen**. Er öffnet die Seite **Logic** mit diesem Song und wandelt ihn gleich um, sodass die Vorschau da ist und sich vor dem Herunterladen noch alles einstellen lässt. Tonwerk baut das Projekt selbst, mit der Bibliothek `YueToLogic.Core` (früher der eigene Dienst [yue-to-logic-pro](https://github.com/Marcel-B/yue-to-logic-pro)); der Browser muss die FLAC also nicht erst herunter- und wieder hochladen. Zurück kommt ein ZIP mit dem `.logicx`-Projekt: Audio auf der ersten Spur, Gesang, Instrument und Akkorde als MIDI, Tempo, Takt und Abschnitte aus der Partitur. Hinweise (etwa eine Partitur, die länger ist als das Audio) zeigt die Seite nach dem Download an; wird aus einem Song kein Projekt (eine Partitur, die sich nicht lesen lässt, Audio ohne 48 kHz), steht dort der Grund.
@@ -450,6 +462,11 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `Lyrics:MinContextLength` (`Lyrics__MinContextLength`) | `8192` | Kleinster Kontext, auf den Tonwerk zurückgeht, wenn LM Studio das Modell wegen zu wenig Speicher ablehnt |
 | `Lyrics:ApiToken` (`Lyrics__ApiToken`) | – | nur nötig, wenn in LM Studio „Require Authentication“ an ist |
 | `Lyrics:Lms` (`Lyrics__Lms`) | `~/.lmstudio/bin/lms` | Kommandozeilenwerkzeug, mit dem Tonwerk den Server von LM Studio startet |
+| `Sketch:Model` (`Sketch__Model`) | `claude-opus-5-5` | Claude-Modell für Ausarbeitungen |
+| `Sketch:Effort` (`Sketch__Effort`) | `high` | wie gründlich es nachdenkt (`low` bis `max`) |
+| `Sketch:KeyFile` (`Sketch__KeyFile`) | `~/.config/tonwerk/anthropic.key` | Datei mit dem API-Schlüssel von Anthropic (oder `ANTHROPIC_API_KEY`, `Sketch:ApiKey`) |
+| `Sketch:MaxTokens` (`Sketch__MaxTokens`) | `64000` | Obergrenze der Antwort samt Denkphase |
+| `Sketch:Timeout` (`Sketch__Timeout`) | `00:20:00` | so lange darf ein Plan dauern |
 | `Logic:SplitSections` (`Logic__SplitSections`) | `false` | eine Region je Songabschnitt statt einer je Spur |
 | `Queue:BundleWindow` (`Queue__BundleWindow`) | `00:20:00` | so lange dürfen Songs für YuE2 an einem wartenden Textentwurf oder einer wartenden Fassung vorbei; `00:00:00` hält die Reihenfolge streng ein |
 | `Voice:EngineRoot` (`Voice__EngineRoot`) | `~/Library/Application Support/YuE UI/engines` | wo `--voices` Trennung und Seed-VC einrichtet; die folgenden fünf liegen darunter |
@@ -599,6 +616,10 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `GET` / `POST` | `/api/songs/{run}/{song}/images` | Vorschläge des Songs, neueste zuerst, bzw. `{ prompt, model?, seed? }` malen; antwortet `202`, der Fortschritt kommt als `image`-Event (`queued`, `loading`, `painting` mit `fraction`, dann `done` oder `failed`); `501` ohne mflux |
 | `GET` / `DELETE` | `/api/images/{id}` | Vorschlag als JPEG bzw. abbrechen oder löschen |
 | `PUT` | `/api/images/{id}/cover` | Vorschlag als Cover des Songs übernehmen |
+| `GET` | `/api/sketches/info` | Ausarbeitung: `{ configured, model }` |
+| `GET` / `POST` | `/api/sketches` | Ausarbeitungen, neueste zuerst, bzw. `{ text, instruction? }` an Claude schicken; antwortet `202`, `400` für leeren oder zu langen Text, `501` ohne Schlüssel |
+| `GET` / `DELETE` | `/api/sketches/{id}` | `{ job }`, solange der Plan entsteht, danach `{ job, abc, lyrics, request, warnings, bars, seconds }` (`request` wie bei „Alles übernehmen“); bzw. abbrechen oder löschen |
+| `GET` | `/api/sketches/{id}/midi`, `/api/sketches/{id}/score` | MIDI-Entwurf bzw. Partitur als Datei |
 | `GET` | `/api/playlists` | `[{ id, name, songIds }]`: alle Playlists, älteste zuerst, Songs in Reihenfolge (`run/songN`), gelöschte weggelassen |
 | `POST` | `/api/playlists` | `{ name }`: neue, leere Playlist (`201`) |
 | `PUT` | `/api/playlists/{id}/name` | `{ name }`: umbenennen (1 bis 100 Zeichen) |

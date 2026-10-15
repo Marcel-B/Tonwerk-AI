@@ -348,7 +348,7 @@ extension AppModel {
     }
 
     /// A file name from the title: no slashes or colons, which the Mac's file system refuses.
-    static func projectName(_ title: String) -> String {
+    nonisolated static func projectName(_ title: String) -> String {
         let cleaned = title.components(separatedBy: CharacterSet(charactersIn: "/\\:")).joined(separator: "-")
             .trimmingCharacters(in: .whitespaces)
         return cleaned.isEmpty ? "Tonwerk" : cleaned

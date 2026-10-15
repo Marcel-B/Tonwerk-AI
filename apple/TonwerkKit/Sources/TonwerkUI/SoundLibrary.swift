@@ -55,7 +55,7 @@ final class SoundLibrary {
     /// What a track plays: its named sound while that exists, else its own copy, else its kind's default.
     func sound(forTrack track: String, kind: String) -> SynthSound {
         guard let entry = tracks[track.uppercased()] else { return .defaults(for: kind) }
-        if let preset = entry.preset, let sound = preset(named: preset) {
+        if let name = entry.preset, let sound = preset(named: name) {
             return SynthSound(json: sound.patch, kind: kind)
         }
         return SynthSound(json: entry.patch, kind: kind)

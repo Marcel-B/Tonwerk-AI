@@ -111,7 +111,7 @@ private final class RenderState {
         while done < frames {
             while let current = event, current.pointee.head.eventSampleTime - now <= AUEventSampleTime(done) {
                 handle(current)
-                event = current.pointee.head.next
+                event = current.pointee.head.next.map { UnsafePointer($0) }
             }
             var until = frames
             if let next = event {
@@ -122,7 +122,7 @@ private final class RenderState {
         }
         while let current = event {
             handle(current)
-            event = current.pointee.head.next
+            event = current.pointee.head.next.map { UnsafePointer($0) }
         }
         return noErr
     }

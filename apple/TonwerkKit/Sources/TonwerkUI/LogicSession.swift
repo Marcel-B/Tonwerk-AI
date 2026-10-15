@@ -56,7 +56,7 @@ final class LogicSession {
 
     var score: LogicScore? { conversion?.score }
 
-    var library: SoundLibrary { model.soundLibrary }
+    var sounds: SoundLibrary { model.soundLibrary }
 
     var voices: [LogicScore.Voice] {
         score?.playableVoices(includeChords: form.includeChords) ?? []

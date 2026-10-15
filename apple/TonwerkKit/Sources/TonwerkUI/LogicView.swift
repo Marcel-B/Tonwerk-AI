@@ -409,7 +409,7 @@ private struct TrackRow: View {
     private var route: some View {
         let instrument = session.instrument(of: voice.id)
         let connected = session.output(of: voice.id) != nil
-        let library = session.library
+        let library = session.sounds
         let preset = library.preset(ofTrack: voice.id)
         return Menu {
             Button {

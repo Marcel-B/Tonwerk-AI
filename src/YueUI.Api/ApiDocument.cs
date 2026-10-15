@@ -112,6 +112,7 @@ public static class ApiDocument
     }
 
     /// <summary>The other schema of a <c>oneOf</c> of null and one schema, else the schema itself.</summary>
+    [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(schema))]
     private static IOpenApiSchema? WithoutNull(IOpenApiSchema? schema) =>
         schema is OpenApiSchema { OneOf: { Count: 2 } choices }
         && choices.Count(choice => choice is OpenApiSchema { Type: JsonSchemaType.Null }) == 1

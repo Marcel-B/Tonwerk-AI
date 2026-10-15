@@ -76,10 +76,15 @@ struct CoverBackdrop: View {
     var opacity: Double = 0.55
 
     var body: some View {
-        CoverView(song: song)
-            .scaledToFill()
-            .blur(radius: 40, opaque: true)
-            .opacity(opacity)
+        // The square cover filled into a wide bar is far taller than it; laid over a clear view, it takes that view's
+        // frame, so clipping cuts it there. Clipping the cover itself cut nothing, and it covered the page above.
+        Color.clear
+            .overlay {
+                CoverView(song: song)
+                    .scaledToFill()
+                    .blur(radius: 40, opaque: true)
+                    .opacity(opacity)
+            }
             .clipped()
             .allowsHitTesting(false)
             .accessibilityHidden(true)

@@ -59,6 +59,7 @@ struct PlayerBar: View {
                     CoverBackdrop(song: song, opacity: 0.6)
                     Rectangle().fill(.regularMaterial)
                 }
+                .clipped()
             }
             .overlay(alignment: .top) { Divider() }
             .animation(.easeInOut(duration: 0.3), value: song.id)

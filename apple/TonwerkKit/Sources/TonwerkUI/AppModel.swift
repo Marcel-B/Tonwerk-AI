@@ -167,15 +167,39 @@ public final class AppModel {
     public func rate(_ song: Song, _ stars: Int?) async {
         guard let tonwerk else { return }
         let rating = stars.flatMap { (1...5).contains($0) ? $0 : nil }
-        replace(song.id) { old in
-            Song(
-                run: old.run, name: old.name, title: old.title, number: old.number, style: old.style,
-                lyrics: old.lyrics, createdAt: old.createdAt, seconds: old.seconds, rating: rating, note: old.note,
-                coverUpdatedAt: old.coverUpdatedAt, hasAudio: old.hasAudio)
-        }
+        replace(song.id) { $0.with(rating: .some(rating)) }
         _ = try? await tonwerk.api.rateSong(
             path: .init(run: song.run, song: song.name),
             body: .json(.init(rating: rating.map { Int32($0) })))
+    }
+
+    /// A new title for the song's run (all its songs); the folder keeps its name, which is the songs' id. Empty goes
+    /// back to the worker's title.
+    public func rename(_ song: Song, to title: String) async throws {
+        guard let tonwerk else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shown = trimmed.isEmpty ? song.originalTitle : trimmed
+        let response = try await tonwerk.api.renameRun(path: .init(run: song.run), body: .json(.init(title: trimmed)))
+        guard case .noContent = response else {
+            throw ServerError(String(localized: "Der Titel wurde nicht gespeichert."))
+        }
+        for other in songs where other.run == song.run {
+            replace(other.id) { $0.with(title: shown) }
+        }
+    }
+
+    /// The song's note, trimmed; empty deletes it.
+    public func setNote(_ song: Song, _ text: String) async throws {
+        guard let tonwerk else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let note: String? = trimmed.isEmpty ? nil : trimmed
+        guard note != song.note else { return }
+        let response = try await tonwerk.api.setSongNote(
+            path: .init(run: song.run, song: song.name), body: .json(.init(note: note)))
+        guard case .noContent = response else {
+            throw ServerError(String(localized: "Die Notiz wurde nicht gespeichert."))
+        }
+        replace(song.id) { $0.with(note: .some(note)) }
     }
 
     private func replace(_ id: String, with change: (Song) -> Song) {

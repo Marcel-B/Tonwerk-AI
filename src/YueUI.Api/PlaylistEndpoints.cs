@@ -21,7 +21,9 @@ public static class PlaylistEndpoints
     public static RouteGroupBuilder MapPlaylistEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/playlists", (SqlitePlaylistStore store, SongLibrary library) =>
-            store.List().Select(p => Info(p, library)).ToList());
+            store.List().Select(p => Info(p, library)).ToList())
+            .WithName("ListPlaylists")
+            .Produces<List<PlaylistInfo>>(StatusCodes.Status200OK);
 
         api.MapPost("/playlists", (PlaylistNameRequest request, SqlitePlaylistStore store) =>
         {
@@ -31,7 +33,10 @@ public static class PlaylistEndpoints
             }
             var created = store.Create(name);
             return Results.Created($"/api/playlists/{created.Id}", new PlaylistInfo(created.Id, created.Name, []));
-        });
+        })
+            .WithName("CreatePlaylist")
+            .Produces<PlaylistInfo>(StatusCodes.Status201Created)
+            .ProducesValidationProblem();
 
         api.MapPut("/playlists/{id:long}/name", (long id, PlaylistNameRequest request, SqlitePlaylistStore store, SongLibrary library) =>
         {
@@ -40,7 +45,11 @@ public static class PlaylistEndpoints
                 return NameProblem();
             }
             return store.Rename(id, name) && store.Find(id) is { } renamed ? Results.Ok(Info(renamed, library)) : Results.NotFound();
-        });
+        })
+            .WithName("RenamePlaylist")
+            .Produces<PlaylistInfo>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
 
         api.MapPut("/playlists/{id:long}/songs", (long id, PlaylistSongsRequest request, SqlitePlaylistStore store, SongLibrary library) =>
         {
@@ -56,14 +65,22 @@ public static class PlaylistEndpoints
             return store.Replace(id, [.. songIds.Distinct(StringComparer.Ordinal)]) && store.Find(id) is { } stored
                 ? Results.Ok(Info(stored, library))
                 : Results.NotFound();
-        });
+        })
+            .WithName("SetPlaylistSongs")
+            .Produces<PlaylistInfo>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
 
         api.MapDelete("/playlists/{id:long}", (long id, SqlitePlaylistStore store) => store.Delete(id) switch
         {
             PlaylistDeletion.Deleted => Results.NoContent(),
             PlaylistDeletion.LastOne => Results.Problem("The last playlist cannot be deleted.", statusCode: StatusCodes.Status409Conflict),
             _ => Results.NotFound(),
-        });
+        })
+            .WithName("DeletePlaylist")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         return api;
     }
 

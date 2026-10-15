@@ -58,7 +58,10 @@ public static class LyricsEndpoints
             {
                 return Results.Problem(title: exception.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
-        });
+        })
+            .WithName("ListLyricsModels")
+            .Produces<LyricsModels>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         api.MapPost("/lyrics", async (LyricsRequest request, JobQueue queue, CancellationToken cancellationToken) =>
         {
@@ -85,7 +88,10 @@ public static class LyricsEndpoints
                 return invalid;
             }
             return Results.Accepted(value: await queue.LyricsAsync(request with { Lyrics = null, Instruction = null }, cancellationToken));
-        });
+        })
+            .WithName("WriteLyrics")
+            .Produces<LyricsState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem();
 
         // A song from a few words in one call, for an iPhone shortcut: the draft first, the song once it is done.
         api.MapPost("/quick", async (QuickSongRequest request, JobQueue queue, QuickSongs quick, Library.SongLibrary library, CancellationToken cancellationToken) =>
@@ -119,7 +125,10 @@ public static class LyricsEndpoints
             var draft = await queue.LyricsAsync(new LyricsRequest(request.Keywords!.Trim(), style, language), cancellationToken);
             await quick.ExpectAsync(draft.Id, song, cancellationToken);
             return Results.Accepted(value: new QuickSongStarted(draft.Id, draft.Stage, title, style!));
-        });
+        })
+            .WithName("StartQuickSong")
+            .Produces<QuickSongStarted>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem();
         return api;
     }
 

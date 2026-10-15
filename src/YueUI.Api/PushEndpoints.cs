@@ -22,7 +22,8 @@ public static class PushEndpoints
 {
     public static RouteGroupBuilder MapPushEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/push", (PushStore store) => new PushKey(store.PublicKey));
+        api.MapGet("/push", (PushStore store) => new PushKey(store.PublicKey))
+            .WithName("GetPushKey");
 
         api.MapPost("/push/subscriptions", (PushSubscriptionRequest request, PushStore store) =>
         {
@@ -37,7 +38,10 @@ public static class PushEndpoints
             var language = request.Language is "en" ? "en" : "de";
             store.Add(request.Endpoint!, request.Keys.P256dh, request.Keys.Auth, language);
             return Results.NoContent();
-        });
+        })
+            .WithName("Subscribe")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem();
 
         api.MapDelete("/push/subscriptions", ([FromBody] PushEndpointRequest request, PushStore store) =>
         {
@@ -46,7 +50,9 @@ public static class PushEndpoints
                 store.Remove(request.Endpoint);
             }
             return Results.NoContent();
-        });
+        })
+            .WithName("Unsubscribe")
+            .Produces(StatusCodes.Status204NoContent);
 
         // Checks the whole way to the phone without generating a song first.
         api.MapPost("/push/test", async (PushEndpointRequest request, PushStore store, IPushSender sender, CancellationToken cancellationToken) =>
@@ -66,7 +72,12 @@ public static class PushEndpoints
                 default:
                     return Results.Problem(title: "The push service did not accept the message.", statusCode: StatusCodes.Status502BadGateway);
             }
-        });
+        })
+            .WithName("SendTestPush")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status410Gone)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
         return api;
     }
 

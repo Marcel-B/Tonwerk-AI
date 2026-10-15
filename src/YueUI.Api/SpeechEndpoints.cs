@@ -30,35 +30,65 @@ public static class SpeechEndpoints
                 [.. options.Value.ResolvedModels.Select(m => Info(m, engine))],
                 [.. options.Value.ResolvedCleanModels.Select(m => Info(m, engine))],
                 store.Voices(),
-                store.Takes()));
+                store.Takes()))
+            .WithName("GetSpeechLab")
+            .Produces<SpeechInfo>(StatusCodes.Status200OK);
 
         api.MapPost("/speech/voices", AddVoiceAsync)
             // Posted from a plain form; there is no login and no cookie that a forged request could use.
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(MaxRecordingBytes + 64 * 1024))
-            .WithFormOptions(multipartBodyLengthLimit: MaxRecordingBytes);
+            .WithFormOptions(multipartBodyLengthLimit: MaxRecordingBytes)
+            .WithName("CreateSpeechVoice")
+            .Produces<SpeechVoice>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         api.MapGet("/speech/voices/{id}/audio", (string id, SqliteSpeechStore store) =>
             store.Voice(id) is not null && File.Exists(store.VoicePath(id))
                 ? Results.File(store.VoicePath(id), "audio/wav", enableRangeProcessing: true)
-                : Results.NotFound());
+                : Results.NotFound())
+            .WithName("GetSpeechVoiceAudio")
+            .ProducesFile("audio/wav")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/speech/voices/{id}", (string id, SqliteSpeechStore store) =>
-            store.RemoveVoice(id) ? Results.NoContent() : Results.NotFound());
+            store.RemoveVoice(id) ? Results.NoContent() : Results.NotFound())
+            .WithName("DeleteSpeechVoice")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
 
-        api.MapPost("/speech/takes", AddTakes);
+        api.MapPost("/speech/takes", AddTakes)
+            .WithName("CreateSpeechTakes")
+            .Produces<IReadOnlyList<SpeechTake>>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         api.MapPost("/speech/cleanups", AddCleanupAsync)
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(MaxCleanupBytes + 64 * 1024))
-            .WithFormOptions(multipartBodyLengthLimit: MaxCleanupBytes);
+            .WithFormOptions(multipartBodyLengthLimit: MaxCleanupBytes)
+            .WithName("CreateSpeechCleanup")
+            .Produces<SpeechTake>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         // The recording as it was uploaded (decoded to WAV), to hear before and after.
         api.MapGet("/speech/takes/{id}/source", (string id, SqliteSpeechStore store) =>
             store.Take(id) is { Source: not null } && File.Exists(store.SourcePath(id))
                 ? Results.File(store.SourcePath(id), "audio/wav", enableRangeProcessing: true)
-                : Results.NotFound());
+                : Results.NotFound())
+            .WithName("GetSpeechTakeSource")
+            .ProducesFile("audio/wav")
+            .Produces(StatusCodes.Status404NotFound);
         // Range requests: Safari plays audio only from a source that answers them.
         api.MapGet("/speech/takes/{id}/audio", (string id, bool? download, SqliteSpeechStore store) =>
             store.Take(id) is { Stage: "done" } take && File.Exists(store.TakePath(id))
                 ? Results.File(store.TakePath(id), "audio/wav", download == true ? DownloadName(take) : null, enableRangeProcessing: true)
-                : Results.NotFound());
+                : Results.NotFound())
+            .WithName("GetSpeechTakeAudio")
+            .ProducesFile("audio/wav")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/speech/takes/{id}", (string id, SqliteSpeechStore store, SpeechLab lab) =>
         {
             if (store.Take(id) is not { } take)
@@ -67,7 +97,10 @@ public static class SpeechEndpoints
             }
             lab.Delete(take);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteSpeechTake")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

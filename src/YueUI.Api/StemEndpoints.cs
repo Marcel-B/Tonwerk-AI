@@ -18,17 +18,34 @@ public static class StemEndpoints
 
     public static RouteGroupBuilder MapStemEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/stems/models", ListModelsAsync);
-        api.MapGet("/stems", (SqliteStemStore store) => Results.Ok(store.All()));
-        api.MapPost("/songs/{run}/{song}/stems", Separate);
+        api.MapGet("/stems/models", ListModelsAsync)
+            .WithName("ListStemModels")
+            .Produces<List<StemModel>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
+        api.MapGet("/stems", (SqliteStemStore store) => Results.Ok(store.All()))
+            .WithName("ListStemSets")
+            .Produces<IReadOnlyList<StemSetState>>(StatusCodes.Status200OK);
+        api.MapPost("/songs/{run}/{song}/stems", Separate)
+            .WithName("CreateStemSet")
+            .Produces<StemSetState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         api.MapPost("/stems", UploadAsync)
             // Posted from a plain form; there is no login and no cookie that a forged request could use.
             .DisableAntiforgery()
             .WithFormOptions(multipartBodyLengthLimit: MaxUploadBytes)
-            .WithMetadata(new RequestSizeLimitAttribute(MaxUploadBytes + 64 * 1024));
+            .WithMetadata(new RequestSizeLimitAttribute(MaxUploadBytes + 64 * 1024))
+            .WithName("CreateStemSetFromUpload")
+            .Produces<StemSetState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         // By the set alone, which is all an upload has; the song's routes below stay for pages loaded before.
         api.MapGet("/stems/{id}/{name}", (string id, string name, bool? download, SqliteStemStore store, SongLibrary library) =>
-            store.Get(id) is { } set ? StemAudio(set, name, download == true, store, library) : Results.NotFound());
+            store.Get(id) is { } set ? StemAudio(set, name, download == true, store, library) : Results.NotFound())
+            .WithName("GetStemFile")
+            .ProducesFile("audio/flac", "audio/wav")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/stems/{id}", (string id, SqliteStemStore store, VoiceConverter converter) =>
         {
             if (store.Get(id) is not { } set)
@@ -37,10 +54,16 @@ public static class StemEndpoints
             }
             converter.DeleteStems(set);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteStemSet")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         // Range requests, as for the song itself: the page seeks and Safari plays only from a source that answers them.
         api.MapGet("/songs/{run}/{song}/stems/{id}/{name}", (string run, string song, string id, string name, bool? download, SqliteStemStore store, SongLibrary library) =>
-            store.Get(id) is { } set && set.SongId == $"{run}/{song}" ? StemAudio(set, name, download == true, store, library) : Results.NotFound());
+            store.Get(id) is { } set && set.SongId == $"{run}/{song}" ? StemAudio(set, name, download == true, store, library) : Results.NotFound())
+            .WithName("GetStemFileForSong")
+            .ProducesFile("audio/flac", "audio/wav")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/songs/{run}/{song}/stems/{id}", (string run, string song, string id, SqliteStemStore store, VoiceConverter converter) =>
         {
             if (store.Get(id) is not { } set || set.SongId != $"{run}/{song}")
@@ -49,7 +72,10 @@ public static class StemEndpoints
             }
             converter.DeleteStems(set);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteStemSetForSong")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

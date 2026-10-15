@@ -187,7 +187,7 @@ builder.Services.AddHttpClient(LokiShipper.HttpClientName, client => client.Time
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
+builder.Services.AddApiDocument();
 
 var app = builder.Build();
 
@@ -198,11 +198,13 @@ if (!app.Environment.IsDevelopment())
 
 app.UseClientAppAssets();
 
-app.MapOpenApi("/api/openapi");
+app.MapOpenApi(ApiDocument.Path);
 
 var api = app.MapGroup("/api");
 // HEAD as well, since uptime monitors often probe with it.
-api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"));
+api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"))
+    .WithName("GetHealth")
+    .Produces<string>(StatusCodes.Status200OK, "text/plain");
 api.MapWorkerEndpoints();
 api.MapLoraEndpoints();
 api.MapLibraryEndpoints();

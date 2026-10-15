@@ -51,28 +51,77 @@ public static class LogicEndpoints
 
     public static RouteGroupBuilder MapLogicEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/songs/{run}/{song}/logic", ExportSongAsync);
+        api.MapGet("/songs/{run}/{song}/logic", ExportSongAsync)
+            .WithName("ExportSongLogicProject")
+            .ProducesFile("application/zip")
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         // The way back: a song edited in Logic and exported as MIDI becomes the score of a new song.
-        api.MapPost("/midi/abc", MidiToAbcAsync).DisableAntiforgery();
+        api.MapPost("/midi/abc", MidiToAbcAsync)
+            .DisableAntiforgery()
+            .WithName("ConvertMidiToAbc")
+            .Produces<MidiScore>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
+        // The Logic page's answers are YueToLogic.Core's JSON (enums by name, not this API's camelCase ones), so they
+        // are described as opaque objects rather than with a schema whose enum values would be wrong. A 422 there is
+        // either a ConversionResult that says why or a problem (no notes heard in a stem), both JSON objects.
         var logic = api.MapGroup("/logic");
         logic.MapPost("/convert", ConvertAsync)
             .DisableAntiforgery()
-            .WithFormOptions(multipartBodyLengthLimit: MaxScoreBytes + 64 * 1024);
+            .WithFormOptions(multipartBodyLengthLimit: MaxScoreBytes + 64 * 1024)
+            .WithName("ConvertLogicScore")
+            .Produces<JsonElement>(StatusCodes.Status200OK)
+            .Produces<JsonElement>(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status504GatewayTimeout);
         logic.MapPost("/musicxml", MusicXmlAsync)
             .DisableAntiforgery()
-            .WithFormOptions(multipartBodyLengthLimit: MaxScoreBytes + 64 * 1024);
+            .WithFormOptions(multipartBodyLengthLimit: MaxScoreBytes + 64 * 1024)
+            .WithName("ExportLogicMusicXml")
+            .ProducesFile("application/vnd.recordare.musicxml+xml")
+            .Produces<JsonElement>(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status504GatewayTimeout);
         logic.MapPost("/export", ExportAsync)
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(MaxAudioBytes + MaxScoreBytes + 64 * 1024))
-            .WithFormOptions(multipartBodyLengthLimit: MaxAudioBytes + MaxScoreBytes + 64 * 1024);
-        logic.MapGet("/presets", (SqliteLogicPresetStore store) => Results.Ok(store.List()));
-        logic.MapPut("/presets/{name}", SavePreset);
+            .WithFormOptions(multipartBodyLengthLimit: MaxAudioBytes + MaxScoreBytes + 64 * 1024)
+            .WithName("ExportLogicProject")
+            .ProducesFile("application/zip")
+            .Produces<JsonElement>(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status504GatewayTimeout);
+        logic.MapGet("/presets", (SqliteLogicPresetStore store) => Results.Ok(store.List()))
+            .WithName("ListLogicPresets")
+            .Produces<IReadOnlyList<LogicPreset>>(StatusCodes.Status200OK);
+        logic.MapPut("/presets/{name}", SavePreset)
+            .WithName("SaveLogicPreset")
+            .Produces<LogicPreset>(StatusCodes.Status200OK)
+            .Produces<LogicPreset>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
         logic.MapDelete("/presets/{name}", (string name, SqliteLogicPresetStore store) =>
             store.Delete(name.Trim())
                 ? Results.NoContent()
-                : Results.Problem(title: "Unknown preset", detail: $"There is no preset named '{name}'.", statusCode: StatusCodes.Status404NotFound));
-        logic.MapPost("/import", Import);
+                : Results.Problem(title: "Unknown preset", detail: $"There is no preset named '{name}'.", statusCode: StatusCodes.Status404NotFound))
+            .WithName("DeleteLogicPreset")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        logic.MapPost("/import", Import)
+            .WithName("ImportLogicSettings")
+            .Produces<LogicImportResult>(StatusCodes.Status200OK);
         return api;
     }
 

@@ -8,13 +8,21 @@ public static class LoraEndpoints
 {
     public static RouteGroupBuilder MapLoraEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/loras", (LoraLibrary loras) => Results.Ok(new LoraList(loras.Folder, loras.List())));
+        api.MapGet("/loras", (LoraLibrary loras) => Results.Ok(new LoraList(loras.Folder, loras.List())))
+            .WithName("ListLoras")
+            .Produces<LoraList>(StatusCodes.Status200OK);
         api.MapPost("/loras", UploadAsync)
             .DisableAntiforgery()
             .WithFormOptions(multipartBodyLengthLimit: LoraLibrary.MaxUploadBytes)
-            .WithMetadata(new RequestSizeLimitAttribute(LoraLibrary.MaxUploadBytes + 64 * 1024));
+            .WithMetadata(new RequestSizeLimitAttribute(LoraLibrary.MaxUploadBytes + 64 * 1024))
+            .WithName("UploadLora")
+            .Produces<LoraInfo>(StatusCodes.Status201Created)
+            .ProducesValidationProblem();
         api.MapDelete("/loras/{name}", (string name, LoraLibrary loras) =>
-            loras.Delete(name) ? Results.NoContent() : Results.NotFound());
+            loras.Delete(name) ? Results.NoContent() : Results.NotFound())
+            .WithName("DeleteLora")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

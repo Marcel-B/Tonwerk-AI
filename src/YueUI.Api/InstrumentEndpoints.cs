@@ -17,13 +17,37 @@ public static class InstrumentEndpoints
     public static RouteGroupBuilder MapInstrumentEndpoints(this RouteGroupBuilder api)
     {
         var instruments = api.MapGroup("/instruments");
-        instruments.MapGet("/", (SqliteInstrumentStore store) => Results.Ok(store.List()));
-        instruments.MapPost("/", Create);
-        instruments.MapPut("/{id:long}", Update);
-        instruments.MapPut("/{id:long}/note", SetNote);
-        instruments.MapDelete("/{id:long}", (long id, SqliteInstrumentStore store) => store.Delete(id) ? Results.NoContent() : NotFound(id));
-        instruments.MapGet("/assignments", (SqliteInstrumentStore store) => Results.Ok(store.Assignments()));
-        instruments.MapPut("/assignments/{track}", Assign);
+        instruments.MapGet("/", (SqliteInstrumentStore store) => Results.Ok(store.List()))
+            .WithName("ListInstruments")
+            .Produces<IReadOnlyList<Instrument>>(StatusCodes.Status200OK);
+        instruments.MapPost("/", Create)
+            .WithName("CreateInstrument")
+            .Produces<Instrument>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+        instruments.MapPut("/{id:long}", Update)
+            .WithName("UpdateInstrument")
+            .Produces<Instrument>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+        instruments.MapPut("/{id:long}/note", SetNote)
+            .WithName("SetInstrumentNote")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        instruments.MapDelete("/{id:long}", (long id, SqliteInstrumentStore store) => store.Delete(id) ? Results.NoContent() : NotFound(id))
+            .WithName("DeleteInstrument")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        instruments.MapGet("/assignments", (SqliteInstrumentStore store) => Results.Ok(store.Assignments()))
+            .WithName("ListTrackAssignments")
+            .Produces<IReadOnlyDictionary<string, long>>(StatusCodes.Status200OK);
+        instruments.MapPut("/assignments/{track}", Assign)
+            .WithName("SetTrackAssignment")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
         return api;
     }
 

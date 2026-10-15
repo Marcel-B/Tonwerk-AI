@@ -27,8 +27,14 @@ public static class AceEndpoints
                 files.Dit,
                 files.Adapters,
                 composer.Jobs());
-        });
-        api.MapPost("/ace", Compose);
+        })
+            .WithName("GetAce")
+            .Produces<AceInfo>(StatusCodes.Status200OK);
+        api.MapPost("/ace", Compose)
+            .WithName("CreateAceJob")
+            .Produces<AceJob>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         api.MapDelete("/ace/{id}", (string id, AceComposer composer) =>
         {
             if (composer.Get(id) is not { } job)
@@ -37,7 +43,10 @@ public static class AceEndpoints
             }
             composer.Delete(job);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteAceJob")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         api.MapGet("/songs/{run}/{song}/ace", (string run, string song, SongLibrary library) =>
         {
             if (library.SongDirectory(run, song) is not { } directory
@@ -55,7 +64,10 @@ public static class AceEndpoints
             {
                 return Results.NotFound();
             }
-        });
+        })
+            .WithName("GetSongAceRequest")
+            .Produces<AceSongRequest>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

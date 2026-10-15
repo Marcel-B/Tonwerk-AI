@@ -20,16 +20,29 @@ public static class ImageEndpoints
                 engine.Installed,
                 options.Value.ResolvedPython,
                 [.. options.Value.ResolvedModels.Select(m => new ImageModelInfo(
-                    m.Id, m.Label, m.DownloadGb, m.MemoryGb, m.License, m.Commercial, m.Gated, engine.Downloaded(m), !m.Gated || engine.TokenFound))]));
+                    m.Id, m.Label, m.DownloadGb, m.MemoryGb, m.License, m.Commercial, m.Gated, engine.Downloaded(m), !m.Gated || engine.TokenFound))]))
+            .WithName("GetImageInfo")
+            .Produces<ImageInfo>(StatusCodes.Status200OK);
 
         api.MapGet("/songs/{run}/{song}/images", (string run, string song, SongLibrary library, ImageMaker images) =>
-            library.SongDirectory(run, song) is null ? Results.NotFound() : Results.Ok(images.Of($"{run}/{song}")));
-        api.MapPost("/songs/{run}/{song}/images", Paint);
+            library.SongDirectory(run, song) is null ? Results.NotFound() : Results.Ok(images.Of($"{run}/{song}")))
+            .WithName("ListSongImages")
+            .Produces<IReadOnlyList<ImageState>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+        api.MapPost("/songs/{run}/{song}/images", Paint)
+            .WithName("CreateSongImage")
+            .Produces<ImageState>(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
 
         api.MapGet("/images/{id}", (string id, ImageMaker images) =>
             images.Get(id) is { Stage: "done" } && File.Exists(images.ImagePath(id))
                 ? Results.File(images.ImagePath(id), "image/jpeg")
-                : Results.NotFound());
+                : Results.NotFound())
+            .WithName("GetImage")
+            .ProducesFile("image/jpeg")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapPut("/images/{id}/cover", async (string id, ImageMaker images, SongLibrary library, Status.StatusHub hub, CancellationToken cancellationToken) =>
         {
             if (images.Get(id) is not { Stage: "done" } image
@@ -45,7 +58,10 @@ public static class ImageEndpoints
             }
             hub.LibraryChanged();
             return Results.NoContent();
-        });
+        })
+            .WithName("SetImageAsCover")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/images/{id}", (string id, ImageMaker images) =>
         {
             if (images.Get(id) is not { } image)
@@ -54,7 +70,10 @@ public static class ImageEndpoints
             }
             images.Delete(image);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteImage")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

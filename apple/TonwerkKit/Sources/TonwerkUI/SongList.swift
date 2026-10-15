@@ -36,6 +36,11 @@ struct SongList: View {
     }
 
     var body: some View {
+        withDetails(content)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         Group {
             if let error = model.libraryError, model.songs.isEmpty {
                 ContentUnavailableView {
@@ -58,46 +63,7 @@ struct SongList: View {
                     ContentUnavailableView.search(text: query)
                 }
             } else {
-                #if os(macOS)
-                List(selection: $selected) {
-                    ForEach(shown) { song in
-                        SongRow(song: song, playing: player.current?.id == song.id)
-                            .tag(song.id)
-                    }
-                    .onDelete(perform: playlist == nil ? nil : { remove($0) })
-                }
-                .contextMenu(forSelectionType: Song.ID.self) { ids in
-                    if let song = ids.first.flatMap({ model.song($0) }) {
-                        menu(for: song)
-                    }
-                } primaryAction: { ids in
-                    // A double click.
-                    if let song = ids.first.flatMap({ model.song($0) }), song.hasAudio {
-                        player.play(song, in: shown)
-                    }
-                }
-                #else
-                List {
-                    ForEach(shown) { song in
-                        SongRow(song: song, playing: player.current?.id == song.id) {
-                            sheetSong = song.id
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if song.hasAudio {
-                                player.play(song, in: shown)
-                            }
-                        }
-                        .contextMenu { menu(for: song) }
-                    }
-                    .onDelete(perform: playlist == nil ? nil : { remove($0) })
-                }
-                #endif
-                #if os(macOS)
-                .listStyle(.inset(alternatesRowBackgrounds: true))
-                #else
-                .listStyle(.plain)
-                #endif
+                songList
             }
         }
         .navigationTitle(title)
@@ -107,38 +73,6 @@ struct SongList: View {
             Text("Songtext").tag(Song.SearchScope.lyrics)
         }
         .refreshable { await model.reloadLibrary() }
-        #if os(macOS)
-        .inspector(isPresented: $details) {
-            Group {
-                if let chosen {
-                    SongDetail(song: chosen, list: shown)
-                        .id(chosen.id)
-                } else {
-                    ContentUnavailableView(
-                        "Kein Song gewählt", systemImage: "music.note",
-                        description: Text("Wähle einen Song, um Songtext, Notiz und Versionen zu sehen."))
-                }
-            }
-            .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
-        }
-        #else
-        .sheet(isPresented: Binding(get: { sheetSong != nil }, set: { if !$0 { sheetSong = nil } })) {
-            if let song = sheetSong.flatMap({ model.song($0) }) {
-                NavigationStack {
-                    SongDetail(song: song, list: shown)
-                        .id(song.id)
-                        .navigationTitle(song.displayTitle)
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Fertig") { sheetSong = nil }
-                            }
-                        }
-                }
-                .presentationDetents([.medium, .large])
-            }
-        }
-        #endif
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -162,6 +96,88 @@ struct SongList: View {
             }
         }
     }
+
+    /// The Mac selects with a click and plays with a double click, its details beside the list; the iPhone plays with
+    /// a tap and opens the details from the row's ⓘ, as the Music app does.
+    #if os(macOS)
+    private var songList: some View {
+        List(selection: $selected) {
+            ForEach(shown) { song in
+                SongRow(song: song, playing: player.current?.id == song.id)
+                    .tag(song.id)
+            }
+            .onDelete(perform: playlist == nil ? nil : { remove($0) })
+        }
+        .contextMenu(forSelectionType: Song.ID.self) { ids in
+            if let song = ids.first.flatMap({ model.song($0) }) {
+                menu(for: song)
+            }
+        } primaryAction: { ids in
+            if let song = ids.first.flatMap({ model.song($0) }), song.hasAudio {
+                player.play(song, in: shown)
+            }
+        }
+        .listStyle(.inset(alternatesRowBackgrounds: true))
+    }
+
+    private func withDetails(_ content: some View) -> some View {
+        content.inspector(isPresented: $details) {
+            Group {
+                if let chosen {
+                    SongDetail(song: chosen, list: shown)
+                        .id(chosen.id)
+                } else {
+                    ContentUnavailableView(
+                        "Kein Song gewählt", systemImage: "music.note",
+                        description: Text("Wähle einen Song, um Songtext, Notiz und Versionen zu sehen."))
+                }
+            }
+            .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
+        }
+    }
+    #else
+    private var songList: some View {
+        List {
+            ForEach(shown) { song in
+                SongRow(song: song, playing: player.current?.id == song.id) {
+                    sheetSong = song.id
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if song.hasAudio {
+                        player.play(song, in: shown)
+                    }
+                }
+                .contextMenu { menu(for: song) }
+            }
+            .onDelete(perform: playlist == nil ? nil : { remove($0) })
+        }
+        .listStyle(.plain)
+    }
+
+    private var sheetShown: Binding<Bool> {
+        Binding(get: { sheetSong != nil }, set: { if !$0 { sheetSong = nil } })
+    }
+
+    private func withDetails(_ content: some View) -> some View {
+        content.sheet(isPresented: sheetShown) {
+            if let song = sheetSong.flatMap({ model.song($0) }) {
+                NavigationStack {
+                    SongDetail(song: song, list: shown)
+                        .id(song.id)
+                        .navigationTitle(song.displayTitle)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Fertig") { sheetSong = nil }
+                            }
+                        }
+                }
+                .presentationDetents([.medium, .large])
+            }
+        }
+    }
+    #endif
 
     private var orderMenu: some View {
         Menu {

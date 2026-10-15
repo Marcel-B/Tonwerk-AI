@@ -118,6 +118,35 @@ final class LibraryOrderTests: XCTestCase {
     }
 }
 
+final class StagesTests: XCTestCase {
+    private let start = Date(timeIntervalSince1970: 1000)
+
+    func testDoneStepsTookUntilTheNextAndTheRestOfThePipelineWaits() {
+        let steps = Stages.steps(
+            history: [("queued", start), ("planning", start.addingTimeInterval(5)), ("tokens", start.addingTimeInterval(65))],
+            current: "tokens", render: false, finished: false, now: start.addingTimeInterval(95))
+        XCTAssertEqual(steps.map(\.stage), ["queued", "planning", "tokens", "synth", "decode"])
+        XCTAssertEqual(steps.map(\.state), [.done, .done, .current, .pending, .pending])
+        XCTAssertEqual(steps.map(\.seconds), [5, 60, 30, nil, nil])
+    }
+
+    func testARenderOnlySynthesizesAndAFinishedSongDropsItsEnd() {
+        let render = Stages.steps(history: [("queued", start)], current: "queued", render: true, finished: false, now: start)
+        XCTAssertEqual(render.map(\.stage), ["queued", "synth", "decode"])
+        let done = Stages.steps(
+            history: [("synth", start), ("decode", start.addingTimeInterval(10)), ("ready", start.addingTimeInterval(12))],
+            current: "ready", render: true, finished: true, now: start.addingTimeInterval(99))
+        XCTAssertEqual(done.map(\.stage), ["synth", "decode"])
+        XCTAssertEqual(done.map(\.seconds), [10, 2])
+    }
+
+    func testStagesAreGerman() {
+        XCTAssertEqual(Stages.name("tokens"), "Komponiert")
+        XCTAssertEqual(Stages.step("planning"), "Partitur")
+        XCTAssertEqual(Stages.name("odd"), "odd")
+    }
+}
+
 final class CreateFormTests: XCTestCase {
     func testAnEmptyFormNamesWhatIsMissing() {
         var form = CreateForm()

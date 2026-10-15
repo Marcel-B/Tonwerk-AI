@@ -9,6 +9,7 @@ public struct TonwerkScene: Scene {
     public var body: some Scene {
         WindowGroup {
             RootView()
+                .tint(Theme.accent)
                 .environment(model)
                 .environment(model.player)
         }

@@ -269,6 +269,7 @@ struct SongList: View {
 
 struct SongRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(Player.self) private var player
     let song: Song
     let playing: Bool
     /// The iPhone's ⓘ, which opens the details; the Mac shows them beside the list.
@@ -278,16 +279,19 @@ struct SongRow: View {
         HStack(spacing: 12) {
             CoverView(song: song)
                 .frame(width: 44, height: 44)
+                .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
                 .overlay {
                     if playing {
-                        Image(systemName: "speaker.wave.2.fill")
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(.black.opacity(0.35))
+                        PlayingIndicator(playing: player.isPlaying)
                             .foregroundStyle(.white)
-                            .shadow(radius: 2)
                     }
                 }
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.displayTitle)
                     .fontWeight(playing ? .semibold : .regular)
+                    .foregroundStyle(playing ? Theme.accent : Color.primary)
                     .lineLimit(1)
                 Text(song.style)
                     .font(.caption)
@@ -373,13 +377,27 @@ struct CoverView: View {
     }
 
     private var drawn: some View {
-        let hue = Double(song.id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % 360) / 360
-        return LinearGradient(
-            colors: [Color(hue: hue, saturation: 0.6, brightness: 0.75), Color(hue: (hue + 0.12).truncatingRemainder(dividingBy: 1), saturation: 0.7, brightness: 0.4)],
-            startPoint: .topLeading, endPoint: .bottomTrailing)
+        DrawnCover(id: song.id)
+    }
+}
+
+/// The cover a song without its own gets: a gradient hued by the id, as the web page draws it (`export.ts`).
+struct DrawnCover: View {
+    let id: String
+
+    var body: some View {
+        let hue = Double(id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % 360) / 360
+        LinearGradient(
+            colors: [
+                Color(hue: hue, saturation: 0.6, brightness: 0.75),
+                Color(hue: (hue + 0.12).truncatingRemainder(dividingBy: 1), saturation: 0.7, brightness: 0.4),
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
         .overlay {
             Image(systemName: "music.note")
                 .foregroundStyle(.white.opacity(0.7))
         }
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }

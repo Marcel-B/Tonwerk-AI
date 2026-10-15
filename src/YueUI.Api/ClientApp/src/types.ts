@@ -997,5 +997,14 @@ export interface SketchResult {
 
 export interface SketchInfo {
   configured: boolean
+  /** The default model. */
   model: string
+  /** The Claude models to choose from, the default first. */
+  models: ClaudeModelChoice[]
+}
+
+/** A Claude model a picker offers (Sketches/SketchModels.cs). */
+export interface ClaudeModelChoice {
+  id: string
+  name: string
 }

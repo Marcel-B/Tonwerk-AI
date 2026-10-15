@@ -792,10 +792,13 @@ export async function getSketches(): Promise<SketchSummary[]> {
   return (await send('/api/sketches')).json() as Promise<SketchSummary[]>
 }
 
-/** Sends a written sketch to Claude; the plan follows minutes later, so the answer is the waiting sketch. */
-export async function planSketch(text: string, instruction: string): Promise<SketchSummary> {
+/**
+ * Sends a written sketch to Claude; the plan follows minutes later, so the answer is the waiting sketch. `model` is one
+ * of the info's models, null for the default.
+ */
+export async function planSketch(text: string, instruction: string, model: string | null): Promise<SketchSummary> {
   return (
-    await send('/api/sketches', json('POST', { text, instruction: instruction || null }))
+    await send('/api/sketches', json('POST', { text, instruction: instruction || null, model }))
   ).json() as Promise<SketchSummary>
 }
 

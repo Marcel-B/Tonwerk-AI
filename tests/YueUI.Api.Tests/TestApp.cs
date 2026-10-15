@@ -1194,11 +1194,14 @@ public sealed class FakeSketchModel : Sketches.ISketchModel
 
     public List<(string Sketch, string? Instruction)> Calls { get; } = [];
 
-    public async Task<Sketches.SketchAnswer> PlanAsync(string sketch, string? instruction, CancellationToken cancellationToken)
+    public List<string> Models { get; } = [];
+
+    public async Task<Sketches.SketchAnswer> PlanAsync(string sketch, string? instruction, string model, CancellationToken cancellationToken)
     {
         lock (Calls)
         {
             Calls.Add((sketch, instruction));
+            Models.Add(model);
         }
         await Gate.Task.WaitAsync(cancellationToken);
         if (Failure is { } failure)

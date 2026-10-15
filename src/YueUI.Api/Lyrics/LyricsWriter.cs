@@ -299,7 +299,7 @@ public sealed partial class LyricsWriter(
     {
         var settings = options.Value;
         List<LyricsModel> claude = cloud.Configured
-            ? [.. settings.ClaudeModels.Distinct().Select(id => new LyricsModel(id, ClaudeName(id), null, false, true, Cloud: true))]
+            ? [.. settings.ClaudeModels.Distinct().Select(id => new LyricsModel(id, Sketches.ClaudeModelChoice.NameOf(id), null, false, true, Cloud: true))]
             : [];
         List<LyricsModel> models;
         try
@@ -323,23 +323,6 @@ public sealed partial class LyricsWriter(
         return new LyricsModels(settings.Model, models);
     }
 
-    /// <summary>"claude-opus-5-5" → "Claude Opus 5.5": the name Anthropic gives it, from the id.</summary>
-    public static string ClaudeName(string id)
-    {
-        var words = new List<string>();
-        foreach (var part in id.Split('-', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (part.All(char.IsAsciiDigit) && words.Count > 0 && words[^1].All(c => char.IsAsciiDigit(c) || c == '.'))
-            {
-                words[^1] += "." + part;
-            }
-            else
-            {
-                words.Add(char.ToUpperInvariant(part[0]) + part[1..]);
-            }
-        }
-        return string.Join(' ', words);
-    }
 
     /// <summary>
     /// LM Studio's own list, with names and sizes: the size is what decides whether a model fits beside the apps on

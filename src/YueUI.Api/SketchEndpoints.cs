@@ -35,7 +35,14 @@ public static class SketchEndpoints
                     $"No Anthropic API key: set ANTHROPIC_API_KEY or write it into {options.Value.ResolvedKeyFile}.",
                     statusCode: StatusCodes.Status501NotImplemented);
             }
-            var job = maker.Enqueue(request.Text, request.Instruction);
+            if (request.Model is { } model && !options.Value.Offered.Contains(model))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["model"] = [$"One of {string.Join(", ", options.Value.Offered)}."],
+                });
+            }
+            var job = maker.Enqueue(request.Text, request.Instruction, request.Model);
             return Results.Accepted($"/api/sketches/{job.Id}", SketchSummary.Of(job));
         });
         api.MapGet("/sketches/{id}", async (string id, SketchMaker maker) =>

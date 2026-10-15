@@ -26,9 +26,12 @@ public sealed class ClaudeLyricsTests : IDisposable
     {
         var list = (await _client.GetFromJsonAsync<JsonObject>("/api/lyrics/models"))!["models"]!.AsArray();
 
-        Assert.Equal(["google/gemma-4-e4b", "qwen/qwen3-8b", "claude-opus-5-5"], list.Select(m => (string?)m!["id"]));
+        Assert.Equal(
+            ["google/gemma-4-e4b", "qwen/qwen3-8b", "claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-haiku-5-5"],
+            list.Select(m => (string?)m!["id"]));
         Assert.Equal("Claude Opus 5.5", (string?)list[2]!["name"]);
-        Assert.Equal([false, false, true], list.Select(m => (bool?)m!["cloud"]));
+        Assert.Equal("Claude Fable 5.1", (string?)list[3]!["name"]);
+        Assert.Equal([false, false, true, true, true, true], list.Select(m => (bool?)m!["cloud"]));
         Assert.True((bool?)list[2]!["vision"]);
 
         _app.CloudLyrics.Configured = false;
@@ -45,18 +48,20 @@ public sealed class ClaudeLyricsTests : IDisposable
         var models = (await _client.GetFromJsonAsync<JsonObject>("/api/lyrics/models"))!;
 
         Assert.Equal("google/gemma-4-e4b", (string?)models["default"]);
-        Assert.Equal(["google/gemma-4-e4b", "claude-opus-5-5"], models["models"]!.AsArray().Select(m => (string?)m!["id"]));
+        Assert.Equal(
+            ["google/gemma-4-e4b", "claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-haiku-5-5"],
+            models["models"]!.AsArray().Select(m => (string?)m!["id"]));
     }
 
     [Fact]
     public async Task A_Claude_draft_gets_the_same_prompts_and_never_touches_LM_Studio()
     {
-        var draft = await Finished(new { keywords = "Nachtzug", style = "German, synthwave", language = "german", model = "claude-opus-5-5" });
+        var draft = await Finished(new { keywords = "Nachtzug", style = "German, synthwave", language = "german", model = "claude-sonnet-5-5" });
 
         Assert.Equal("done", draft.Stage);
         Assert.Equal("[Verse]\nCloud line\n\n[Chorus]\nSky line", draft.Lyrics);
         var call = Assert.Single(_app.CloudLyrics.Calls);
-        Assert.Equal("claude-opus-5-5", call.Model);
+        Assert.Equal("claude-sonnet-5-5", call.Model);
         Assert.Contains("Write in German", call.System, StringComparison.Ordinal);
         Assert.Contains("Nachtzug", call.Prompt, StringComparison.Ordinal);
         Assert.Null(call.Image);
@@ -104,7 +109,7 @@ public sealed class ClaudeLyricsTests : IDisposable
     [InlineData("claude-opus-5-5", "Claude Opus 5.5")]
     [InlineData("claude-sonnet-5", "Claude Sonnet 5")]
     [InlineData("claude-haiku-4-5", "Claude Haiku 4.5")]
-    public void Names_are_made_from_the_id(string id, string name) => Assert.Equal(name, LyricsWriter.ClaudeName(id));
+    public void Names_are_made_from_the_id(string id, string name) => Assert.Equal(name, ClaudeModelChoice.NameOf(id));
 
     [Fact]
     public async Task The_adapter_asks_Claude_with_the_system_prompt_and_a_photo_as_an_image_block()

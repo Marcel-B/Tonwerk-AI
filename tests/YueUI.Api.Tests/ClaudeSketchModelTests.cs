@@ -17,7 +17,7 @@ public sealed class ClaudeSketchModelTests
         var plan = JsonSerializer.Serialize(SketchSamples.Plan(), JsonSerializerOptions.Web);
         var handler = new FakeAnthropic(Stream(plan, "end_turn"));
 
-        var answer = await Model(handler).PlanAsync("# Before the Silence\n96 BPM", "keep the hook", CancellationToken.None);
+        var answer = await Model(handler).PlanAsync("# Before the Silence\n96 BPM", "keep the hook", "claude-opus-5-5", CancellationToken.None);
 
         Assert.Equal("Before the Silence", answer.Plan.Title);
         Assert.Equal(7, answer.Plan.Sections.Sum(s => s.Bars.Count));
@@ -45,7 +45,7 @@ public sealed class ClaudeSketchModelTests
     {
         var handler = new FakeAnthropic(Stream("{\"title\":", stopReason));
 
-        var error = await Assert.ThrowsAsync<SketchModelException>(() => Model(handler).PlanAsync("x", null, CancellationToken.None));
+        var error = await Assert.ThrowsAsync<SketchModelException>(() => Model(handler).PlanAsync("x", null, "claude-opus-5-5", CancellationToken.None));
 
         Assert.Equal(message, error.Message);
     }
@@ -55,7 +55,7 @@ public sealed class ClaudeSketchModelTests
     {
         var handler = new FakeAnthropic("""{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}""", HttpStatusCode.Unauthorized);
 
-        var error = await Assert.ThrowsAsync<SketchModelException>(() => Model(handler).PlanAsync("x", null, CancellationToken.None));
+        var error = await Assert.ThrowsAsync<SketchModelException>(() => Model(handler).PlanAsync("x", null, "claude-opus-5-5", CancellationToken.None));
 
         Assert.StartsWith("Claude:", error.Message);
     }

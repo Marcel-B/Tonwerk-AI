@@ -51,8 +51,9 @@ public sealed class LyricsOptions
     /// <summary>
     /// Claude models the picker offers beside LM Studio's, while an Anthropic key is set (the sketches' key,
     /// <c>Sketch:ApiKey</c>, <c>ANTHROPIC_API_KEY</c> or <c>~/.config/tonwerk/anthropic.key</c>). Empty offers none.
+    /// Lyrics are short, so even Fable costs little; Haiku is the quick and cheap one.
     /// </summary>
-    public string[] ClaudeModels { get; set; } = ["claude-opus-5-5"];
+    public string[] ClaudeModels { get; set; } = ["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-haiku-5-5"];
 
     /// <summary>How hard Claude thinks over lyrics: low, medium, high, xhigh or max. Lyrics are short; medium suffices.</summary>
     public string ClaudeEffort { get; set; } = "medium";

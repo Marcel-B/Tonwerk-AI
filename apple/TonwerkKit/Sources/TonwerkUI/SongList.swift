@@ -229,6 +229,12 @@ struct SongList: View {
         }
         .disabled(!song.hasScore)
         Button {
+            model.openInLogic(song)
+        } label: {
+            Label("In Logic öffnen", systemImage: "pianokeys")
+        }
+        .disabled(!song.hasScore)
+        Button {
             model.sharing = song
         } label: {
             Label("Teilen …", systemImage: "square.and.arrow.up")

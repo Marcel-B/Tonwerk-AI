@@ -13,6 +13,12 @@ public static class ApiDocument
     public const string Path = "/api/openapi";
 
     public static IServiceCollection AddApiDocument(this IServiceCollection services) => services.AddOpenApi(options =>
+    {
+        options.AddSchemaTransformer((schema, _, _) =>
+        {
+            NumbersOnly(schema);
+            return Task.CompletedTask;
+        });
         options.AddDocumentTransformer((document, _, _) =>
         {
             document.Info = new OpenApiInfo
@@ -34,7 +40,22 @@ public static class ApiDocument
                 FlattenForm(operation);
             }
             return Task.CompletedTask;
-        }));
+        });
+    });
+
+    /// <summary>
+    /// The web defaults read numbers from strings too, so ASP.NET describes every number as "integer or string" with a
+    /// pattern. The server only ever writes numbers, and Swift's generator turns a schema of two types into an untyped
+    /// value container, so the string is left out.
+    /// </summary>
+    private static void NumbersOnly(OpenApiSchema schema)
+    {
+        if (schema.Type is { } type && (type & (JsonSchemaType.Integer | JsonSchemaType.Number)) != 0)
+        {
+            schema.Type = type & ~JsonSchemaType.String;
+            schema.Pattern = null;
+        }
+    }
 
     /// <summary>
     /// A body that is not JSON (audio, pictures, ZIPs, MIDI, text files): described as binary, so a generated client

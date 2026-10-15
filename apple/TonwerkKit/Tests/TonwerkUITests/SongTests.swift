@@ -94,4 +94,51 @@ final class CreateFormTests: XCTestCase {
 
         XCTAssertEqual(CreateForm.load(from: defaults), form)
     }
+
+    func testTheAdvancedParametersGoOutOnlyWhereTheyDiffer() {
+        var form = CreateForm()
+        form.style = "pop"
+        form.instrumental = true
+        XCTAssertNil(form.request.abcSampling)
+        XCTAssertNil(form.request.maxTokens)
+        XCTAssertEqual(form.request.draftSteps, 8)
+        XCTAssertFalse(form.advancedChanged)
+
+        form.semanticSampling.temperature = 0.9
+        form.maxSeconds = 60
+        form.engines = "gpu"
+        XCTAssertTrue(form.advancedChanged)
+        XCTAssertEqual(form.request.semanticSampling?.temperature, 0.9)
+        XCTAssertNil(form.request.semanticSampling?.topK)
+        XCTAssertEqual(form.request.maxTokens, 1500)
+        XCTAssertEqual(form.request.engines, "gpu")
+
+        form.useAdvanced = false
+        XCTAssertNil(form.request.semanticSampling)
+        XCTAssertNil(form.request.engines)
+    }
+
+    func testAScoreKeepsItsPlanningAndGoesOutOnlyWhenUsed() {
+        var form = CreateForm()
+        form.style = "pop"
+        form.lyrics = "[verse]"
+        form.useScore(AbcScore.example)
+        XCTAssertEqual(form.planning, .full)
+        XCTAssertNotNil(form.request.abc)
+        form.planning = .off
+        XCTAssertNotNil(form.problem)
+        form.useAbc = false
+        XCTAssertNil(form.problem)
+        XCTAssertNil(form.request.abc)
+    }
+
+    func testAFormKeptByAnOlderVersionStillReads() throws {
+        let old = #"{"title":"Herbst","style":"pop","lyrics":"","idea":"","german":true,"lyricsModel":"","draftId":"","instrumental":false,"full":true,"batch":2,"planning":"melody","seed":"7"}"#
+        let form = try JSONDecoder().decode(CreateForm.self, from: Data(old.utf8))
+        XCTAssertEqual(form.title, "Herbst")
+        XCTAssertEqual(form.planning, .melody)
+        XCTAssertEqual(form.abcSampling, .abcDefaults)
+        XCTAssertTrue(form.useAdvanced)
+    }
 }
+

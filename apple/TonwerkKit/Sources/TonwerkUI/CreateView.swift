@@ -17,18 +17,22 @@ struct CreateView: View {
                 TextField("Titel (optional)", text: $model.form.title)
                 TextField("Stil", text: $model.form.style, prompt: Text("German, pop, female vocal, warm piano, 90 bpm"), axis: .vertical)
                     .lineLimit(2...6)
+                StyleBlocksView(style: $model.form.style, instrumental: model.form.instrumental)
             }
 
             Section("Songtext") {
                 Toggle("Instrumental", isOn: $model.form.instrumental)
+                TextEditor(text: $model.form.lyrics)
+                    .font(.body.monospaced())
+                    .frame(minHeight: model.form.instrumental ? 60 : 220)
+                    .scrollContentBackground(.hidden)
+                SectionTagsView(lyrics: $model.form.lyrics)
                 if !model.form.instrumental {
-                    TextEditor(text: $model.form.lyrics)
-                        .font(.body.monospaced())
-                        .frame(minHeight: 220)
-                        .scrollContentBackground(.hidden)
                     draft
                 }
             }
+
+            ScoreSection()
 
             Section("Erzeugen") {
                 Stepper(value: $model.form.batch, in: 1...10) {
@@ -39,16 +43,13 @@ struct CreateView: View {
                     Text("Voll").tag(true)
                 }
                 .pickerStyle(.segmented)
-                Picker("Planung", selection: $model.form.planning) {
-                    Text("Melodie und Akkorde").tag(CreateForm.Planning.full)
-                    Text("Nur Melodie").tag(CreateForm.Planning.melody)
-                    Text("Keine").tag(CreateForm.Planning.off)
-                }
                 TextField("Seed", text: $model.form.seed, prompt: Text("leer = zufällig"))
                     #if os(iOS)
                     .keyboardType(.numberPad)
                     #endif
             }
+
+            AdvancedSection()
 
             Section {
                 Button(action: generate) {
@@ -114,20 +115,19 @@ struct CreateView: View {
         @Bindable var model = model
         TextField("Stichworte für einen Entwurf", text: $model.form.idea, axis: .vertical)
             .lineLimit(1...4)
-        HStack {
-            Picker("Sprache", selection: $model.form.german) {
-                Text("Deutsch").tag(true)
-                Text("Englisch").tag(false)
-            }
-            .fixedSize()
-            if let models {
-                Picker("Modell", selection: $model.form.lyricsModel) {
-                    Text("Standard (\(models.models.first { $0.id == models._default }?.name ?? models._default))").tag("")
-                    ForEach(models.models, id: \.id) { choice in
-                        Text(choice.cloud == true ? "\(choice.name) ☁︎" : choice.name).tag(choice.id)
-                    }
+        Picker("Sprache", selection: $model.form.german) {
+            Text("Deutsch").tag(true)
+            Text("Englisch").tag(false)
+        }
+        if let models {
+            Picker("Modell", selection: $model.form.lyricsModel) {
+                Text("Standard (\(models.models.first { $0.id == models._default }?.name ?? models._default))").tag("")
+                ForEach(models.models, id: \.id) { choice in
+                    Text(choice.cloud == true ? "\(choice.name) ☁︎" : choice.name).tag(choice.id)
                 }
             }
+        }
+        HStack {
             Spacer()
             if drafting {
                 ProgressView().controlSize(.small)
@@ -239,12 +239,13 @@ extension AppModel {
         try? await tonwerk?.api.listLyricsModels().ok.body.json
     }
 
-    /// A song's request laid over the form, then the form shown.
+    /// A song's request laid over the form, its own score along switched off, then the form shown.
     func useInForm(_ song: Song) async {
         guard let tonwerk,
               let request = try? await tonwerk.api.getSongRequest(path: .init(run: song.run, song: song.name)).ok.body.json
         else { return }
-        form.take(request)
+        let own = request.abc == nil ? await ownScore(of: song) : nil
+        form.take(request, ownScore: own)
         saveForm()
         page = .create
     }

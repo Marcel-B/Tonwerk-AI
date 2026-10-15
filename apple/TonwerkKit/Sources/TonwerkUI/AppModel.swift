@@ -32,6 +32,17 @@ public final class AppModel {
     var sharing: Song?
     /// The Logic page's state, made when it is first opened.
     var logic: LogicSession?
+    /// The synthesizers' named and per-track sounds, made on first use (``soundLibrary``).
+    @ObservationIgnored private var sounds: SoundLibrary?
+    /// The instruments page's state, kept like the Logic page's.
+    var instrumentsPage: InstrumentsSession?
+
+    var soundLibrary: SoundLibrary {
+        if let sounds { return sounds }
+        let library = SoundLibrary(model: self)
+        sounds = library
+        return library
+    }
     /// The song the painting dialog is open for, from a song's menu.
     var painting: Song?
     /// Painted covers in the works or finished since, by id, from `image` events.

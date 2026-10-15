@@ -409,11 +409,24 @@ private struct TrackRow: View {
     private var route: some View {
         let instrument = session.instrument(of: voice.id)
         let connected = session.output(of: voice.id) != nil
+        let library = session.library
+        let preset = library.preset(ofTrack: voice.id)
         return Menu {
             Button {
-                Task { await session.assign(voice.id, to: nil) }
+                Task { await session.give(voice.id, sound: nil) }
             } label: {
-                chosen("Klang der App", instrument == nil)
+                chosen(voice.isDrums ? "Klang der App" : "Standardklang", instrument == nil && preset == nil)
+            }
+            if !voice.isDrums, !library.named.isEmpty {
+                Section("Klänge") {
+                    ForEach(library.named) { sound in
+                        Button {
+                            Task { await session.give(voice.id, sound: sound.name) }
+                        } label: {
+                            chosen(sound.name, instrument == nil && preset?.uppercased() == sound.id)
+                        }
+                    }
+                }
             }
             if !session.instruments.isEmpty {
                 Section("MIDI-Instrumente") {
@@ -434,7 +447,7 @@ private struct TrackRow: View {
                     Text(instrument.name)
                 } else {
                     Image(systemName: "speaker.wave.2")
-                    Text("App")
+                    Text(preset ?? String(localized: "App"))
                 }
             }
             .font(.caption)

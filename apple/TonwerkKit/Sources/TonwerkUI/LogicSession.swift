@@ -56,6 +56,8 @@ final class LogicSession {
 
     var score: LogicScore? { conversion?.score }
 
+    var library: SoundLibrary { model.soundLibrary }
+
     var voices: [LogicScore.Voice] {
         score?.playableVoices(includeChords: form.includeChords) ?? []
     }
@@ -121,6 +123,9 @@ final class LogicSession {
         async let assignments = model.logicAssignments()
         async let mixer = model.logicMixer()
         let (list, assigned, mix) = await (instruments, assignments, mixer)
+        if !model.soundLibrary.loaded {
+            await model.soundLibrary.load()
+        }
         self.instruments = list
         self.assignments = assigned.filter { _, id in list.contains { $0.id == id } }
         if let mix {
@@ -160,11 +165,21 @@ final class LogicSession {
                 route = .midi(output.endpoint, channel: UInt8(min(16, max(1, instrument.channel)) - 1))
             }
             return LogicPlayer.Track(
-                voice: voice, route: route, muted: muted.contains(voice.id), soloed: soloed.contains(voice.id))
+                voice: voice, route: route, muted: muted.contains(voice.id), soloed: soloed.contains(voice.id),
+                sound: voice.isDrums ? nil : model.soundLibrary.sound(forTrack: voice.id, kind: voice.kind))
         }
     }
 
-    /// After a device came or went, or a mute or solo changed.
+    /// A track to one of the named sounds, or its default with nil; either way it plays in the app again.
+    func give(_ track: String, sound name: String?) async {
+        if assignments[track] != nil {
+            await assign(track, to: nil)
+        }
+        await model.soundLibrary.give(track, named: name)
+        reroute()
+    }
+
+    /// After a device came or went, a mute or solo or a sound changed.
     func reroute() {
         player.update(tracks)
     }

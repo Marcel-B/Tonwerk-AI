@@ -14,6 +14,10 @@ struct CreateView: View {
         @Bindable var model = model
         Form {
             Section {
+                TemplatePicker()
+            }
+
+            Section {
                 TextField("Titel (optional)", text: $model.form.title)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Stil")

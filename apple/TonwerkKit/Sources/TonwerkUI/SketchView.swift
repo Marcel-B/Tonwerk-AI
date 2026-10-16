@@ -219,6 +219,12 @@ private struct SketchSessionView: View {
                         Label("Partitur (.abc)", systemImage: "doc")
                     }
                     .buttonStyle(.bordered)
+                    Button {
+                        Task { await openInLogic(detail) }
+                    } label: {
+                        Label("Auf der Logic-Seite öffnen", systemImage: "pianokeys")
+                    }
+                    .buttonStyle(.bordered)
                 }
 
                 section("Stil") { Text(plan.style) }
@@ -295,6 +301,16 @@ private struct SketchSessionView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(heading).font(.subheadline.weight(.semibold))
             content()
+        }
+    }
+
+    /// The score goes to the Logic page as a file of one's own, as the web page hands it over.
+    private func openInLogic(_ detail: SketchDetail) async {
+        do {
+            let file = try await model.downloadSketch(detail.job, midi: false)
+            model.openInLogic(file: PickedFile(url: file, name: file.lastPathComponent))
+        } catch {
+            session.problem = error.localizedDescription
         }
     }
 

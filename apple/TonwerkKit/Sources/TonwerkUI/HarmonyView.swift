@@ -178,6 +178,14 @@ private struct HarmonySessionView: View {
                     .buttonStyle(.bordered)
                     .disabled(session.stale)
                 }
+                if let source = session.source {
+                    Button {
+                        openInLogic(source)
+                    } label: {
+                        Label("Mit allen Optionen auf der Seite Logic", systemImage: "pianokeys")
+                    }
+                    .buttonStyle(.borderless)
+                }
             }
             if session.stale {
                 Text("Die Einstellungen haben sich geändert; „Stimmen erzeugen“ macht die Vorschau und die MIDI-Datei neu.")
@@ -192,6 +200,15 @@ private struct HarmonySessionView: View {
                     .font(.caption)
                     .foregroundStyle(note.severity == "Error" ? Color.red : note.severity == "Warning" ? Color.orange : Color.secondary)
             }
+        }
+    }
+
+    /// The melody, not the parts: the Logic page reads a MIDI file's `Harmony …` tracks as generated and leaves
+    /// them out, so it makes its own from the melody.
+    private func openInLogic(_ source: ScoreSource) {
+        switch source {
+        case .song(let song): model.openInLogic(song)
+        case .file(let file): model.openInLogic(file: file)
         }
     }
 

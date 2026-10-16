@@ -392,6 +392,24 @@ struct RatingView: View {
     }
 }
 
+/// The stars only to read, where a song is picked rather than heard (the Logic page's song list).
+struct RatingStars: View {
+    let rating: Int?
+    var font: Font = .caption2
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(1...5, id: \.self) { stars in
+                Image(systemName: stars <= (rating ?? 0) ? "star.fill" : "star")
+                    .foregroundStyle(stars <= (rating ?? 0) ? AnyShapeStyle(.yellow) : AnyShapeStyle(.tertiary))
+            }
+        }
+        .font(font)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rating.map { "\($0) Sterne" } ?? "Nicht bewertet")
+    }
+}
+
 /// The song's own cover, or one drawn from its id like the web page's (`export.ts` hues the gradient by the id).
 struct CoverView: View {
     @Environment(AppModel.self) private var model

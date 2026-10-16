@@ -7,6 +7,8 @@ struct LogicConversion: Decodable {
     let success: Bool
     let score: LogicScore?
     let diagnostics: [LogicDiagnostic]
+    /// The Standard MIDI File as base64, which the backing vocals page saves.
+    var midi: String?
 }
 
 struct LogicDiagnostic: Decodable, Hashable {

@@ -73,6 +73,8 @@ public final class AppModel {
     var insights: Components.Schemas.InsightReport?
     /// The sketch page's state, kept like the ACE-Step page's.
     var sketchPage: SketchSession?
+    /// The backing vocals page's state, so its melody and preview outlast a page change.
+    var harmonyPage: HarmonySession?
     /// The log page's state, kept so its filter outlasts a page change.
     var logPage: LogSession?
     /// The storage page's state, kept like the log's.
@@ -146,6 +148,8 @@ public final class AppModel {
         insights = nil
         sketchPage?.stop()
         sketchPage = nil
+        harmonyPage?.stop()
+        harmonyPage = nil
         transcriptionPage = nil
         logPage = nil
         storagePage = nil

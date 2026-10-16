@@ -146,6 +146,40 @@ struct LogicForm: Codable, Equatable {
     var countIn = 0
     /// One region per song section in the Logic project; the export only.
     var splitSections = false
+    /// Backing vocals from the melody (`ArrangementOptions.Harmony`), as `HarmonySettings` names them.
+    var harmonyParts: [String] = []
+    var harmonyKey: String?
+    var harmonyChorusOnly = false
+    /// The melody doubled on a track of its own, whole octaves away.
+    var doubleVocal = false
+    var doubleOctave = -1
+    /// Bass and drums heard in the song's stems instead of generated (`bassStems`, `drumStems`); a library song only.
+    var bassFromStems = false
+    var drumsFromStems = false
+
+    static let doubleOctaves = [-2, -1, 1, 2]
+
+    init() {}
+
+    /// A form stored by an older version lacks the newer fields; those take their defaults instead of the whole form.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        includeChords = (try? c.decode(Bool.self, forKey: .includeChords)) ?? true
+        chordPattern = (try? c.decode(String.self, forKey: .chordPattern)) ?? ""
+        bass = (try? c.decode(String.self, forKey: .bass)) ?? ""
+        drums = (try? c.decode(String.self, forKey: .drums)) ?? ""
+        splitDrums = (try? c.decode(Bool.self, forKey: .splitDrums)) ?? false
+        crash = (try? c.decode(Bool.self, forKey: .crash)) ?? true
+        countIn = (try? c.decode(Int.self, forKey: .countIn)) ?? 0
+        splitSections = (try? c.decode(Bool.self, forKey: .splitSections)) ?? false
+        harmonyParts = ((try? c.decode([String].self, forKey: .harmonyParts)) ?? []).filter(HarmonySettings.parts.contains)
+        harmonyKey = (try? c.decode(String.self, forKey: .harmonyKey)).flatMap { HarmonySettings.keys.contains($0) ? $0 : nil }
+        harmonyChorusOnly = (try? c.decode(Bool.self, forKey: .harmonyChorusOnly)) ?? false
+        doubleVocal = (try? c.decode(Bool.self, forKey: .doubleVocal)) ?? false
+        doubleOctave = (try? c.decode(Int.self, forKey: .doubleOctave)).flatMap { Self.doubleOctaves.contains($0) ? $0 : nil } ?? -1
+        bassFromStems = (try? c.decode(Bool.self, forKey: .bassFromStems)) ?? false
+        drumsFromStems = (try? c.decode(Bool.self, forKey: .drumsFromStems)) ?? false
+    }
 
     private static let key = "logicForm"
 
@@ -181,6 +215,18 @@ struct LogicForm: Codable, Equatable {
         }
         if countIn > 0 {
             arrangement["countIn"] = ["bars": countIn, "click": true]
+        }
+        if doubleVocal {
+            arrangement["doubling"] = ["voiceId": "Vocal", "semitones": 12 * doubleOctave]
+        }
+        if !harmonyParts.isEmpty {
+            arrangement["harmony"] = [
+                "parts": HarmonySettings.parts.filter(harmonyParts.contains),
+                "voiceId": "Vocal",
+                "key": harmonyKey.map { $0 as Any } ?? NSNull(),
+                // YuE2 names its sections in English; a MIDI file edited in a German Logic may say Refrain.
+                "sections": harmonyChorusOnly ? ["chorus", "refrain"] : [String](),
+            ] as [String: Any]
         }
         var channels: [String: Int] = [:]
         for (track, instrument) in Self.assigned(assignments, instruments) {

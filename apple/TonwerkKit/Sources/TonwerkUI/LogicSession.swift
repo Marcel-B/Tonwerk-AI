@@ -64,6 +64,14 @@ final class LogicSession {
         }
     }
 
+    /// The library song's stem sets as listed when it was opened; `AppModel.liveStems` lays newer ones over them.
+    private var loadedStems: [Components.Schemas.StemSetState] = []
+    /// Set by the picker; until then the newest set with vocals is taken, as on the web page. Empty for none.
+    private var pickedStems: String?
+    private(set) var stemsConfigured = false
+    /// Basic Pitch, which bass and drums from the stems need.
+    private(set) var midiInstalled = false
+
     let player = LogicPlayer()
     let outputs = MidiOutputs()
 
@@ -106,8 +114,11 @@ final class LogicSession {
         player.stop()
         recordingFile = nil
         player.setRecording(nil)
+        loadedStems = []
+        pickedStems = nil
         Task {
             await library?.value
+            await loadStems()
             await convert()
             await loadRecording()
         }
@@ -121,7 +132,7 @@ final class LogicSession {
         do {
             let asked = form
             let options = asked.options(assignments: assignments, instruments: instruments)
-            let result = try await model.convertScore(source, options: options)
+            let result = try await model.convertScore(source, options: options, fields: stemPartFields)
             guard source.id == self.source?.id else { return }
             conversion = result
             convertedForm = asked
@@ -133,6 +144,87 @@ final class LogicSession {
         } catch {
             problem = error.localizedDescription
         }
+    }
+
+    // MARK: Stems
+
+    func loadStems() async {
+        guard let song else { return }
+        async let sets = try? model.stemSets()
+        async let info = model.voiceInfo()
+        async let midi = model.audioMidiInstalled()
+        let (list, voices, installed) = await (sets, info, midi)
+        guard song.id == self.song?.id else { return }
+        loadedStems = (list ?? []).filter { $0.songId == song.id }
+        stemsConfigured = voices?.stemsConfigured == true
+        midiInstalled = installed == true
+    }
+
+    /// The song's finished stem sets, newest first.
+    private var doneStems: [Components.Schemas.StemSetState] {
+        guard let song else { return [] }
+        var sets = Dictionary(loadedStems.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        for set in model.liveStems.values where set.songId == song.id {
+            sets[set.id] = set
+        }
+        return sets.values.filter { $0.stage == "done" }
+            .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    /// Sets with the vocals the Logic template has tracks for.
+    var vocalStems: [Components.Schemas.StemSetState] {
+        doneStems.filter { set in (set.stems ?? []).contains { $0.name == "vocals" || $0.name == "vocals_dry" } }
+    }
+
+    /// Whether the song's stems are being separated right now.
+    var separatingStems: Bool {
+        guard let song else { return false }
+        return model.liveStems.values.contains { $0.songId == song.id && $0.finished != true && $0.stage != "cancelled" }
+    }
+
+    /// The set whose vocals go into the project, nil for none.
+    var stemSetId: String? {
+        get {
+            let usable = vocalStems
+            if let pickedStems {
+                return usable.contains { $0.id == pickedStems } ? pickedStems : nil
+            }
+            return usable.first?.id
+        }
+        set {
+            pickedStems = newValue ?? ""
+            if form.bassFromStems || form.drumsFromStems {
+                Task { await convert() }
+            }
+        }
+    }
+
+    /// The picked set where it has the stem, else the newest that does: only some models separate bass and drums.
+    func stems(with stem: String) -> Components.Schemas.StemSetState? {
+        let sets = doneStems.filter { set in (set.stems ?? []).contains { $0.name == stem } }
+        return sets.first { $0.id == stemSetId } ?? sets.first
+    }
+
+    /// The export takes the picked set's vocals as audio tracks besides what every conversion sends.
+    private var exportFields: [(String, String)] {
+        var fields = stemPartFields
+        if song != nil, let set = stemSetId {
+            fields.append(("stems", set))
+        }
+        return fields
+    }
+
+    /// Bass and drums heard in the stems go along with every conversion and the export.
+    private var stemPartFields: [(String, String)] {
+        guard song != nil, midiInstalled else { return [] }
+        var fields: [(String, String)] = []
+        if form.bassFromStems, let set = stems(with: "bass") {
+            fields.append(("bassStems", set.id))
+        }
+        if form.drumsFromStems, let set = stems(with: "drums") {
+            fields.append(("drumStems", set.id))
+        }
+        return fields
     }
 
     private func loadRecording() async {
@@ -255,7 +347,8 @@ final class LogicSession {
         return try await model.exportLogic(
             source, options: form.options(assignments: assignments, instruments: instruments),
             splitSections: form.splitSections,
-            instruments: LogicForm.exportInstruments(assignments, instruments))
+            instruments: LogicForm.exportInstruments(assignments, instruments),
+            fields: exportFields)
     }
 }
 
@@ -367,14 +460,18 @@ extension AppModel {
     }
 
     /// The score through the converter, for the Logic page and the backing vocals.
-    func convertScore(_ source: ScoreSource, options: [String: Any]) async throws -> LogicConversion {
-        let (data, _) = try await postScore("api/logic/convert", source, fields: [("options", Self.json(options))], timeout: 120)
+    func convertScore(
+        _ source: ScoreSource, options: [String: Any], fields: [(String, String)] = []
+    ) async throws -> LogicConversion {
+        let (data, _) = try await postScore(
+            "api/logic/convert", source, fields: [("options", Self.json(options))] + fields, timeout: 120)
         return try JSONDecoder().decode(LogicConversion.self, from: data)
     }
 
     /// The Logic project as a ZIP in the temporary folder, with the export's warnings.
     func exportLogic(
-        _ source: ScoreSource, options: [String: Any], splitSections: Bool, instruments: [String: Any]
+        _ source: ScoreSource, options: [String: Any], splitSections: Bool, instruments: [String: Any],
+        fields extra: [(String, String)] = []
     ) async throws -> (URL, [LogicDiagnostic]) {
         let name = Self.projectName(source.baseName)
         var fields = [
@@ -383,6 +480,7 @@ extension AppModel {
         if !instruments.isEmpty {
             fields.append(("instruments", Self.json(instruments)))
         }
+        fields += extra
         let (data, response) = try await postScore("api/logic/export", source, fields: fields, timeout: 300)
         let http: HTTPURLResponse? = response
         if http?.statusCode == 422, let refused = try? JSONDecoder().decode(LogicConversion.self, from: data) {

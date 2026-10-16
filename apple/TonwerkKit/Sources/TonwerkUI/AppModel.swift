@@ -59,6 +59,8 @@ public final class AppModel {
     var transcriptionPage: TranscriptionSession?
     /// The log page's state, kept so its filter outlasts a page change.
     var logPage: LogSession?
+    /// The storage page's state, kept like the log's.
+    var storagePage: StorageSession?
 
     var soundLibrary: SoundLibrary {
         if let sounds { return sounds }
@@ -115,6 +117,7 @@ public final class AppModel {
         liveTranscriptions = [:]
         transcriptionPage = nil
         logPage = nil
+        storagePage = nil
         worker = nil
         memoryHolder = nil
         voicesPage = nil

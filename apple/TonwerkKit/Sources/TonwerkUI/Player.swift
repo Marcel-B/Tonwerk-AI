@@ -24,6 +24,12 @@ public final class Player {
     public private(set) var elapsed: Double = 0
     public private(set) var duration: Double = 0
 
+    /// The playing song's cover colour (`coverColour` in `video.ts`), for the full-screen player's analyzer and
+    /// glows; nil without a cover of its own.
+    public private(set) var coverColour: String?
+    /// What the analyzers and effects hear, fed by a tap on the playing song.
+    @ObservationIgnored let analyzer = SpectrumAnalyzer()
+
     public var current: Song? {
         index.flatMap { queue.indices.contains($0) ? queue[$0] : nil }
     }
@@ -127,11 +133,28 @@ public final class Player {
         guard let song = current, let server else { return }
         elapsed = 0
         duration = song.seconds ?? 0
-        player.replaceCurrentItem(with: AVPlayerItem(url: song.streamURL(on: server)))
+        let item = AVPlayerItem(url: song.streamURL(on: server))
+        player.replaceCurrentItem(with: item)
+        listen(to: item)
         activateSession()
         player.play()
         updateNowPlaying()
         loadArtwork(for: song)
+    }
+
+    /// Taps the song for the analyzer once its audio track is known; the song plays meanwhile, the bars wait.
+    private func listen(to item: AVPlayerItem) {
+        let analyzer = self.analyzer
+        Task {
+            guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first,
+                  let tap = SpectrumTap.make(feeding: analyzer)
+            else { return }
+            let parameters = AVMutableAudioMixInputParameters(track: track)
+            parameters.audioTapProcessor = tap
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = [parameters]
+            item.audioMix = mix
+        }
     }
 
     private func activateSession() {
@@ -224,6 +247,7 @@ public final class Player {
 
     /// The song's own cover for the lock screen; songs without one show none there, as on the web page.
     private func loadArtwork(for song: Song) {
+        coverColour = nil
         guard let server, let url = song.coverURL(on: server) else { return }
         Task {
             guard let (data, _) = try? await URLSession.shared.data(from: url),
@@ -231,6 +255,12 @@ public final class Player {
                   current?.id == song.id
             else { return }
             artwork = (song.id, MPMediaItemArtwork(boundsSize: image.size) { _ in image })
+            #if canImport(UIKit)
+            let picture = image.cgImage
+            #else
+            let picture = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            #endif
+            coverColour = picture.map(VideoArt.coverColour)
             updateNowPlaying()
         }
     }

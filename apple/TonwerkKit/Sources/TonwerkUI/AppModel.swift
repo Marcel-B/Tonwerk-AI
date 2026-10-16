@@ -36,6 +36,16 @@ public final class AppModel {
     @ObservationIgnored private var sounds: SoundLibrary?
     /// The instruments page's state, kept like the Logic page's.
     var instrumentsPage: InstrumentsSession?
+    /// The voices page's state, kept like the Logic page's.
+    var voicesPage: VoicesSession?
+    /// The song the sing-with-a-voice dialog is open for, from a song's menu.
+    var singing: Song?
+    /// How the last version was asked for, offered again for the next.
+    var voiceSettings = VoiceSettings()
+    /// Versions, stem sets and swaps in the works or finished since, by id, from their events.
+    var liveVersions: [String: Components.Schemas.VersionState] = [:]
+    var liveStems: [String: Components.Schemas.StemSetState] = [:]
+    var liveSwaps: [String: Components.Schemas.SwapState] = [:]
 
     var soundLibrary: SoundLibrary {
         if let sounds { return sounds }
@@ -85,6 +95,10 @@ public final class AppModel {
         playlists = []
         queue = []
         working = [:]
+        liveVersions = [:]
+        liveStems = [:]
+        liveSwaps = [:]
+        voicesPage = nil
         connection = .none
         defaults.removeObject(forKey: Self.serverKey)
     }
@@ -134,6 +148,9 @@ public final class AppModel {
             for image in snapshot.images ?? [] {
                 images[image.id] = image
             }
+            liveVersions = Dictionary((snapshot.versions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveStems = Dictionary((snapshot.stems ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveSwaps = Dictionary((snapshot.swaps ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
         case .song(let state):
@@ -145,6 +162,17 @@ public final class AppModel {
             drafts[draft.id] = draft
         case .image(let image):
             images[image.id] = image
+        case .version(let version):
+            let before = liveVersions[version.id]?.stage
+            liveVersions[version.id] = version
+            // The library lists a song's versions with their stage; a new or finished one changes that.
+            if before == nil || (version.finished == true && before != version.stage) {
+                Task { await reloadLibrary() }
+            }
+        case .stems(let set):
+            liveStems[set.id] = set
+        case .swap(let swap):
+            liveSwaps[swap.id] = swap
         case .library:
             Task { await reloadLibrary() }
         default:

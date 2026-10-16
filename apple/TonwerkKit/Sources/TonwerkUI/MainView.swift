@@ -9,6 +9,7 @@ enum Page: Hashable {
     case queue
     case logic
     case instruments
+    case voices
     case playlist(Int64)
 }
 
@@ -46,12 +47,13 @@ struct MainView: View {
                         .badge(model.unrated.count)
                         .tag(Page.review)
                     Label("Warteschlange", systemImage: "hourglass")
-                        .badge(model.queue.count + model.inProgress.count)
+                        .badge(model.queue.count + model.inProgress.count + model.voiceJobs.count)
                         .tag(Page.queue)
                 }
                 Section("Werkzeuge") {
                     Label("Logic", systemImage: "pianokeys").tag(Page.logic)
                     Label("Instrumente", systemImage: "slider.vertical.3").tag(Page.instruments)
+                    Label("Stimmen", systemImage: "person.wave.2").tag(Page.voices)
                 }
                 Section("Playlists") {
                     ForEach(model.playlists, id: \.id) { playlist in
@@ -103,6 +105,8 @@ struct MainView: View {
                 LogicView()
             case .instruments:
                 InstrumentsView()
+            case .voices:
+                VoicesView()
             case .playlist(let id):
                 if let playlist = model.playlists.first(where: { $0.id == id }) {
                     SongList(
@@ -127,6 +131,9 @@ private struct Dialogs: ViewModifier {
         content
             .exportSheet(for: $model.sharing)
             .paintSheet(for: $model.painting)
+            .sheet(item: $model.singing) { song in
+                SingSheet(song: song)
+            }
             .alert("Neue Playlist", isPresented: $naming) {
                 TextField("Name", text: $newName)
                 Button("Anlegen") { Task { await model.createPlaylist(named: newName) } }

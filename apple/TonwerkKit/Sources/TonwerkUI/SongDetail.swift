@@ -275,6 +275,7 @@ private struct InfoTile: View {
 
 /// A version with another voice: playable once it is done, else its stage.
 private struct VersionRow: View {
+    @Environment(AppModel.self) private var model
     @Environment(Player.self) private var player
     let song: Song
     let version: Song.Version
@@ -308,6 +309,16 @@ private struct VersionRow: View {
                 Text(stageName)
                     .font(.caption)
                     .foregroundStyle(version.stage == "failed" ? Color.red : Color.secondary)
+            }
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                if player.current?.version?.id == version.id {
+                    player.stop()
+                }
+                Task { try? await model.deleteVersion(song, version) }
+            } label: {
+                Label(version.playable ? "Version löschen" : "Abbrechen", systemImage: "trash")
             }
         }
     }

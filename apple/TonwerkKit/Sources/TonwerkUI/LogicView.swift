@@ -328,10 +328,11 @@ private struct LogicSessionView: View {
     }
 }
 
-/// Play, pause, position and the recording switch; its own view, so the position's updates redraw only it.
-private struct LogicTransport: View {
+/// Play, pause, position and the recording switch; its own view, so the position's updates redraw only it. The
+/// backing vocals page has no recording, so no switch.
+struct LogicTransport: View {
     let player: LogicPlayer
-    @Binding var recording: Bool
+    var recording: Binding<Bool>?
     @State private var scrubbing: Double?
 
     var body: some View {
@@ -359,12 +360,14 @@ private struct LogicTransport: View {
             Text(Song.clock(player.duration))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
-            Toggle(isOn: $recording) {
-                Image(systemName: "waveform")
+            if let recording {
+                Toggle(isOn: recording) {
+                    Image(systemName: "waveform")
+                }
+                .toggleStyle(.button)
+                .help("Aufnahme mitspielen")
+                .accessibilityLabel("Aufnahme mitspielen")
             }
-            .toggleStyle(.button)
-            .help("Aufnahme mitspielen")
-            .accessibilityLabel("Aufnahme mitspielen")
         }
         .overlay(alignment: .bottom) {
             if let problem = player.problem {

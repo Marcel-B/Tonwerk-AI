@@ -382,7 +382,7 @@ private struct AceSessionView: View {
                 Spacer()
                 Text(AceSession.stageName(job))
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(job.stage == "failed" ? .red : job.stage == "done" ? .green : .primary)
+                    .foregroundStyle(job.stage == "failed" ? Color.red : job.stage == "done" ? Color.green : Color.primary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(.quaternary, in: Capsule())

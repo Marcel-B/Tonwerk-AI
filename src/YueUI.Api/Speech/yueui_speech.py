@@ -13,6 +13,12 @@ Out: the take as WAV at "output", and lines starting with "YUEUI " on stdout, ea
     {"event": "note", "text": "..."}  (something repaired on the way, for the server's log)
 Anything else on stdout or stderr is mlx-audio's own output, which the server keeps for the error message.
 The model is loaded for this one take and freed with the process: on 24 GB it must not stay beside YuE2.
+
+A take can also clean a speech recording instead of speaking (Sprache säubern):
+    {"clean": true, "model": "<hf repo>", "subfolder": "v3" | null, "input": "/abs/source.wav", "output": "/abs/take.wav"}
+"input" is 48 kHz mono 16-bit WAV (the server decodes the upload with ffmpeg), "output" the same, cleaned. Besides the
+events above it reports {"event": "progress", "share": 0.42} in steps of a percent at least, and its stage is
+"cleaning" instead of "speaking".
 """
 
 import functools
@@ -207,8 +213,179 @@ def guard_codes(model) -> None:
     codec.decode = guarded
 
 
+# MossFormer2 decodes up to a minute in one go and switches to its own 4-second chunks beyond; pieces of half a minute
+# keep the better mode for a talk of any length, give progress, and bound the memory. A second of overlap faded across
+# hides the seam.
+SEGMENT_SECONDS = 30
+OVERLAP_SECONDS = 1
+# DeepFilterNet is streamed: its state carries from block to block, so there is no seam to fade.
+STREAM_SECONDS = 2
+
+
+def read_wav(path: str):
+    import numpy as np
+    from scipy.io import wavfile
+
+    rate, data = wavfile.read(path)
+    if data.ndim > 1:
+        data = data.mean(axis=1)
+    if data.dtype == np.int16:
+        data = data.astype(np.float32) / 32768.0
+    return rate, np.asarray(data, dtype=np.float32)
+
+
+def write_wav(path: str, rate: int, audio) -> None:
+    import numpy as np
+    from scipy.io import wavfile
+
+    wavfile.write(path, rate, (np.clip(audio, -1.0, 1.0) * 32767.0).astype(np.int16))
+
+
+def fit(audio, length: int):
+    """The model's answer as one channel of exactly `length` samples: some pad to their frame size, some add a channel."""
+    import numpy as np
+
+    audio = np.asarray(audio, dtype=np.float32).reshape(-1)
+    if len(audio) >= length:
+        return audio[:length]
+    return np.concatenate([audio, np.zeros(length - len(audio), dtype=np.float32)])
+
+
+def overlapped(audio, rate: int, enhance, progress, segment: float = SEGMENT_SECONDS, overlap: float = OVERLAP_SECONDS):
+    """`enhance` over the recording in overlapping pieces, each fading in over the end of the one before."""
+    import numpy as np
+
+    size, fade = int(segment * rate), int(overlap * rate)
+    out = np.zeros(len(audio), dtype=np.float32)
+    start = 0
+    while start < len(audio):
+        end = min(start + size, len(audio))
+        piece = fit(enhance(audio[start:end]), end - start)
+        if start == 0:
+            out[start:end] = piece
+        else:
+            # The piece before ended at start + fade; this one is longer than fade (see the step below).
+            ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
+            out[start : start + fade] = out[start : start + fade] * (1 - ramp) + piece[:fade] * ramp
+            out[start + fade : end] = piece[fade:]
+        progress(end / len(audio))
+        if end == len(audio):
+            break
+        start = end - fade
+    return out
+
+
+def streamed(audio, rate: int, streamer, progress, block: float = STREAM_SECONDS):
+    import numpy as np
+
+    size = int(block * rate)
+    outs = []
+    for start in range(0, len(audio), size):
+        out = streamer.process_chunk(audio[start : start + size], is_last=False)
+        if out.size:
+            outs.append(np.asarray(out, dtype=np.float32))
+        progress(min(start + size, len(audio)) / len(audio))
+    tail = streamer.flush()
+    if tail.size:
+        outs.append(np.asarray(tail, dtype=np.float32))
+    return fit(np.concatenate(outs) if outs else np.zeros(0, dtype=np.float32), len(audio))
+
+
+def reporter():
+    """Emits progress when it moved by a percent, so a long talk does not flood the server with events."""
+    last = [-1.0]
+
+    def report(share: float) -> None:
+        if share - last[0] >= 0.01 or share >= 1:
+            last[0] = share
+            emit({"event": "progress", "share": round(share, 3)})
+
+    return report
+
+
+def mossformer_folder(repo: str) -> str:
+    """
+    Where MossFormer2 SE loads from. mlx-audio 0.5.9 asks its repository for config.json and model.safetensors, but
+    starkdmi/MossFormer2_SE_48K_MLX (the one its README names) holds only model_fp32/fp16/int8/int6/int4.safetensors,
+    so the load ended in a 404 (RemoteEntryNotFoundError). The fp32 file loads into mlx-audio's model as it is (its
+    code came from starkdmi's mossformer_se_mlx, same module tree), and the config's defaults are the 48K model's; so
+    a folder holding the two names the loader wants is made in the model cache and handed over as a local path. A
+    repository that does have config.json is used as it is.
+    """
+    if os.path.isdir(repo):
+        return repo
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.errors import EntryNotFoundError
+
+    try:
+        hf_hub_download(repo_id=repo, filename="config.json")
+        return repo
+    except EntryNotFoundError:
+        pass
+    weights = hf_hub_download(repo_id=repo, filename="model_fp32.safetensors")
+    from huggingface_hub import constants
+
+    folder = os.path.join(constants.HF_HOME, "yueui-local", repo.replace("/", "--"))
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, "config.json"), "w") as config:
+        config.write("{}")
+    link = os.path.join(folder, "model.safetensors")
+    if os.path.lexists(link):
+        os.remove(link)
+    os.symlink(weights, link)
+    return folder
+
+
+def clean(request: dict) -> int:
+    emit({"event": "stage", "stage": "loading"})
+    started = time.perf_counter()
+    repo = request["model"]
+    try:
+        # DeepFilterNet streams with a state of its own; MossFormer2 (and anything else configured) takes an array.
+        if "deepfilternet" in repo.lower():
+            from mlx_audio.sts.models.deepfilternet import DeepFilterNetModel
+
+            model = DeepFilterNetModel.from_pretrained(repo, subfolder=request.get("subfolder"))
+        else:
+            from mlx_audio.sts.models.mossformer2_se import MossFormer2SEModel
+
+            model = MossFormer2SEModel.from_pretrained(mossformer_folder(repo))
+    except ModuleNotFoundError as missing:
+        print(
+            f"Error: cleaning needs the Python package '{missing.name}', which the speech lab's environment lacks;"
+            " run deploy/install-speech.sh again.",
+            flush=True,
+        )
+        return 1
+    loaded = time.perf_counter()
+
+    rate, audio = read_wav(request["input"])
+    if rate != model.config.sample_rate:
+        print(f"Error: the recording has {rate} Hz, the model wants {model.config.sample_rate}.", flush=True)
+        return 1
+    emit({"event": "stage", "stage": "cleaning"})
+    progress = reporter()
+    if hasattr(model, "create_streamer"):
+        cleaned = streamed(audio, rate, model.create_streamer(), progress)
+    else:
+        cleaned = overlapped(audio, rate, lambda piece: model.enhance(piece, chunked=False), progress)
+    write_wav(request["output"], rate, cleaned)
+    finished = time.perf_counter()
+    emit(
+        {
+            "event": "done",
+            "loadSeconds": round(loaded - started, 2),
+            "speakSeconds": round(finished - loaded, 2),
+            "peakMemoryGb": peak_memory_gb(),
+        }
+    )
+    return 0
+
+
 def main() -> int:
     request = json.load(sys.stdin)
+    if request.get("clean"):
+        return clean(request)
     output = request["output"]
     directory, name = os.path.split(output)
     prefix, _ = os.path.splitext(name)

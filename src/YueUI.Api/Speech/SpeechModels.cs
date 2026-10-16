@@ -55,6 +55,49 @@ public sealed class SpeechModel
     public string Note { get; set; } = "";
 
     /// <summary>
+    /// For a model that cleans a recording instead of speaking (<see cref="CleanDefaults"/>): the subfolder of the
+    /// repository that holds the weights, as DeepFilterNet keeps its versions; null for the repository's root.
+    /// </summary>
+    public string? Subfolder { get; set; }
+
+    /// <summary>
+    /// The models that take a speech recording (a talk, an interview) and give back the voice without noise:
+    /// enhancement models mlx-audio 0.5.9 has under <c>mlx_audio.sts</c>, found by web research on 2026-10-14 and
+    /// not yet heard on the Mac. Both work at 48 kHz on one channel, so the recording is decoded to that first.
+    /// </summary>
+    /// <remarks>
+    /// Left out: Resemble Enhance (has an MLX port, but rebuilds speech generatively and invents words: a study of
+    /// 2026, arXiv 2603.02641, measured 47 % character accuracy after it), NVIDIA's RE-USE (non-commercial, needs
+    /// mamba_ssm on CUDA) and Sidon (dereverberates too, but only as CoreML in a Swift toolkit). The stem separator's
+    /// vocal models are trained on music; they keep a voice but not as clean as a model trained on speech.
+    /// </remarks>
+    public static IReadOnlyList<SpeechModel> CleanDefaults { get; } =
+    [
+        new()
+        {
+            Id = "mossformer2-se",
+            Label = "MossFormer2 SE 48K",
+            // Alibaba's ClearerVoice-Studio model converted to MLX.
+            Repo = "starkdmi/MossFormer2_SE_48K_MLX",
+            DownloadGb = 0.25,
+            Clones = false,
+            License = "Apache-2.0",
+            Note = "Removes noise and much of the room thoroughly; the stronger of the two.",
+        },
+        new()
+        {
+            Id = "deepfilternet3",
+            Label = "DeepFilterNet 3",
+            Repo = "mlx-community/DeepFilterNet-mlx",
+            Subfolder = "v3",
+            DownloadGb = 0.01,
+            Clones = false,
+            License = "MIT / Apache-2.0",
+            Note = "Small and fast, gentle: takes steady noise away and leaves the voice as it was, reverb included.",
+        },
+    ];
+
+    /// <summary>
     /// Found by web research on 2026-09-28 and not yet heard on the Mac; the repositories are the ones mlx-audio 0.5.6
     /// names. Each is loaded for its take and freed after, so the largest one decides what has to leave the memory.
     /// </summary>
@@ -149,12 +192,14 @@ public sealed class SpeechModel
 /// <summary>What the lab page needs to draw itself.</summary>
 /// <param name="Installed">The Python environment with mlx-audio exists; otherwise the page shows how to make it.</param>
 /// <param name="Python">Where the server looks for it.</param>
-/// <param name="FfmpegInstalled">Recordings are converted with ffmpeg; without it none can be stored.</param>
+/// <param name="FfmpegInstalled">Recordings are converted with ffmpeg; without it none can be stored or cleaned.</param>
+/// <param name="CleanModels">The models that clean a speech recording (<see cref="SpeechModel.CleanDefaults"/>).</param>
 public sealed record SpeechInfo(
     bool Installed,
     string Python,
     bool FfmpegInstalled,
     IReadOnlyList<SpeechModelInfo> Models,
+    IReadOnlyList<SpeechModelInfo> CleanModels,
     IReadOnlyList<SpeechVoice> Voices,
     IReadOnlyList<SpeechTake> Takes);
 
@@ -176,8 +221,9 @@ public sealed record SpeechModelInfo(
 public sealed record SpeechVoice(string Id, string Label, string Transcript, double Seconds, DateTimeOffset CreatedAt);
 
 /// <summary>
-/// One text spoken by one model. <see cref="Stage"/>: queued, loading (includes a first download), speaking, done,
-/// failed or cancelled. The times are the script's own measurements, to compare the models.
+/// One text spoken by one model, or one recording cleaned by one (<see cref="Source"/> set). <see cref="Stage"/>:
+/// queued, loading (includes a first download), speaking or cleaning, done, failed or cancelled. The times are the
+/// script's own measurements, to compare the models.
 /// </summary>
 public sealed record SpeechTake
 {
@@ -187,7 +233,17 @@ public sealed record SpeechTake
 
     public required string ModelLabel { get; init; }
 
+    /// <summary>What is spoken; empty for a cleaned recording.</summary>
     public required string Text { get; init; }
+
+    /// <summary>
+    /// The name of the uploaded recording this take cleans (<c>POST /api/speech/cleanups</c>); null for a spoken take.
+    /// The recording itself, decoded to 48 kHz mono WAV, lies beside the takes until the take is deleted.
+    /// </summary>
+    public string? Source { get; init; }
+
+    /// <summary>How much of the recording is cleaned, 0 to 1; null while it is not known (and for spoken takes).</summary>
+    public double? Progress { get; init; }
 
     /// <summary>The recorded voice, null for the model's own.</summary>
     public string? VoiceId { get; init; }
@@ -205,7 +261,7 @@ public sealed record SpeechTake
     /// <summary>Loading the model, including a download.</summary>
     public double? LoadSeconds { get; init; }
 
-    /// <summary>Speaking the text, without loading.</summary>
+    /// <summary>Speaking the text (or cleaning the recording), without loading.</summary>
     public double? SpeakSeconds { get; init; }
 
     public double? PeakMemoryGb { get; init; }

@@ -35,6 +35,8 @@ public sealed record RunInfo(
 /// <param name="CoverUpdatedAt">When the song's cover was chosen, null while it has the drawn one.</param>
 /// <param name="Note">A note written to the song in this app, null while there is none.</param>
 /// <param name="VideoFormats">The formats the song has a finished music video in; empty while it has none.</param>
+/// <param name="Engine"><c>ace</c> for a song ACE-Step made (Ace/AceComposer.cs), null for YuE2's.</param>
+/// <param name="Traits">Tempo, key and how clearly the lyrics are sung, as far as heard yet (Analysis/SongAnalyzer.cs).</param>
 public sealed record SongInfo(
     string Id,
     int Index,
@@ -49,7 +51,9 @@ public sealed record SongInfo(
     IReadOnlyList<VersionState> Versions,
     DateTimeOffset? CoverUpdatedAt = null,
     string? Note = null,
-    IReadOnlyList<string>? VideoFormats = null);
+    IReadOnlyList<string>? VideoFormats = null,
+    string? Engine = null,
+    SongTraits? Traits = null);
 
 /// <summary>
 /// What a song was generated with, from its <c>request.json</c>, in the terms of <see cref="GenerateRequest"/>, so the
@@ -79,7 +83,9 @@ public sealed record SongRequest(
 /// <summary>
 /// Reads the songs the worker (this server's or YuE Studio's) wrote to <see cref="YuePaths.OutputDir"/>:
 /// one folder per run, one <c>songN</c> folder per song with <c>audio.flac</c>, <c>score.abc</c>,
-/// <c>request.json</c> (the prompt) and <c>result.json</c> (title, quality, length).
+/// <c>request.json</c> (the prompt) and <c>result.json</c> (title, quality, length). ACE-Step's songs
+/// (Ace/AceComposer.cs) are run folders of the same shape in a folder of their own, <see cref="AceDirectory"/>, with an
+/// <c>ace.json</c> in each song; a run name is looked for in both, YuE's first.
 /// </summary>
 /// <remarks>Only names matching the worker's own patterns are accepted, which also keeps request paths inside the library.</remarks>
 public sealed partial class SongLibrary(
@@ -91,14 +97,52 @@ public sealed partial class SongLibrary(
     SqliteCoverStore covers,
     SqliteSongNoteStore notes,
     SqliteVideoStore videos,
-    StreamCopies streams)
+    StreamCopies streams,
+    SqliteDatabase database,
+    Microsoft.Extensions.Options.IOptions<Ace.AceOptions> ace,
+    Timing.TimingFiles timings,
+    SqliteSongTraitStore traits)
 {
     public string OutputDir => paths.OutputDir;
 
+    /// <summary>Where ACE-Step's run folders are, apart from YuE Studio's, whose app would not understand them.</summary>
+    public string AceDirectory => ace.Value.ResolvedSongs(database.Directory);
+
+    /// <summary>What marks a song folder as ACE-Step's: the request as acestep.cpp synthesized it.</summary>
+    public const string AceFile = "ace.json";
+
+    /// <summary>The run's folder in either library, or null for a name the worker would not write or a run that does not exist.</summary>
+    public string? RunDirectory(string run)
+    {
+        if (!RunName().IsMatch(run))
+        {
+            return null;
+        }
+        foreach (var root in (string[])[paths.OutputDir, AceDirectory])
+        {
+            var directory = Path.Combine(root, run);
+            if (Directory.Exists(directory))
+            {
+                return directory;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Every run folder's name in both libraries, for the backup.</summary>
+    public IEnumerable<string> RunNames() =>
+        Roots().SelectMany(root => root.EnumerateDirectories()).Select(d => d.Name).Where(name => RunName().IsMatch(name));
+
+    /// <summary>Whether <paramref name="name"/> would make a valid run folder's name.</summary>
+    public static bool IsRunName(string name) => RunName().IsMatch(name);
+
+    private IEnumerable<DirectoryInfo> Roots() =>
+        ((string[])[paths.OutputDir, AceDirectory]).Select(root => new DirectoryInfo(root)).Where(root => root.Exists);
+
     public IReadOnlyList<RunInfo> ListRuns()
     {
-        var root = new DirectoryInfo(paths.OutputDir);
-        if (!root.Exists)
+        var roots = Roots().ToList();
+        if (roots.Count == 0)
         {
             return [];
         }
@@ -107,16 +151,19 @@ public sealed partial class SongLibrary(
         var covered = Read(covers.All) ?? new Dictionary<string, DateTimeOffset>();
         var noted = Read(notes.All) ?? new Dictionary<string, string>();
         var filmed = Read(videos.FinishedFormats) ?? new Dictionary<string, IReadOnlyList<string>>();
+        var heard = Read(traits.All) ?? new Dictionary<string, SongTraits>();
         var sung = (Read(versions.All) ?? [])
             .Where(v => v.Stage != "cancelled")
             .GroupBy(v => v.SongId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<VersionState>)[.. g]);
         return
         [
-            .. root.EnumerateDirectories()
+            .. roots.SelectMany(root => root.EnumerateDirectories())
                 .Where(d => RunName().IsMatch(d.Name))
+                // The same name in both (two runs in the same second) shows YuE's, as RunDirectory finds it.
+                .DistinctBy(d => d.Name)
                 .OrderByDescending(d => d.Name, StringComparer.Ordinal)
-                .Select(d => ReadRun(d, renamed.GetValueOrDefault(d.Name), rated, covered, noted, sung, filmed))
+                .Select(d => ReadRun(d, renamed.GetValueOrDefault(d.Name), rated, covered, noted, sung, filmed, heard))
                 // A run still tokenizing has no song folders yet; the queue shows it.
                 .Where(r => r.Songs.Count > 0),
         ];
@@ -125,23 +172,22 @@ public sealed partial class SongLibrary(
     /// <summary>The song's folder, or null for a name the worker would not write or a song that does not exist.</summary>
     public string? SongDirectory(string run, string song)
     {
-        if (!RunName().IsMatch(run) || !SongName().IsMatch(song))
+        if (RunDirectory(run) is not { } runDirectory || !SongName().IsMatch(song))
         {
             return null;
         }
-        var directory = Path.Combine(paths.OutputDir, run, song);
+        var directory = Path.Combine(runDirectory, song);
         return Directory.Exists(directory) ? directory : null;
     }
 
     /// <summary>The run's song folders in order, or null for a name the worker would not write or a run that does not exist.</summary>
     public IReadOnlyList<string>? SongDirectories(string run)
     {
-        var directory = new DirectoryInfo(Path.Combine(paths.OutputDir, run));
-        if (!RunName().IsMatch(run) || !directory.Exists)
+        if (RunDirectory(run) is not { } path)
         {
             return null;
         }
-        return [.. SongFolders(directory).Select(d => d.FullName)];
+        return [.. SongFolders(new DirectoryInfo(path)).Select(d => d.FullName)];
     }
 
     /// <summary>Deletes the song's folder, and the run's folder with it once no song is left.</summary>
@@ -161,9 +207,11 @@ public sealed partial class SongLibrary(
             covers.Remove($"{run}/{song}");
             notes.Remove($"{run}/{song}");
             videos.RemoveSong($"{run}/{song}");
+            traits.Remove($"{run}/{song}");
         });
         streams.ForgetSong(run, song);
-        var runDirectory = new DirectoryInfo(Path.Combine(paths.OutputDir, run));
+        timings.ForgetSong(run, song);
+        var runDirectory = new DirectoryInfo(Path.GetDirectoryName(directory)!);
         if (!SongFolders(runDirectory).Any())
         {
             runDirectory.Delete(recursive: true);
@@ -176,11 +224,11 @@ public sealed partial class SongLibrary(
     /// <returns>False for a name the worker would not write or a run that does not exist.</returns>
     public bool DeleteRun(string run)
     {
-        if (SongDirectories(run) is null)
+        if (RunDirectory(run) is not { } directory)
         {
             return false;
         }
-        Directory.Delete(Path.Combine(paths.OutputDir, run), recursive: true);
+        Directory.Delete(directory, recursive: true);
         ForgetRun(run);
         return true;
     }
@@ -397,7 +445,9 @@ public sealed partial class SongLibrary(
         covers.RemoveRun(run);
         notes.RemoveRun(run);
         videos.RemoveRun(run);
+        traits.RemoveRun(run);
         streams.ForgetRun(run);
+        timings.ForgetRun(run);
     });
 
     /// <summary>The files are gone already; a database that cannot be written only keeps a row nobody sees.</summary>
@@ -419,7 +469,8 @@ public sealed partial class SongLibrary(
         IReadOnlyDictionary<string, DateTimeOffset> covered,
         IReadOnlyDictionary<string, string> noted,
         IReadOnlyDictionary<string, IReadOnlyList<VersionState>> sung,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> filmed)
+        IReadOnlyDictionary<string, IReadOnlyList<string>> filmed,
+        IReadOnlyDictionary<string, SongTraits> heard)
     {
         var songs = new List<SongInfo>();
         string title = "", style = "", lyrics = "";
@@ -454,7 +505,9 @@ public sealed partial class SongLibrary(
                 sung.GetValueOrDefault(id) ?? [],
                 covered.TryGetValue(id, out var cover) ? cover : null,
                 noted.GetValueOrDefault(id),
-                filmed.GetValueOrDefault(id) ?? []));
+                filmed.GetValueOrDefault(id) ?? [],
+                File.Exists(Path.Combine(folder.FullName, AceFile)) ? "ace" : null,
+                heard.GetValueOrDefault(id)));
         }
 
         var original = title.Length > 0 ? title : TitleFromName(run.Name);

@@ -28,7 +28,13 @@ public static class ExportEndpoints
 
     public static RouteGroupBuilder MapExportEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/songs/{run}/{song}/export", ExportAsync).DisableAntiforgery();
+        api.MapPost("/songs/{run}/{song}/export", ExportAsync).DisableAntiforgery()
+            .WithName("ExportSong")
+            .ProducesFile("audio/mp4", "audio/mpeg", "audio/flac")
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
         return api;
     }
 
@@ -87,7 +93,11 @@ public static class ExportEndpoints
             var flac = Path.Combine(directory, "audio.flac");
             if (extension == "flac")
             {
-                File.Copy(flac, temp);
+                // Brought to the target loudness where that is on and ffmpeg is there, else the original.
+                if (!await encoder.EncodeAsync(flac, temp, AudioFormat.Flac, 0, cancellationToken))
+                {
+                    File.Copy(flac, temp, overwrite: true);
+                }
             }
             else if (!await encoder.EncodeAsync(
                 flac,

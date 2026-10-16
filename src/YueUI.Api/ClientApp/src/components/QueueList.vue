@@ -10,6 +10,7 @@ import {
   deleteVersion,
   deleteVideo,
   deleteImage,
+  deleteAceJob,
   moveQueued,
   shutdownWorker,
   stopAll,
@@ -19,7 +20,9 @@ import QueueOverview from './QueueOverview.vue'
 import SongTimeline from './SongTimeline.vue'
 import { holderOf, speechWaitReason, transcribing, waitReason } from '../queueModels'
 import { navigate, showSong, songHref } from '../view'
+import { addPlaylist } from '../playlist'
 import type {
+  AceJob,
   LogEntry,
   LyricsState,
   QueuedJob,
@@ -54,6 +57,8 @@ const props = defineProps<{
   videos: VideoState[]
   /** Painted covers; they wait for the memory like the speech lab's takes. */
   images: ImageState[]
+  /** ACE-Step's songs; they wait for the memory too, one job at a time. */
+  ace: AceJob[]
   /** Queue:BundleWindow; null for a server from before it was sent. */
   bundleWindowSeconds: number | null
   /** The speech lab's takes; those in the works wait for the same memory. */
@@ -71,6 +76,34 @@ const emit = defineEmits<{
 }>()
 
 const hasFinished = computed(() => props.songs.some((s) => s.finished))
+
+/**
+ * The finished songs the queue still shows, in the order they were made, so they can be heard and rated in one go
+ * from a playlist of their own. ACE-Step's jobs name only their run, so its songs come from the library's listing.
+ */
+const readySongIds = computed(() => {
+  const ids = props.songs.filter((s) => s.stage === 'ready' && props.listed.has(s.id)).map((s) => s.id)
+  for (const job of props.ace) {
+    if (job.stage === 'done' && job.run) {
+      ids.push(...[...props.listed].filter((id) => id.startsWith(`${job.run}/`)).sort(bySongNumber))
+    }
+  }
+  return [...new Set(ids)]
+})
+
+function bySongNumber(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true })
+}
+
+async function playlistOfFinished(): Promise<void> {
+  const name = t('queuePlaylistName', {
+    date: new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }),
+  })
+  await run(async () => {
+    await addPlaylist(name, readySongIds.value)
+    navigate('playlist')
+  })
+}
 
 const jobIcons: Record<QueuedJob['kind'], string> = {
   song: 'pi pi-sparkles',
@@ -139,6 +172,13 @@ const reasons = computed(() =>
 const takesInWork = computed(() => props.takes.filter((take) => !take.finished))
 
 function takeDetail(take: SpeechTake): string {
+  if (take.source !== null) {
+    // A recording being cleaned: its name, and how far it is.
+    return [
+      take.source,
+      ...(take.progress !== null && !take.finished ? [`${Math.round(take.progress * 100)} %`] : []),
+    ].join(' · ')
+  }
   return [take.voiceLabel ?? t('labOwnVoice'), take.text.replace(/\s+/g, ' ').trim()].join(' · ')
 }
 
@@ -211,6 +251,20 @@ const imagesInWork = computed(() =>
   props.images.filter((i) => !i.finished).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
 )
 
+const aceInWork = computed(() =>
+  props.ace.filter((job) => !job.finished).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+)
+
+function aceStage(job: AceJob): string {
+  const label = t(`aceStage_${job.stage}`)
+  return job.stage === 'queued' || job.stage === 'saving' ? label : `${label} ${Math.round(job.fraction * 100)} %`
+}
+
+/** Like a take of the speech lab: one at a time, each once the others let go of the memory. */
+function aceReason(index: number): string {
+  return speechWaitReason(index, holder.value, 'ace')
+}
+
 function imageStage(image: ImageState): string {
   return image.stage === 'painting'
     ? t('imageStage_painting', { percent: Math.round(image.fraction * 100) })
@@ -241,6 +295,9 @@ function voiceReason(item: VoiceItem): string {
   }
   if (holder.value === 'image') {
     return t('waitImage')
+  }
+  if (holder.value === 'ace') {
+    return t('waitAce')
   }
   if (holder.value === 'transcription') {
     return t('waitTranscription')
@@ -309,6 +366,16 @@ watch(
         @click="emit('hideFinished')"
       />
       <Button
+        v-if="readySongIds.length > 0"
+        :label="t('queuePlaylist', { n: readySongIds.length })"
+        :title="t('queuePlaylistHint')"
+        icon="pi pi-list"
+        severity="secondary"
+        outlined
+        size="small"
+        @click="playlistOfFinished"
+      />
+      <Button
         :label="t('stopAll')"
         v-if="worker.busy"
         icon="pi pi-stop-circle"
@@ -339,6 +406,7 @@ watch(
       :transcriptions="transcriptions"
       :images="images"
       :videos="videos"
+      :ace="ace"
     />
 
     <div v-if="runningTranscription" class="mb-4">
@@ -452,6 +520,39 @@ watch(
       </ul>
     </div>
 
+    <div v-if="aceInWork.length > 0" class="mb-4">
+      <h3 class="m-0 text-sm font-medium text-muted-color">{{ t('queueAce') }}</h3>
+      <ul class="m-0 p-0 list-none flex flex-col gap-1">
+        <li v-for="(job, index) in aceInWork" :key="job.id" class="flex gap-2 items-center">
+          <i class="pi pi-wave-pulse text-muted-color" />
+          <div class="min-w-0 flex-1">
+            <a
+              href="#/ace"
+              class="block truncate font-bold text-color no-underline hover:underline"
+              @click.prevent="navigate('ace')"
+              >{{ job.title }}</a
+            >
+            <span class="block text-sm text-muted-color truncate">{{ job.request.caption }}</span>
+            <span v-if="job.stage === 'queued'" class="block text-xs text-muted-color truncate"
+              ><i class="pi pi-clock text-xs" /> {{ aceReason(index) }}</span
+            >
+          </div>
+          <Tag :severity="job.stage === 'queued' ? 'secondary' : undefined" class="shrink-0">
+            <i v-if="job.stage !== 'queued'" class="pi pi-spin pi-spinner text-xs" />
+            {{ aceStage(job) }}
+          </Tag>
+          <Button
+            icon="pi pi-times"
+            text
+            rounded
+            severity="danger"
+            :aria-label="t('queueCancel')"
+            @click="run(() => deleteAceJob(job.id))"
+          />
+        </li>
+      </ul>
+    </div>
+
     <div v-if="videosInWork.length > 0" class="mb-4">
       <h3 class="m-0 text-sm font-medium text-muted-color">{{ t('queueVideo') }}</h3>
       <ul class="m-0 p-0 list-none flex flex-col gap-1">
@@ -495,7 +596,7 @@ watch(
       <h3 class="m-0 text-sm font-medium text-muted-color">{{ t('menuLab') }}</h3>
       <ul class="m-0 p-0 list-none flex flex-col gap-1">
         <li v-for="(take, i) in takesInWork" :key="take.id" class="flex gap-2 items-center">
-          <i class="pi pi-comments text-muted-color" />
+          <i :class="take.source !== null ? 'pi pi-filter' : 'pi pi-comments'" class="text-muted-color" />
           <div class="min-w-0 flex-1">
             <a
               href="#/lab"
@@ -591,6 +692,7 @@ watch(
         takesInWork.length === 0 &&
         videosInWork.length === 0 &&
         imagesInWork.length === 0 &&
+        aceInWork.length === 0 &&
         !runningTranscription
       "
       class="muted empty"

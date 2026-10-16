@@ -83,10 +83,13 @@ export function toggleInPlaylist(songId: string, id = activePlaylist.value?.id):
 }
 
 /** A new, empty playlist, which becomes the active one. */
-export async function addPlaylist(name: string): Promise<void> {
+export async function addPlaylist(name: string, songIds: string[] = []): Promise<void> {
   const created = await createPlaylist(name)
   playlists.value = [...playlists.value, created]
   activeId.value = created.id
+  if (songIds.length > 0) {
+    await savePlaylist(songIds, created.id)
+  }
 }
 
 export async function renameActivePlaylist(name: string): Promise<void> {

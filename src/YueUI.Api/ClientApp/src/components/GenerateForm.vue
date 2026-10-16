@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import { ApiError, draftLyrics, generate, getLyricsModels, listVoices, reviseLyrics } from '../api'
-import { defaultFormState, toGenerateRequest, type FormState } from '../form'
+import { defaultFormState, toGenerateRequest, usesScore, type FormState } from '../form'
 import { formatBytes, t } from '../i18n'
 import { photoDataUrl } from '../photo'
 import { insertSectionTag } from '../lyricsTags'
@@ -53,7 +53,7 @@ const message = ref<{ text: string; error: boolean } | null>(null)
 
 // The API refuses this too; saying so before sending saves a round trip from the phone.
 const scoreWithoutPlanning = computed(
-  () => form.value.abc.trim() !== '' && form.value.cot === 'off' && !form.value.instrumental,
+  () => usesScore(form.value) && form.value.cot === 'off' && !form.value.instrumental,
 )
 
 async function submit(): Promise<void> {
@@ -307,6 +307,7 @@ const lyricsModelOptions = computed(() =>
   (lyricsModels.value?.models ?? []).map((m) => {
     const name = m.id === lyricsModels.value?.default ? t('lyricsModelDefault', { name: m.name }) : m.name
     const details = [
+      m.cloud ? t('lyricsModelCloud') : '',
       m.sizeBytes ? formatBytes(m.sizeBytes) : '',
       m.vision ? t('lyricsModelVision') : '',
       m.loaded ? t('lyricsModelLoaded') : '',
@@ -314,6 +315,9 @@ const lyricsModelOptions = computed(() =>
     return { value: m.id, label: [name, ...details.filter((d) => d)].join(' · ') }
   }),
 )
+
+/** Claude writes beside a running song, so the form need not say the draft waits for it. */
+const cloudModel = computed(() => lyricsModels.value?.models.find((m) => m.id === lyricsModel.value)?.cloud === true)
 
 /** The default is kept as "none chosen", so that a new default on the server reaches this form too. */
 const lyricsModel = computed({
@@ -351,14 +355,8 @@ const qualityOptions = [
     label: t('qualityFull'),
   },
 ]
-const batchOptions = [
-  { value: 1, label: '1' },
-  {
-    value: 2,
-    label: '2',
-  },
-  { value: 3, label: '3' },
-]
+// Up to the API's MaxBatch; the worker composes four at a time and works through the rest one after another.
+const batchOptions = Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label: String(i + 1) }))
 </script>
 
 <template>
@@ -461,6 +459,7 @@ const batchOptions = [
       size="small"
       class="mt-2 w-full"
     />
+    <small v-if="cloudModel" class="muted mt-1 block">{{ t('lyricsCloudHint') }}</small>
     <div v-if="photo" class="mt-2 flex items-center gap-2">
       <img :src="photo" :alt="t('photoAlt')" class="h-16 w-16 rounded-md object-cover" />
       <small class="muted min-w-0 flex-1">{{ blind ? t('photoBlindModel') : t('photoHint') }}</small>
@@ -573,6 +572,25 @@ const batchOptions = [
         </FloatLabel>
         <FieldHelp id="gen-batch-help" :hint="t('batchHint')" :more="t('batchMore')" />
         <small v-if="fieldErrors.batch" class="danger">{{ fieldErrors.batch.join(' ') }}</small>
+      </div>
+
+      <!-- Out here, not among the advanced parameters: it stays in effect when those are switched off. -->
+      <div class="col-span-2">
+        <FloatLabel variant="on" class="mt-2 w-full">
+          <InputText
+            fluid
+            id="gen-seed"
+            v-model="form.seed"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            :placeholder="t('seedPlaceholder')"
+            aria-describedby="gen-seed-help"
+          />
+          <label for="gen-seed">{{ t('seed') }}</label>
+        </FloatLabel>
+        <FieldHelp id="gen-seed-help" :hint="t('seedHint')" :more="t('seedMore')" />
+        <small v-if="fieldErrors.seed" class="danger">{{ fieldErrors.seed.join(' ') }}</small>
       </div>
     </div>
 

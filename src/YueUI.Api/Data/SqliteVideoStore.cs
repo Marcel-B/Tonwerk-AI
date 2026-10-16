@@ -12,6 +12,9 @@ public sealed class SqliteVideoStore(SqliteDatabase database)
 {
     public const string VideoFile = "video.mp4";
 
+    /// <summary>The lyrics' times are written and read here only, in the API's camelCase.</summary>
+    public static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
+
     public string Folder(string id) => Path.Combine(database.Directory, "videos", id);
 
     public string VideoPath(string id) => Path.Combine(Folder(id), VideoFile);
@@ -35,7 +38,28 @@ public sealed class SqliteVideoStore(SqliteDatabase database)
             VideoMotions.Plasma => [.. Enumerable.Range(0, VideoLayout.PlasmaFrames).Select(i => Path.Combine(Folder(video.Id), $"plasma{i}.png"))],
             _ => [],
         },
-        video.Media is not null && File.Exists(Path.Combine(Folder(video.Id), "shade.png")) ? Path.Combine(Folder(video.Id), "shade.png") : null);
+        video.Media is not null && File.Exists(Path.Combine(Folder(video.Id), "shade.png")) ? Path.Combine(Folder(video.Id), "shade.png") : null,
+        LyricsStrips(video.Id));
+
+    /// <summary>The lyrics' times as the endpoint wrote them beside their strips; a video without lyrics has none.</summary>
+    public string LyricsCuesPath(string id) => Path.Combine(Folder(id), "lyrics.json");
+
+    private IReadOnlyList<LyricsStrip>? LyricsStrips(string id)
+    {
+        try
+        {
+            if (!File.Exists(LyricsCuesPath(id))
+                || System.Text.Json.JsonSerializer.Deserialize<List<LyricsCue>>(File.ReadAllText(LyricsCuesPath(id)), Json) is not { Count: > 0 } cues)
+            {
+                return null;
+            }
+            return [.. cues.Chunk(VideoLayout.LyricsPerStrip).Select((chunk, i) => new LyricsStrip(Path.Combine(Folder(id), $"lyrics{i}.png"), chunk))];
+        }
+        catch (Exception exception) when (exception is IOException or System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>The song's videos, newest first, as the dialog lists them.</summary>
     public IReadOnlyList<VideoState> ForSong(string songId) =>

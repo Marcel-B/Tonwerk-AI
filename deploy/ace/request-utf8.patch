@@ -1,0 +1,61 @@
+diff --git a/src/request.cpp b/src/request.cpp
+index 8633862..87ae016 100644
+--- a/src/request.cpp
++++ b/src/request.cpp
+@@ -474,6 +474,30 @@ static yyjson_mut_doc * request_build_doc(const AceRequest * r, bool sparse) {
+     return doc;
+ }
+ 
++// Tonwerk: the LM can leave invalid UTF-8 in its text (a multi-byte character cut between tokens), which yyjson
++// refuses to write; request_write then left an empty file that ace-synth could not read. Invalid bytes become U+FFFD.
++static std::string utf8_repair(const std::string & s) {
++    std::string out;
++    out.reserve(s.size());
++    size_t i = 0;
++    while (i < s.size()) {
++        unsigned char c = (unsigned char) s[i];
++        int           n = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
++        bool          ok = n > 0 && i + n <= s.size();
++        for (int k = 1; ok && k < n; k++) {
++            ok = ((unsigned char) s[i + k] >> 6) == 0x2;
++        }
++        if (ok) {
++            out.append(s, i, n);
++            i += n;
++        } else {
++            out += "\xEF\xBF\xBD";
++            i += 1;
++        }
++    }
++    return out;
++}
++
+ bool request_write(const AceRequest * r, const char * path) {
+     FILE * f = fopen(path, "w");
+     if (!f) {
+@@ -485,6 +509,25 @@ bool request_write(const AceRequest * r, const char * path) {
+     size_t           len;
+     char *           json = yyjson_mut_write(doc, WRITE_FLAGS | YYJSON_WRITE_NEWLINE_AT_END, &len);
+     yyjson_mut_doc_free(doc);
++    AceRequest repaired;
++    if (!json) {
++        repaired                    = *r;
++        repaired.caption            = utf8_repair(r->caption);
++        repaired.lyrics             = utf8_repair(r->lyrics);
++        repaired.keyscale           = utf8_repair(r->keyscale);
++        repaired.timesignature      = utf8_repair(r->timesignature);
++        repaired.vocal_language     = utf8_repair(r->vocal_language);
++        repaired.lm_negative_prompt = utf8_repair(r->lm_negative_prompt);
++        doc                         = request_build_doc(&repaired, true);
++        json                        = yyjson_mut_write(doc, WRITE_FLAGS | YYJSON_WRITE_NEWLINE_AT_END, &len);
++        yyjson_mut_doc_free(doc);
++        fprintf(stderr, "[Request] WARNING: replaced invalid UTF-8 in %s\n", path);
++    }
++    if (!json) {
++        fclose(f);
++        fprintf(stderr, "[Request] ERROR: cannot serialize %s\n", path);
++        return false;
++    }
+ 
+     fwrite(json, 1, len, f);
+     free(json);

@@ -13,6 +13,8 @@ import type {
   LyricsState,
   MidiScore,
   PlaylistInfo,
+  InsightReport,
+  TimingAnswer,
   PromptTemplate,
   QueuedJob,
   RunInfo,
@@ -22,7 +24,10 @@ import type {
   SpeechTake,
   SpeechVoice,
   StatusSnapshot,
+  StorageCleanup,
+  StorageCleanupTarget,
   StorageInfo,
+  StorageOverview,
   TranscriptionList,
   TranscriptionState,
   TranscriptionTask,
@@ -39,6 +44,12 @@ import type {
   MediaInfo,
   ImageInfo,
   ImageState,
+  AceInfo,
+  AceJob,
+  AceSongRequest,
+  SketchInfo,
+  SketchResult,
+  SketchSummary,
   MemoryInfo,
   VoiceInfo,
   WorkerInfo,
@@ -172,6 +183,26 @@ export async function saveSongNote(songId: string, note: string): Promise<void> 
   await send(`/api/songs/${songId}/note`, { ...json('PUT', { note }), keepalive: true })
 }
 
+/** When each lyrics line of the song is sung, or how far its timing is. */
+export async function getTiming(songId: string): Promise<TimingAnswer> {
+  return (await send(`/api/songs/${songId}/timing`)).json() as Promise<TimingAnswer>
+}
+
+/** The timed lyrics as SubRip subtitles, which YouTube takes beside a video. */
+export function subtitlesUrl(songId: string): string {
+  return `${apiBase}/api/songs/${songId}/timing.srt`
+}
+
+/** Asks Whisper to time the song's lyrics; 501 when it is not installed. */
+export async function requestTiming(songId: string): Promise<TimingAnswer> {
+  return (await send(`/api/songs/${songId}/timing`, { method: 'POST' })).json() as Promise<TimingAnswer>
+}
+
+/** Which style blocks and settings the rated songs were made with, against their stars. */
+export async function getInsights(): Promise<InsightReport> {
+  return (await send('/api/insights')).json() as Promise<InsightReport>
+}
+
 /** Every playlist, oldest first, with its song ids in order; songs deleted since are left out. */
 export async function getPlaylists(): Promise<PlaylistInfo[]> {
   return (await send('/api/playlists')).json() as Promise<PlaylistInfo[]>
@@ -230,6 +261,16 @@ export async function startBackup(): Promise<BackupStatus> {
 
 export async function getStorage(): Promise<StorageInfo> {
   return (await send('/api/storage')).json() as Promise<StorageInfo>
+}
+
+/** Every part of what the app and its models take on disk, measured anew on each call. */
+export async function getStorageOverview(): Promise<StorageOverview> {
+  return (await send('/api/storage/overview')).json() as Promise<StorageOverview>
+}
+
+/** Removes what can be made again (streaming copies, painted proposals, videos) or what nothing refers to any more. */
+export async function cleanupStorage(target: StorageCleanupTarget): Promise<StorageCleanup> {
+  return (await send(`/api/storage/cleanup/${target}`, { method: 'POST' })).json() as Promise<StorageCleanup>
 }
 
 /** The song's own cover; the time it was chosen makes a changed cover a new address, past every cache. */
@@ -524,6 +565,8 @@ export interface VideoRequest {
   /** A photo video's folder; its pictures take the background's place. */
   media?: string
   motif?: string
+  /** The sung line in the band; the server has the times, `lyrics0…` the lines. */
+  showLyrics?: boolean
 }
 
 /**
@@ -539,6 +582,8 @@ export interface VideoLayerImages {
   particles?: Blob
   /** The plasma ball's frames, sent as `plasma0`, `plasma1`, … */
   plasma?: Blob[]
+  /** The lyrics' strips, sent as `lyrics0`, `lyrics1`, … */
+  lyrics?: Blob[]
 }
 
 /** Sends the layers and queues the video; its progress arrives as `video` events. */
@@ -677,6 +722,19 @@ export async function deleteSpeechTake(id: string): Promise<void> {
   await send(`/api/speech/takes/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+/** A speech recording cleaned of noise by one model; it waits with the takes and reports as a `speech` event. */
+export async function cleanSpeech(file: Blob, fileName: string, model: string): Promise<SpeechTake> {
+  const form = new FormData()
+  form.append('model', model)
+  form.append('file', file, fileName)
+  return (await send('/api/speech/cleanups', { method: 'POST', body: form })).json() as Promise<SpeechTake>
+}
+
+/** The recording a cleaned take started from, to hear before and after. */
+export function speechTakeSourceUrl(id: string): string {
+  return `${apiBase}/api/speech/takes/${encodeURIComponent(id)}/source`
+}
+
 export function speechTakeAudioUrl(id: string, download = false): string {
   return `${apiBase}/api/speech/takes/${encodeURIComponent(id)}/audio${download ? '?download=true' : ''}`
 }
@@ -713,6 +771,58 @@ export async function deleteImage(id: string): Promise<void> {
   await send(`/api/images/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+export async function getAce(): Promise<AceInfo> {
+  return (await send('/api/ace')).json() as Promise<AceInfo>
+}
+
+/** Queues a song for ACE-Step; its progress arrives as `ace` events, the songs in the library once done. */
+export async function composeAce(request: AceSongRequest): Promise<AceJob> {
+  return (await send('/api/ace', json('POST', request))).json() as Promise<AceJob>
+}
+
+/** Stops a job in the works, or forgets a finished one (its songs stay in the library). */
+export async function deleteAceJob(id: string): Promise<void> {
+  await send(`/api/ace/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** Whether Claude can plan sketches (an Anthropic key is set), and with which model. */
+export async function getSketchInfo(): Promise<SketchInfo> {
+  return (await send('/api/sketches/info')).json() as Promise<SketchInfo>
+}
+
+/** Every sketch, newest first. */
+export async function getSketches(): Promise<SketchSummary[]> {
+  return (await send('/api/sketches')).json() as Promise<SketchSummary[]>
+}
+
+/**
+ * Sends a written sketch to Claude; the plan follows minutes later, so the answer is the waiting sketch. `model` is one
+ * of the info's models, null for the default.
+ */
+export async function planSketch(text: string, instruction: string, model: string | null): Promise<SketchSummary> {
+  return (
+    await send('/api/sketches', json('POST', { text, instruction: instruction || null, model }))
+  ).json() as Promise<SketchSummary>
+}
+
+export async function getSketch(id: string): Promise<SketchResult> {
+  return (await send(`/api/sketches/${encodeURIComponent(id)}`)).json() as Promise<SketchResult>
+}
+
+export async function deleteSketch(id: string): Promise<void> {
+  await send(`/api/sketches/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** Where the sketch's MIDI draft and score download from, for a link the browser follows. */
+export function sketchFileUrl(id: string, file: 'midi' | 'score'): string {
+  return `${apiBase}/api/sketches/${encodeURIComponent(id)}/${file}`
+}
+
+/** What ACE-Step was asked for an ACE song, with its own seed and lyrics, to make it again on the page. */
+export async function aceSongRequest(songId: string): Promise<AceSongRequest> {
+  return (await send(`/api/songs/${songId}/ace`)).json() as Promise<AceSongRequest>
+}
+
 export interface EventHandlers {
   snapshot(snapshot: StatusSnapshot): void
   song(song: SongState): void
@@ -732,6 +842,8 @@ export interface EventHandlers {
   video(video: VideoState): void
   /** A painted cover candidate changed; a deleted one arrives as cancelled. */
   image(image: ImageState): void
+  /** An ACE-Step job changed; a stopped one arrives as cancelled. */
+  ace(job: AceJob): void
   queue(queue: QueuedJob[]): void
   /** Another large model took the memory, or gave it back. */
   memory(memory: MemoryInfo): void
@@ -762,6 +874,7 @@ export function subscribe(handlers: EventHandlers): () => void {
   on<SpeechTake>('speech', handlers.speech)
   on<VideoState>('video', handlers.video)
   on<ImageState>('image', handlers.image)
+  on<AceJob>('ace', handlers.ace)
   on<MemoryInfo>('memory', handlers.memory)
   source.onerror = () => handlers.connection(false)
   return () => source.close()

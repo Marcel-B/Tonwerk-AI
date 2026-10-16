@@ -33,33 +33,70 @@ public static partial class LibraryEndpoints
 
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/library", (SongLibrary library) => library.ListRuns());
+        api.MapGet("/library", (SongLibrary library) => library.ListRuns())
+            .WithName("ListLibrary");
+        // Which style blocks and settings the rated songs were made with, against their stars.
+        api.MapGet("/insights", (SongLibrary library) => Insights.Build(library))
+            .WithName("GetInsights");
         // Range requests let the browser's player seek and start before a five-minute FLAC is loaded.
         // A download is a tagged copy (cover, lyrics); the player, the Logic page and range requests get the file itself.
         api.MapGet("/songs/{run}/{song}/audio", (string run, string song, bool? download, SongLibrary library, TaggedFiles tagged) =>
             download == true
                 ? AudioDownload(library, tagged, run, song)
-                : SongFile(library, run, song, "audio.flac", "audio/flac", "flac", download: false));
+                : SongFile(library, run, song, "audio.flac", "audio/flac", "flac", download: false))
+            .WithName("GetSongAudio")
+            .ProducesFile("audio/flac")
+            .Produces(StatusCodes.Status404NotFound);
         // What the player plays: the AAC copy, since the Mac's home upload is too slow for the FLAC on the road.
-        api.MapGet("/songs/{run}/{song}/stream", StreamAsync);
+        api.MapGet("/songs/{run}/{song}/stream", StreamAsync)
+            .WithName("GetSongStream")
+            .ProducesFile("audio/mp4", "audio/flac")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapGet("/songs/{run}/{song}/score", (string run, string song, SongLibrary library) =>
-            SongFile(library, run, song, "score.abc", "text/vnd.abc; charset=utf-8", "abc", download: true));
+            SongFile(library, run, song, "score.abc", "text/vnd.abc; charset=utf-8", "abc", download: true))
+            .WithName("GetSongScore")
+            .ProducesFile("text/vnd.abc")
+            .Produces(StatusCodes.Status404NotFound);
         // What the song was made with, for "as a new song" in the web form.
         api.MapGet("/songs/{run}/{song}/request", (string run, string song, SongLibrary library) =>
-            library.ReadRequest(run, song) is { } request ? Results.Ok(request) : Results.NotFound());
+            library.ReadRequest(run, song) is { } request ? Results.Ok(request) : Results.NotFound())
+            .WithName("GetSongRequest")
+            .Produces<SongRequest>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
         // A version in the works reads the song's audio; it is cancelled with its song by deleting the version first.
         // Cover candidates go with the song; they are no use to anything else.
         api.MapDelete("/songs/{run}/{song}", (string run, string song, SongLibrary library, WorkerHost host, Status.StatusHub hub, Voices.VoiceConverter voices, Images.ImageMaker images) =>
-            Delete(hub, host.IsWorkingOn(run, song) || voices.IsWorkingOn(run, song), () => library.DeleteSong(run, song) && images.DeleteOf(run, song)));
+            Delete(hub, host.IsWorkingOn(run, song) || voices.IsWorkingOn(run, song), () => library.DeleteSong(run, song) && images.DeleteOf(run, song)))
+            .WithName("DeleteSong")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         api.MapDelete("/runs/{run}", (string run, SongLibrary library, WorkerHost host, Status.StatusHub hub, Voices.VoiceConverter voices, Images.ImageMaker images) =>
-            Delete(hub, host.IsWorkingOn(run) || voices.IsWorkingOn(run), () => library.DeleteRun(run) && images.DeleteOf(run)));
+            Delete(hub, host.IsWorkingOn(run) || voices.IsWorkingOn(run), () => library.DeleteRun(run) && images.DeleteOf(run)))
+            .WithName("DeleteRun")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         api.MapPut("/runs/{run}/title", (string run, RenameRequest request, SongLibrary library, WorkerHost host) =>
-            Rename(library, host, run, request.Title?.Trim() ?? ""));
+            Rename(library, host, run, request.Title?.Trim() ?? ""))
+            .WithName("RenameRun")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
         api.MapPut("/songs/{run}/{song}/rating", (string run, string song, RatingRequest request, SongLibrary library, Status.StatusHub hub) =>
-            Rate(library, hub, run, song, request.Rating is 0 ? null : request.Rating));
+            Rate(library, hub, run, song, request.Rating is 0 ? null : request.Rating))
+            .WithName("RateSong")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
         api.MapPut("/songs/{run}/{song}/note", (string run, string song, NoteRequest request, SongLibrary library, Status.StatusHub hub) =>
-            SetNote(library, hub, run, song, request.Note ?? ""));
-        api.MapGet("/storage", (YuePaths paths) => Storage(paths.OutputDir));
+            SetNote(library, hub, run, song, request.Note ?? ""))
+            .WithName("SetSongNote")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
+        api.MapGet("/storage", (YuePaths paths) => Storage(paths.OutputDir))
+            .WithName("GetFreeSpace");
         return api;
     }
 

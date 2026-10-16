@@ -24,23 +24,43 @@ public static partial class AudioMidiEndpoints
     public static RouteGroupBuilder MapAudioMidiEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/audio-midi", (IOptions<AudioMidiOptions> options, IAudioMidiEngine engine) =>
-            new AudioMidiInfo(engine.Installed, options.Value.ResolvedPython));
+            new AudioMidiInfo(engine.Installed, options.Value.ResolvedPython))
+            .WithName("GetAudioMidiInfo")
+            .Produces<AudioMidiInfo>(StatusCodes.Status200OK);
         api.MapPost("/audio-midi", ConvertUploadAsync)
             // A recording is posted from a plain form; there is no login and no cookie that a forged request could use.
             .DisableAntiforgery()
             .WithFormOptions(multipartBodyLengthLimit: MaxUploadBytes)
-            .WithMetadata(new RequestSizeLimitAttribute(MaxUploadBytes));
+            .WithMetadata(new RequestSizeLimitAttribute(MaxUploadBytes))
+            .WithName("ConvertUploadToMidi")
+            .ProducesAudioMidi();
         api.MapPost("/stems/{id}/{name}/midi", (string id, string name, AudioMidiSettings? settings, SqliteStemStore store, SongLibrary library, IAudioMidiEngine engine, HttpResponse response, CancellationToken cancellationToken) =>
             store.Get(id) is { } set
                 ? ConvertStemAsync(set, name, settings, store, library, engine, response, cancellationToken)
-                : Task.FromResult(Results.NotFound()));
+                : Task.FromResult(Results.NotFound()))
+            .WithName("ConvertStemToMidi")
+            .ProducesAudioMidi();
         // The song's route, for pages loaded before the one above.
         api.MapPost("/songs/{run}/{song}/stems/{id}/{name}/midi", (string run, string song, string id, string name, AudioMidiSettings? settings, SqliteStemStore store, SongLibrary library, IAudioMidiEngine engine, HttpResponse response, CancellationToken cancellationToken) =>
             store.Get(id) is { } set && set.SongId == $"{run}/{song}"
                 ? ConvertStemAsync(set, name, settings, store, library, engine, response, cancellationToken)
-                : Task.FromResult(Results.NotFound()));
+                : Task.FromResult(Results.NotFound()))
+            .WithName("ConvertStemToMidiForSong")
+            .ProducesAudioMidi();
         return api;
     }
+
+    /// <summary>
+    /// What every conversion answers: the MIDI file (its note count in <see cref="NotesHeader"/>), or why not. The
+    /// engine's own refusals carry its status (a run that failed or took too long).
+    /// </summary>
+    private static RouteHandlerBuilder ProducesAudioMidi(this RouteHandlerBuilder builder) => builder
+        .ProducesFile("audio/midi")
+        .ProducesValidationProblem()
+        .Produces(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+        .ProducesProblem(StatusCodes.Status500InternalServerError)
+        .ProducesProblem(StatusCodes.Status501NotImplemented);
 
     private static async Task<IResult> ConvertUploadAsync(
         IFormFile? file,

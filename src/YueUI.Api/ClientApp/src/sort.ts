@@ -5,9 +5,21 @@ import type { RunInfo, SongInfo } from './types'
  * How the library is ordered. The server lists runs newest first (their folder names start with the date), so
  * `newest` keeps that order and the others sort a copy.
  */
-export type LibrarySort = 'newest' | 'oldest' | 'rating' | 'longest' | 'shortest'
+export type LibrarySort = 'newest' | 'oldest' | 'rating' | 'longest' | 'shortest' | 'fastest' | 'slowest' | 'unclear'
 
-const sorts: readonly LibrarySort[] = ['newest', 'oldest', 'rating', 'longest', 'shortest']
+export const sorts: readonly LibrarySort[] = [
+  'newest',
+  'oldest',
+  'rating',
+  'longest',
+  'shortest',
+  'fastest',
+  'slowest',
+  'unclear',
+]
+
+/** Orders that put the smallest value first. */
+const ascending: readonly LibrarySort[] = ['shortest', 'slowest', 'unclear']
 const storageKey = 'yue-ui.librarySort'
 
 function initialSort(): LibrarySort {
@@ -49,6 +61,12 @@ function key(song: SongInfo, sort: LibrarySort, ratings: Record<string, number>)
     case 'longest':
     case 'shortest':
       return song.seconds
+    case 'fastest':
+    case 'slowest':
+      return song.traits?.tempo ?? null
+    case 'unclear':
+      // The least understood lyrics first; a song not timed (or without lyrics) has nothing to compare.
+      return song.traits?.clarity ?? null
     default:
       return null
   }
@@ -82,7 +100,7 @@ export function sortRuns(
   if (sort === 'oldest') {
     return entries.reverse()
   }
-  const descending = sort !== 'shortest'
+  const descending = !ascending.includes(sort)
   for (const entry of entries) {
     entry.songs = [...entry.songs].sort((a, b) => compare(key(a, sort, ratings), key(b, sort, ratings), descending))
   }

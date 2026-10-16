@@ -1,0 +1,8 @@
+// The team that signs the app for an iPhone. The repository is public, so the team's id stays out of it: put it into
+// Local.xcconfig next to this file (ignored by git), one line:
+//
+//     DEVELOPMENT_TEAM = ABCDE12345
+//
+// and leave the team empty in Xcode's "Signing & Capabilities", which would write it into the project. The Mac build
+// signs ad hoc and needs no team.
+#include? "Local.xcconfig"

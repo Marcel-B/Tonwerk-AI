@@ -106,3 +106,33 @@ test('songs left unrated are offered for review', async ({ page, api }) => {
   await expect(page.getByText('2 von 2 Einträgen')).toBeVisible()
   await expect(page.getByRole('group').filter({ hasText: 'Sommerregen' }).getByText('Song 1')).toHaveCount(0)
 })
+
+test('songs show tempo, key and clarity, and filter by them', async ({ page, api }) => {
+  api.runs = [
+    run('run-1', {
+      title: 'Nachtzug',
+      songs: [
+        song('run-1/song1', {
+          traits: { tempo: 91.6, key: 'F#m', from: 'audio', clarity: 0.38, clarityFrom: 'mix' },
+        }),
+      ],
+    }),
+    run('run-2', {
+      title: 'Sommerregen',
+      songs: [
+        song('run-2/song1', { traits: { tempo: 124, key: 'Bb', from: 'score', clarity: null, clarityFrom: null } }),
+      ],
+    }),
+  ]
+  await page.goto('#/songs')
+  const night = page.getByRole('group').filter({ hasText: 'Nachtzug' })
+  await expect(night.getByText('92 BPM · F♯-Moll')).toBeVisible()
+  await expect(night.getByText('Text 38 %')).toBeVisible()
+  await expect(page.getByText('124 BPM · B♭-Dur')).toBeVisible()
+  await page.screenshot({ path: 'test-results/library-traits.png', fullPage: true })
+
+  await page.getByRole('combobox', { name: 'Nach Tempo, Tonart oder Text filtern' }).click()
+  await page.getByRole('option', { name: 'Moll' }).click()
+  await expect(page.getByText('1 von 2 Einträgen')).toBeVisible()
+  await expect(page.getByText('Sommerregen')).toBeHidden()
+})

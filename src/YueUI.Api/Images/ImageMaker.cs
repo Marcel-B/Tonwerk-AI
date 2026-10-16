@@ -51,6 +51,15 @@ public sealed class ImageMaker(
         }
     }
 
+    /// <summary>Every candidate, of every song, for the storage overview.</summary>
+    public IReadOnlyList<ImageState> All()
+    {
+        lock (_gate)
+        {
+            return [.. _images.Values];
+        }
+    }
+
     public ImageState? Get(string id)
     {
         lock (_gate)

@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
-import { coverUrl, getStorage, getVoiceInfo, listLibrary, songRequest, songScore, subscribe } from './api'
+import {
+  aceSongRequest,
+  coverUrl,
+  getStorage,
+  getVoiceInfo,
+  listLibrary,
+  songRequest,
+  songScore,
+  subscribe,
+} from './api'
+import { aceForm, fromAceRequest } from './ace'
 import AdvancedParameters from './components/AdvancedParameters.vue'
 import GenerateForm from './components/GenerateForm.vue'
 import SettingsMenu from './components/SettingsMenu.vue'
@@ -14,7 +24,8 @@ import VoicesPanel from './components/VoicesPanel.vue'
 import StemsPanel from './components/StemsPanel.vue'
 import VoiceSwapPanel from './components/VoiceSwapPanel.vue'
 import Message from 'primevue/message'
-import { applyTemplate, fromSongRequest, loadFormState, partsOf, planningFor, saveFormState } from './form'
+import { applyTemplate, fromSongRequest, loadFormState, partsOf, saveFormState, withScore } from './form'
+import { heardTempo } from './traits'
 import { formatBytes, t, workerLabel, type MessageKey } from './i18n'
 import { current, refreshTracks } from './player'
 import { loadPlaylists, playlistIds } from './playlist'
@@ -31,6 +42,8 @@ import TemplatePicker from './components/TemplatePicker.vue'
 import { loadedTemplateId, partList } from './templates'
 import { navigate, view, type View } from './view'
 import type {
+  SongRequest,
+  AceJob,
   LogEntry,
   LyricsState,
   PromptTemplate,
@@ -65,9 +78,14 @@ const HarmonyPage = defineAsyncComponent(() => import('./components/HarmonyPage.
 const InstrumentsPage = defineAsyncComponent(() => import('./components/InstrumentsPage.vue'))
 // The speech lab, likewise loaded and mounted only once it is opened.
 const SpeechLab = defineAsyncComponent(() => import('./components/SpeechLab.vue'))
+// ACE-Step's page, likewise.
+const AcePage = defineAsyncComponent(() => import('./components/AcePage.vue'))
 // The log, likewise.
 const LogPage = defineAsyncComponent(() => import('./components/LogPage.vue'))
+const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.vue'))
 const TemplatesPage = defineAsyncComponent(() => import('./components/TemplatesPage.vue'))
+const InsightsPage = defineAsyncComponent(() => import('./components/InsightsPage.vue'))
+const SketchPage = defineAsyncComponent(() => import('./components/SketchPage.vue'))
 
 const logCapacity = 300
 const form = ref(loadFormState())
@@ -113,6 +131,8 @@ const memory = ref<LargeModel | null>(null)
  * shows the unfinished ones; the lab lays them all over what it loaded.
  */
 const speechTakes = ref<SpeechTake[]>([])
+/** ACE-Step's jobs, those in the works from the snapshot, then as the event stream reports them. */
+const aceJobs = ref<AceJob[]>([])
 /** Songs, renders and drafts waiting for the memory. */
 const jobs = ref<QueuedJob[]>([])
 /** How long songs may pass a waiting draft or version (Queue:BundleWindow). */
@@ -212,6 +232,7 @@ const unsubscribe = subscribe({
     videos.value = snapshot.videos ?? []
     images.value = snapshot.images ?? []
     speechTakes.value = snapshot.speech ?? []
+    aceJobs.value = snapshot.ace ?? []
     jobs.value = snapshot.queue ?? []
     bundleWindowSeconds.value = snapshot.bundleWindowSeconds ?? null
     memory.value = snapshot.memory?.holder ?? null
@@ -257,6 +278,14 @@ const unsubscribe = subscribe({
       speechTakes.value.push(take)
     }
   },
+  ace(job) {
+    const index = aceJobs.value.findIndex((other) => other.id === job.id)
+    if (index >= 0) {
+      aceJobs.value[index] = job
+    } else {
+      aceJobs.value.push(job)
+    }
+  },
   queue(queue) {
     jobs.value = queue
   },
@@ -273,7 +302,7 @@ onBeforeUnmount(unsubscribe)
 
 /**
  * The pages used day to day stand in the bar; the tools around a song (transcribing, voices and stems, Logic, backing vocals, the
- * speech lab, the log) share one submenu, so the bar fits one line on a laptop. The queue concerns every page and has its
+ * speech lab, the storage, the log) share one submenu, so the bar fits one line on a laptop. The queue concerns every page and has its
  * hourglass at the bar's end instead of an entry.
  */
 type Page = { view: View; label: MessageKey; icon: string }
@@ -284,12 +313,16 @@ const pages: Page[] = [
 ]
 const tools: Page[] = [
   { view: 'templates', label: 'menuTemplates', icon: 'pi pi-bookmark' },
+  { view: 'insights', label: 'menuInsights', icon: 'pi pi-chart-bar' },
+  { view: 'sketch', label: 'menuSketch', icon: 'pi pi-pencil' },
+  { view: 'ace', label: 'menuAce', icon: 'pi pi-wave-pulse' },
   { view: 'transcribe', label: 'menuTranscribe', icon: 'pi pi-microphone' },
   { view: 'voices', label: 'menuVoices', icon: 'pi pi-users' },
   { view: 'logic', label: 'menuLogic', icon: 'pi pi-box' },
   { view: 'harmony', label: 'menuHarmony', icon: 'pi pi-align-center' },
   { view: 'instruments', label: 'menuInstruments', icon: 'pi pi-sliders-h' },
   { view: 'lab', label: 'menuLab', icon: 'pi pi-comments' },
+  { view: 'storage', label: 'menuStorage', icon: 'pi pi-database' },
   { view: 'logs', label: 'menuLogs', icon: 'pi pi-file' },
 ]
 
@@ -307,6 +340,7 @@ const queueCount = computed(
     videos.value.filter((v) => !v.finished).length +
     images.value.filter((i) => !i.finished).length +
     speechTakes.value.filter((take) => !take.finished).length +
+    aceJobs.value.filter((job) => !job.finished).length +
     transcriptions.value.filter((tr) => !tr.finished).length,
 )
 
@@ -326,6 +360,7 @@ const badges = computed<Partial<Record<View, number>>>(() => ({
     stemSets.value.filter((s) => !s.finished).length +
     swaps.value.filter((s) => !s.finished).length,
   lab: speechTakes.value.filter((take) => !take.finished).length,
+  ace: aceJobs.value.filter((job) => !job.finished).length,
 }))
 
 /**
@@ -345,10 +380,17 @@ getVoiceInfo()
 const logicOpened = ref(view.value === 'logic')
 const labOpened = ref(view.value === 'lab')
 const logsOpened = ref(view.value === 'logs')
+const storageOpened = ref(view.value === 'storage')
 const templatesOpened = ref(view.value === 'templates')
+const insightsOpened = ref(view.value === 'insights')
+const sketchOpened = ref(view.value === 'sketch')
 const instrumentsOpened = ref(view.value === 'instruments')
 const harmonyOpened = ref(view.value === 'harmony')
+const aceOpened = ref(view.value === 'ace')
 watch(view, (value) => {
+  if (value === 'ace') {
+    aceOpened.value = true
+  }
   if (value === 'harmony') {
     harmonyOpened.value = true
   }
@@ -364,8 +406,17 @@ watch(view, (value) => {
   if (value === 'logs') {
     logsOpened.value = true
   }
+  if (value === 'storage') {
+    storageOpened.value = true
+  }
   if (value === 'templates') {
     templatesOpened.value = true
+  }
+  if (value === 'insights') {
+    insightsOpened.value = true
+  }
+  if (value === 'sketch') {
+    sketchOpened.value = true
   }
 })
 
@@ -499,25 +550,16 @@ function useScore(abc: string, name: string): void {
 }
 
 /**
- * A song's score to build on, e.g. with changed chords or tempo: with its run's style, lyrics and the song's seed,
- * so that a changed score is all that differs. Planning follows the score: chords are kept when it has them.
+ * A song's score (its score.abc, or one from a MIDI file) to build on, e.g. with changed chords or tempo: only the score
+ * and its planning, the rest of the form stays as it is. "Use everything" brings the song's other settings.
  */
 function useSongScore(run: RunInfo, song: SongInfo, abc: string, midiWarnings?: string[]): void {
-  const cot = planningFor(abc)
-  form.value = {
-    ...form.value,
-    title: run.title,
-    style: run.style,
-    lyrics: run.lyrics,
-    abc,
-    cot,
-    seed: song.seed === null ? form.value.seed : String(song.seed),
-  }
+  form.value = withScore(form.value, abc)
   navigate('create')
   const applied = t(midiWarnings ? 'songMidiApplied' : 'songScoreApplied', {
     title: run.title || t('untitled'),
     song: t('songN', { n: song.index }),
-    planning: t(cot === 'full' ? 'cotFull' : 'cotMelody'),
+    planning: t(form.value.cot === 'full' ? 'cotFull' : 'cotMelody'),
   })
   show(midiWarnings?.length ? `${applied} ${t('midiWarnings', { messages: midiWarnings.join(' ') })}` : applied)
 }
@@ -543,17 +585,40 @@ async function useSongScoreById(songId: string): Promise<void> {
   }
 }
 
-/** The song made again: everything it was generated with, from its request.json, the seed and a score included. */
+/** A planned sketch as the next song: its lyrics, style and score, the rest of the form as it was. */
+function useSketch(request: SongRequest): void {
+  form.value = fromSongRequest(form.value, request)
+  fieldErrors.value = {}
+  navigate('create')
+}
+
+/** The song made again: everything it was generated with, from its request.json, the seed and its score included. */
 async function useAsNewSong(songId: string): Promise<void> {
   const found = listedSong(songId)
   if (!found) {
     return
   }
   try {
-    form.value = fromSongRequest(form.value, await songRequest(songId))
+    if (found.song.engine === 'ace') {
+      // ACE-Step's own settings go back into its page; YuE2's form knows none of them.
+      aceForm.value = fromAceRequest(await aceSongRequest(songId))
+      navigate('ace')
+      show(t('newSongApplied', { title: found.run.title || t('untitled'), song: t('songN', { n: found.song.index }) }))
+      return
+    }
+    const request = await songRequest(songId)
+    // The score YuE2 wrote comes along switched off, for a song asked without one.
+    const ownScore = request.abc === null && found.song.hasScore ? await songScore(songId) : null
+    form.value = fromSongRequest(form.value, request, ownScore)
+    // Offered among the tempo blocks rather than written into the style, which would change the song.
+    heardTempo.value = found.song.traits?.from === 'audio' ? (found.song.traits.tempo ?? null) : null
     fieldErrors.value = {}
     navigate('create')
-    show(t('newSongApplied', { title: form.value.title || t('untitled'), song: t('songN', { n: found.song.index }) }))
+    const applied = t('newSongApplied', {
+      title: form.value.title || t('untitled'),
+      song: t('songN', { n: found.song.index }),
+    })
+    show(ownScore === null ? applied : `${applied} ${t('ownScoreApplied')}`)
   } catch (caught) {
     show(caught instanceof Error ? caught.message : String(caught), true)
   }
@@ -693,6 +758,7 @@ async function useAsNewSong(songId: string): Promise<void> {
           :transcriptions="transcriptions"
           :images="images"
           :videos="videos"
+          :ace="aceJobs"
         />
       </a>
     </div>
@@ -726,6 +792,7 @@ async function useAsNewSong(songId: string): Promise<void> {
           :swaps="swaps"
           :videos="videos"
           :images="images"
+          :ace="aceJobs"
           :bundle-window-seconds="bundleWindowSeconds"
           :takes="speechTakes"
           :transcriptions="transcriptions"
@@ -766,7 +833,7 @@ async function useAsNewSong(songId: string): Promise<void> {
       <template #title>
         <div class="flex justify-between items-center">
           <h2>{{ t('library') }}</h2>
-          <span v-if="storageLabel" class="muted text-sm font-normal ml-auto mr-2">{{ storageLabel }}</span>
+          <a v-if="storageLabel" href="#/storage" class="muted text-sm font-normal ml-auto mr-2">{{ storageLabel }}</a>
           <Button
             icon="pi pi-refresh"
             :disabled="libraryLoading"
@@ -856,8 +923,21 @@ async function useAsNewSong(songId: string): Promise<void> {
   <main v-if="labOpened" v-show="view === 'lab'">
     <SpeechLab :active="view === 'lab'" :connected="connected" :live="speechTakes" @error="show($event, true)" />
   </main>
+  <main v-if="aceOpened" v-show="view === 'ace'">
+    <AcePage
+      :active="view === 'ace'"
+      :connected="connected"
+      :live="aceJobs"
+      :runs="runs"
+      @error="show($event, true)"
+      @notice="show($event)"
+    />
+  </main>
   <main v-if="logsOpened" v-show="view === 'logs'">
     <LogPage :active="view === 'logs'" />
+  </main>
+  <main v-if="storageOpened" v-show="view === 'storage'">
+    <StoragePage :active="view === 'storage'" :runs="runs" @notice="show($event)" @error="show($event, true)" />
   </main>
 
   <main v-if="templatesOpened" v-show="view === 'templates'">
@@ -873,6 +953,30 @@ async function useAsNewSong(songId: string): Promise<void> {
           @notice="show($event)"
           @error="show($event, true)"
         />
+      </template>
+    </Card>
+  </main>
+
+  <main v-if="insightsOpened" v-show="view === 'insights'">
+    <Card>
+      <template #title>
+        <h2>{{ t('insights') }}</h2>
+      </template>
+      <template #content>
+        <p class="muted mt-0">{{ t('insightsIntro') }}</p>
+        <InsightsPage :active="view === 'insights'" />
+      </template>
+    </Card>
+  </main>
+
+  <main v-if="sketchOpened" v-show="view === 'sketch'">
+    <Card>
+      <template #title>
+        <h2>{{ t('sketch') }}</h2>
+      </template>
+      <template #content>
+        <p class="muted mt-0">{{ t('sketchIntro') }}</p>
+        <SketchPage :active="view === 'sketch'" @use="useSketch" @notice="show($event)" @error="show($event, true)" />
       </template>
     </Card>
   </main>

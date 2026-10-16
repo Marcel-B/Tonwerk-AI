@@ -87,6 +87,42 @@ jobs:
           test -f out/publish/wwwroot/ui/index.html
           ls out/publish/wwwroot/ui/assets/*.js
 
+  swift-kit:
+    name: TonwerkKit (Swift)
+    # The apps' shared package: the client generated from the OpenAPI description must build and decode real answers.
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: apple/TonwerkKit
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+      # The app itself, for both platforms, unsigned. The package's OpenAPI generator is a build plugin, which Xcode
+      # asks to trust once; here the flag does.
+      - name: Build the app for macOS
+        working-directory: apple
+        run: >-
+          xcodebuild build -project Tonwerk.xcodeproj -scheme Tonwerk -destination 'generic/platform=macOS'
+          -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO -quiet
+
+      - name: Build the app for iPhone
+        working-directory: apple
+        run: >-
+          xcodebuild build -project Tonwerk.xcodeproj -scheme Tonwerk -destination 'generic/platform=iOS'
+          -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO -quiet
+
   frontend-tests:
     name: Frontend tests
     runs-on: ubuntu-latest

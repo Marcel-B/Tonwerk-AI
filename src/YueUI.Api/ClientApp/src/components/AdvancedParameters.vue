@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import Checkbox from 'primevue/checkbox'
 import Panel from 'primevue/panel'
 import { listLoras } from '../api'
 import {
@@ -9,6 +10,7 @@ import {
   maxLoraStrength,
   maxSongSeconds,
   resetAdvanced,
+  usesScore,
   type FormState,
   type SamplingPhase,
 } from '../form'
@@ -20,7 +22,8 @@ import SamplingFields from './SamplingFields.vue'
 
 /**
  * The parameters beside the song's own fields, in a column of their own on wide screens. They edit the same form as
- * GenerateForm and show the field errors of its last submission. The score has a block of its own (ScoreField).
+ * GenerateForm and show the field errors of its last submission. The score has a block of its own (ScoreField), the
+ * seed sits by the song count. The checkbox in the header sends them or the defaults, keeping the values either way.
  */
 defineProps<{
   /** Whether the worker takes the extension's fields; null while unknown (no worker has started yet). */
@@ -32,7 +35,7 @@ const fieldErrors = defineModel<Record<string, string[]>>('errors', { required: 
 const changed = computed(() => advancedChanged(form.value))
 
 /** The request fields shown here; the sampling ones come as `abcSampling.temperature` and so on. */
-const ownFields = new Set(['cot', 'seed', 'draftSteps', 'fullSteps', 'engines', 'maxTokens', 'lora', 'loraStrength'])
+const ownFields = new Set(['cot', 'draftSteps', 'fullSteps', 'engines', 'maxTokens', 'lora', 'loraStrength'])
 const collapsed = ref(true)
 // A refusal about one of these fields would go unseen while the panel is shut.
 watch(fieldErrors, (errors) => {
@@ -41,7 +44,7 @@ watch(fieldErrors, (errors) => {
   }
 })
 // The worker writes a score unless planning is off (an instrumental turns it back on) or one is supplied.
-const plansScore = computed(() => (form.value.cot !== 'off' || form.value.instrumental) && form.value.abc.trim() === '')
+const plansScore = computed(() => (form.value.cot !== 'off' || form.value.instrumental) && !usesScore(form.value))
 // One field for the steps of the chosen quality; each keeps its own value.
 const steps = computed({
   get: () => (form.value.quality === 'draft' ? form.value.draftSteps : form.value.fullSteps),
@@ -127,200 +130,187 @@ const loraHint = computed(() => {
 
 <template>
   <!-- Collapsed at first: a normal song needs none of this, and the queue sits right below. -->
-  <Panel v-model:collapsed="collapsed" toggleable>
+  <!-- The header lays its actions out inline, which left a checkbox and a tag on the baseline below the buttons. -->
+  <Panel v-model:collapsed="collapsed" toggleable :pt="{ headerActions: { class: 'flex items-center gap-1' } }">
     <template #header>
       <div class="flex gap-4">
         {{ t('advanced') }}
       </div>
     </template>
     <template #icons>
-      <Tag v-if="changed" severity="warn">{{ t('advancedChanged') }}</Tag>
+      <Tag v-if="!form.useAdvanced" severity="secondary">{{ t('advancedOff') }}</Tag>
+      <Tag v-else-if="changed" severity="warn">{{ t('advancedChanged') }}</Tag>
+      <Checkbox v-model="form.useAdvanced" binary :aria-label="t('advancedUse')" v-tooltip="t('advancedUse')" />
     </template>
-    <div>
-      <small class="muted">{{ t('advancedIntro') }}</small>
-      <div class="flex justify-end">
-        <Button
-          icon="pi pi-refresh"
-          :label="changed ? t('advancedReset') : t('advancedAtDefaults')"
-          size="small"
-          severity="warn"
-          :disabled="!changed"
-          @click="resetParameters"
-        />
-      </div>
-    </div>
-    <p v-if="extensions === false" class="notice" role="note">{{ t('extensionsOff') }}</p>
-
-    <div class="grid grid-cols-2 gap-3">
+    <small v-if="!form.useAdvanced" class="muted block mb-2">{{ t('advancedUnused') }}</small>
+    <div :class="{ 'opacity-60': !form.useAdvanced }">
       <div>
-        <FloatLabel variant="on" class="mt-6 w-full">
-          <Select
-            id="gen-cot"
-            input-class="w-full"
-            class="w-full"
-            v-model="form.cot"
-            :options="cotItems"
-            option-label="label"
-            option-value="value"
-            aria-describedby="gen-cot-help"
-          />
-          <label for="gen-cot">{{ t('cot') }}</label>
-        </FloatLabel>
-        <small v-if="fieldErrors.cot" class="danger">{{ fieldErrors.cot.join(' ') }}</small>
-        <FieldHelp id="gen-cot-help" :hint="t('cotHint')" :more="t('cotMore')" />
-      </div>
-
-      <div>
-        <FloatLabel variant="on" class="mt-6 w-full">
-          <InputText
-            fluid
-            id="gen-seed"
-            v-model="form.seed"
-            type="text"
-            inputmode="numeric"
-            pattern="[0-9]*"
-            :placeholder="t('seedPlaceholder')"
-            aria-describedby="gen-seed-help"
-          />
-          <label for="gen-seed">{{ t('seed') }}</label>
-        </FloatLabel>
-
-        <FieldHelp id="gen-seed-help" :hint="t('seedHint')" :more="t('seedMore')" />
-        <small v-if="fieldErrors.seed" class="danger">{{ fieldErrors.seed.join(' ') }}</small>
-      </div>
-
-      <div>
-        <FloatLabel variant="on" class="mt-6">
-          <NumberField
-            id="gen-steps"
-            v-model="steps"
-            :min="1"
-            :max="form.quality === 'draft' ? 32 : 64"
-            aria-describedby="gen-steps-help"
-          />
-          <label for="gen-steps">{{ form.quality === 'draft' ? t('stepsDraft') : t('stepsFull') }}</label>
-        </FloatLabel>
-        <FieldHelp
-          id="gen-steps-help"
-          :hint="form.quality === 'draft' ? t('draftStepsHint') : t('fullStepsHint')"
-          :more="t('stepsMore')"
-        />
-        <small v-if="fieldErrors.draftSteps || fieldErrors.fullSteps" class="danger">
-          {{ (fieldErrors.draftSteps ?? fieldErrors.fullSteps)!.join(' ') }}
-        </small>
-      </div>
-      <div>
-        <FloatLabel variant="on" class="mt-6 w-full">
-          <Select
-            id="gen-engines"
-            v-model="form.engines"
-            class="w-full"
-            :options="engineOptions"
-            option-value="value"
-            option-label="label"
-            aria-describedby="gen-engines-help"
-          />
-          <label for="gen-engines">{{ t('engines') }}</label>
-        </FloatLabel>
-        <FieldHelp id="gen-engines-help" :hint="t('enginesHint')" :more="t('enginesMore')" />
-        <small v-if="fieldErrors.engines" class="danger">{{ fieldErrors.engines.join(' ') }}</small>
-      </div>
-
-      <div>
-        <FloatLabel variant="on" class="mt-6 w-full">
-          <Select
-            option-label="label"
-            option-value="value"
-            class="w-full"
-            id="gen-length"
-            :options="lengthOptions"
-            v-model.number="form.maxSeconds"
-            aria-describedby="gen-length-help"
-          />
-
-          <label for="gen-length">{{ t('maxLength') }}</label>
-        </FloatLabel>
-        <FieldHelp id="gen-length-help" :hint="t('maxLengthHint')" :more="t('maxLengthMore')" />
-        <small v-if="fieldErrors.maxTokens" class="danger">{{ fieldErrors.maxTokens.join(' ') }}</small>
-      </div>
-
-      <div>
-        <FloatLabel variant="on" class="mt-6 w-full">
-          <Select
-            id="gen-lora"
-            v-model="form.lora"
-            class="w-full"
-            :options="loraOptions"
-            option-value="value"
-            option-label="label"
-            aria-describedby="gen-lora-help"
-          />
-          <label for="gen-lora">{{ t('lora') }}</label>
-        </FloatLabel>
-        <FieldHelp id="gen-lora-help" :hint="loraHint" :more="t('loraMore', { folder: loras?.folder ?? 'loras/' })" />
-        <small v-if="fieldErrors.lora" class="danger">{{ fieldErrors.lora.join(' ') }}</small>
-      </div>
-
-      <div>
-        <FloatLabel variant="on" class="mt-6">
-          <NumberField
-            id="gen-lora-strength"
-            v-model="form.loraStrength"
-            :min="0"
-            :max="maxLoraStrength"
-            :fraction-digits="2"
-            :disabled="form.lora === ''"
-            aria-describedby="gen-lora-strength-help"
-          />
-          <label for="gen-lora-strength">{{ t('loraStrength') }}</label>
-        </FloatLabel>
-        <FieldHelp id="gen-lora-strength-help" :hint="t('loraStrengthHint')" :more="t('loraStrengthMore')" />
-        <small v-if="fieldErrors.loraStrength" class="danger">{{ fieldErrors.loraStrength.join(' ') }}</small>
-      </div>
-
-      <Panel class="col-span-2" toggleable>
-        <template #header>
-          {{ t('samplingSemantic') }}
-        </template>
-        <small class="muted">{{ t('samplingSemanticIntro') }}</small>
-        <SamplingFields class="mt-6" v-model="form.semanticSampling" phase="semanticSampling" :errors="fieldErrors" />
-
+        <small class="muted">{{ t('advancedIntro') }}</small>
         <div class="flex justify-end">
           <Button
             icon="pi pi-refresh"
-            severity="warn"
+            :label="changed ? t('advancedReset') : t('advancedAtDefaults')"
             size="small"
-            :label="samplingChanged('semanticSampling') ? t('samplingReset') : t('samplingAtDefaults')"
-            :disabled="!samplingChanged('semanticSampling')"
-            @click="resetSampling('semanticSampling')"
+            severity="warn"
+            :disabled="!changed"
+            @click="resetParameters"
           />
         </div>
-      </Panel>
+      </div>
+      <p v-if="extensions === false" class="notice" role="note">{{ t('extensionsOff') }}</p>
 
-      <Panel class="col-span-2" toggleable>
-        <template #header>
-          {{ t('samplingAbc') }}
-        </template>
-        <small class="muted">{{ t('samplingAbcIntro') }}</small>
-        <small v-if="!plansScore" class="inactive">{{ t('samplingAbcInactive') }}</small>
-        <SamplingFields
-          class="mt-6"
-          v-model="form.abcSampling"
-          phase="abcSampling"
-          :errors="fieldErrors"
-          :disabled="!plansScore"
-        />
-        <div class="flex justify-end">
-          <Button
-            severity="warn"
-            size="small"
-            icon="pi pi-refresh"
-            :disabled="!samplingChanged('abcSampling')"
-            :label="samplingChanged('abcSampling') ? t('samplingReset') : t('samplingAtDefaults')"
-            @click="resetSampling('abcSampling')"
-          />
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <FloatLabel variant="on" class="mt-6 w-full">
+            <Select
+              id="gen-cot"
+              input-class="w-full"
+              class="w-full"
+              v-model="form.cot"
+              :options="cotItems"
+              option-label="label"
+              option-value="value"
+              aria-describedby="gen-cot-help"
+            />
+            <label for="gen-cot">{{ t('cot') }}</label>
+          </FloatLabel>
+          <small v-if="fieldErrors.cot" class="danger">{{ fieldErrors.cot.join(' ') }}</small>
+          <FieldHelp id="gen-cot-help" :hint="t('cotHint')" :more="t('cotMore')" />
         </div>
-      </Panel>
+
+        <div>
+          <FloatLabel variant="on" class="mt-6">
+            <NumberField
+              id="gen-steps"
+              v-model="steps"
+              :min="1"
+              :max="form.quality === 'draft' ? 32 : 64"
+              aria-describedby="gen-steps-help"
+            />
+            <label for="gen-steps">{{ form.quality === 'draft' ? t('stepsDraft') : t('stepsFull') }}</label>
+          </FloatLabel>
+          <FieldHelp
+            id="gen-steps-help"
+            :hint="form.quality === 'draft' ? t('draftStepsHint') : t('fullStepsHint')"
+            :more="t('stepsMore')"
+          />
+          <small v-if="fieldErrors.draftSteps || fieldErrors.fullSteps" class="danger">
+            {{ (fieldErrors.draftSteps ?? fieldErrors.fullSteps)!.join(' ') }}
+          </small>
+        </div>
+        <div>
+          <FloatLabel variant="on" class="mt-6 w-full">
+            <Select
+              id="gen-engines"
+              v-model="form.engines"
+              class="w-full"
+              :options="engineOptions"
+              option-value="value"
+              option-label="label"
+              aria-describedby="gen-engines-help"
+            />
+            <label for="gen-engines">{{ t('engines') }}</label>
+          </FloatLabel>
+          <FieldHelp id="gen-engines-help" :hint="t('enginesHint')" :more="t('enginesMore')" />
+          <small v-if="fieldErrors.engines" class="danger">{{ fieldErrors.engines.join(' ') }}</small>
+        </div>
+
+        <div>
+          <FloatLabel variant="on" class="mt-6 w-full">
+            <Select
+              option-label="label"
+              option-value="value"
+              class="w-full"
+              id="gen-length"
+              :options="lengthOptions"
+              v-model.number="form.maxSeconds"
+              aria-describedby="gen-length-help"
+            />
+
+            <label for="gen-length">{{ t('maxLength') }}</label>
+          </FloatLabel>
+          <FieldHelp id="gen-length-help" :hint="t('maxLengthHint')" :more="t('maxLengthMore')" />
+          <small v-if="fieldErrors.maxTokens" class="danger">{{ fieldErrors.maxTokens.join(' ') }}</small>
+        </div>
+
+        <div>
+          <FloatLabel variant="on" class="mt-6 w-full">
+            <Select
+              id="gen-lora"
+              v-model="form.lora"
+              class="w-full"
+              :options="loraOptions"
+              option-value="value"
+              option-label="label"
+              aria-describedby="gen-lora-help"
+            />
+            <label for="gen-lora">{{ t('lora') }}</label>
+          </FloatLabel>
+          <FieldHelp id="gen-lora-help" :hint="loraHint" :more="t('loraMore', { folder: loras?.folder ?? 'loras/' })" />
+          <small v-if="fieldErrors.lora" class="danger">{{ fieldErrors.lora.join(' ') }}</small>
+        </div>
+
+        <div>
+          <FloatLabel variant="on" class="mt-6">
+            <NumberField
+              id="gen-lora-strength"
+              v-model="form.loraStrength"
+              :min="0"
+              :max="maxLoraStrength"
+              :fraction-digits="2"
+              :disabled="form.lora === ''"
+              aria-describedby="gen-lora-strength-help"
+            />
+            <label for="gen-lora-strength">{{ t('loraStrength') }}</label>
+          </FloatLabel>
+          <FieldHelp id="gen-lora-strength-help" :hint="t('loraStrengthHint')" :more="t('loraStrengthMore')" />
+          <small v-if="fieldErrors.loraStrength" class="danger">{{ fieldErrors.loraStrength.join(' ') }}</small>
+        </div>
+
+        <Panel class="col-span-2" toggleable>
+          <template #header>
+            {{ t('samplingSemantic') }}
+          </template>
+          <small class="muted">{{ t('samplingSemanticIntro') }}</small>
+          <SamplingFields class="mt-6" v-model="form.semanticSampling" phase="semanticSampling" :errors="fieldErrors" />
+
+          <div class="flex justify-end">
+            <Button
+              icon="pi pi-refresh"
+              severity="warn"
+              size="small"
+              :label="samplingChanged('semanticSampling') ? t('samplingReset') : t('samplingAtDefaults')"
+              :disabled="!samplingChanged('semanticSampling')"
+              @click="resetSampling('semanticSampling')"
+            />
+          </div>
+        </Panel>
+
+        <Panel class="col-span-2" toggleable>
+          <template #header>
+            {{ t('samplingAbc') }}
+          </template>
+          <small class="muted">{{ t('samplingAbcIntro') }}</small>
+          <small v-if="!plansScore" class="inactive">{{ t('samplingAbcInactive') }}</small>
+          <SamplingFields
+            class="mt-6"
+            v-model="form.abcSampling"
+            phase="abcSampling"
+            :errors="fieldErrors"
+            :disabled="!plansScore"
+          />
+          <div class="flex justify-end">
+            <Button
+              severity="warn"
+              size="small"
+              icon="pi pi-refresh"
+              :disabled="!samplingChanged('abcSampling')"
+              :label="samplingChanged('abcSampling') ? t('samplingReset') : t('samplingAtDefaults')"
+              @click="resetSampling('abcSampling')"
+            />
+          </div>
+        </Panel>
+      </div>
     </div>
 
     <template #footer>

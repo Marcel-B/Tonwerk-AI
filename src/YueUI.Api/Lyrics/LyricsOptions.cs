@@ -48,6 +48,19 @@ public sealed class LyricsOptions
 
     public double Temperature { get; set; } = 0.9;
 
+    /// <summary>
+    /// Claude models the picker offers beside LM Studio's, while an Anthropic key is set (the sketches' key,
+    /// <c>Sketch:ApiKey</c>, <c>ANTHROPIC_API_KEY</c> or <c>~/.config/tonwerk/anthropic.key</c>). Empty offers none.
+    /// Lyrics are short, so even Fable costs little; Haiku is the quick and cheap one.
+    /// </summary>
+    public string[] ClaudeModels { get; set; } = ["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-haiku-5-5"];
+
+    /// <summary>How hard Claude thinks over lyrics: low, medium, high, xhigh or max. Lyrics are short; medium suffices.</summary>
+    public string ClaudeEffort { get; set; } = "medium";
+
+    /// <summary>Upper limit of Claude's answer, thinking included.</summary>
+    public int ClaudeMaxTokens { get; set; } = 16000;
+
     public string LmsPath => string.IsNullOrWhiteSpace(Lms)
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".lmstudio", "bin", "lms")
         : Lms;

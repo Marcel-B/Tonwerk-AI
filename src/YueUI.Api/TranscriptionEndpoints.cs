@@ -18,28 +18,46 @@ public static partial class TranscriptionEndpoints
 
     public static RouteGroupBuilder MapTranscriptionEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/transcriptions", (TranscriptionLibrary library) => library.List());
+        api.MapGet("/transcriptions", (TranscriptionLibrary library) => library.List())
+            .WithName("ListTranscriptions")
+            .Produces<TranscriptionList>(StatusCodes.Status200OK);
         api.MapPost("/transcriptions", Transcribe)
             // A recording is posted from a plain form; there is no login and no cookie that a forged request could use.
             .DisableAntiforgery()
             .WithFormOptions(multipartBodyLengthLimit: MaxUploadBytes)
-            .WithMetadata(new RequestSizeLimitAttribute(MaxUploadBytes));
+            .WithMetadata(new RequestSizeLimitAttribute(MaxUploadBytes))
+            .WithName("CreateTranscription")
+            .Produces<TranscriptionState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
         api.MapPost("/transcriptions/{id}/cancel", async (string id, WorkerHost host, JobQueue queue, CancellationToken cancellationToken) =>
             queue.Cancel(id) || await host.CancelTranscriptionAsync(id, cancellationToken)
                 ? Results.Accepted()
-                : Results.Problem(title: "Not running", statusCode: StatusCodes.Status404NotFound));
+                : Results.Problem(title: "Not running", statusCode: StatusCodes.Status404NotFound))
+            .WithName("CancelTranscription")
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status404NotFound);
         api.MapGet("/transcriptions/{id}/score", (string id, bool? download, TranscriptionLibrary library) =>
             library.Directory(id) is { } directory && File.Exists(Path.Combine(directory, "score.abc"))
                 ? Results.File(Path.Combine(directory, "score.abc"), "text/vnd.abc; charset=utf-8", download == true ? $"{id}.abc" : null)
-                : Results.NotFound());
+                : Results.NotFound())
+            .WithName("GetTranscriptionScore")
+            .ProducesFile("text/vnd.abc")
+            .Produces(StatusCodes.Status404NotFound);
         // score.abc plus SheetSage2's MIDI parts and timed annotations; the recording's own copy is not in the folder.
         api.MapGet("/transcriptions/{id}/zip", (string id, TranscriptionLibrary library) =>
             library.Directory(id) is { } directory
                 ? LibraryEndpoints.Zip($"{id}.zip", Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
                     .Select(path => (path, Path.GetRelativePath(directory, path))))
-                : Results.NotFound());
+                : Results.NotFound())
+            .WithName("DownloadTranscriptionZip")
+            .ProducesFile("application/zip")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/transcriptions/{id}", (string id, TranscriptionLibrary library) =>
-            library.Delete(id) ? Results.NoContent() : Results.NotFound());
+            library.Delete(id) ? Results.NoContent() : Results.NotFound())
+            .WithName("DeleteTranscription")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

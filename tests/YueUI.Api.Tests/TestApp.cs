@@ -78,7 +78,28 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeAudioMidi AudioMidi { get; } = new();
 
+    public FakeAce Ace { get; } = new();
+
+    public FakeSketchModel Sketches { get; } = new();
+
+    public FakeCloudLyrics CloudLyrics { get; } = new();
+
+    /// <summary>The Anthropic key the sketches see; null leaves them unconfigured.</summary>
+    public string? SketchKey { get; set; } = "sketch-key";
+
+    public FakeListener Listener { get; } = new();
+
+    public FakeSongListener SongListener { get; } = new();
+
+    /// <summary>Whether the songs are heard for tempo and key in the background; off unless a test is about it.</summary>
+    public bool AnalyseSongs { get; set; }
+
     public FakeNextcloud Nextcloud { get; } = new();
+
+    public FakeLoki Loki { get; } = new();
+
+    /// <summary>Where the fake Loki is expected; null (the default) leaves shipping the log off.</summary>
+    public string? LokiUrl { get; set; }
 
     /// <summary>The backup folder in the fake Nextcloud; null (the default) leaves the backup off.</summary>
     public string? NextcloudUrl { get; set; }
@@ -190,6 +211,27 @@ public sealed class TestApp : WebApplicationFactory<Program>
             services.Configure<Video.MontageOptions>(options => options.MediaRoot = MediaRoot);
             services.AddSingleton<Images.IImageEngine>(Images);
             services.AddSingleton<AudioMidi.IAudioMidiEngine>(AudioMidi);
+            services.AddSingleton<Ace.IAceEngine>(Ace);
+            services.AddSingleton<Sketches.ISketchModel>(Sketches);
+            services.AddSingleton<ICloudLyricsModel>(CloudLyrics);
+            services.Configure<Sketches.SketchOptions>(options =>
+            {
+                options.ApiKey = SketchKey;
+                options.KeyFile = Path.Combine(Root, "anthropic.key");
+            });
+            services.AddSingleton<Timing.IWordListener>(Listener);
+            services.AddSingleton<Analysis.ISongListener>(SongListener);
+            services.Configure<Analysis.AnalysisOptions>(options =>
+            {
+                options.Auto = AnalyseSongs;
+                options.StartDelay = TimeSpan.Zero;
+                options.IdlePoll = TimeSpan.FromMilliseconds(10);
+            });
+            services.Configure<Ace.AceOptions>(options =>
+            {
+                options.Root = Path.Combine(Root, "ace");
+                options.WaitInterval = TimeSpan.FromMilliseconds(10);
+            });
             services.Configure<Images.ImageOptions>(options =>
             {
                 options.Root = Path.Combine(Root, "images");
@@ -224,6 +266,13 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.TransientRetryDelay = TimeSpan.Zero;
             });
             services.AddHttpClient(WebDavClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeNextcloud.Handler(Nextcloud));
+            services.Configure<Monitoring.MonitoringOptions>(options =>
+            {
+                options.Loki.Url = LokiUrl;
+                options.Loki.Host = "mini";
+                options.Loki.BatchDelay = TimeSpan.FromMilliseconds(10);
+            });
+            services.AddHttpClient(Monitoring.LokiShipper.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeLoki.Handler(Loki));
             if (_fakeWorker)
             {
                 services.AddSingleton<IWorkerLauncher>(Launcher);
@@ -544,7 +593,8 @@ public sealed class FakeEncoder : IAudioEncoder
         Target = m4a;
         Format = format;
         BitRate = bitRate;
-        if (!Available)
+        // A FLAC is only encoded to change its loudness, which the tests leave to LoudnessTests: the original goes.
+        if (!Available || format == AudioFormat.Flac)
         {
             return Task.FromResult(false);
         }
@@ -811,6 +861,11 @@ public sealed class FakeSpeech : ISpeechEngine
 
     public List<SpeechJob> Jobs { get; } = [];
 
+    public List<CleanJob> Cleanups { get; } = [];
+
+    /// <summary>How long a prepared recording to clean is.</summary>
+    public double RecordingSeconds { get; set; } = 90;
+
     /// <summary>The first four bytes of each recording posted, in hex.</summary>
     public List<string> Recordings { get; } = [];
 
@@ -823,6 +878,33 @@ public sealed class FakeSpeech : ISpeechEngine
             Recordings.Add(Convert.ToHexString(File.ReadAllBytes(input), 0, 4));
         }
         await File.WriteAllBytesAsync(output, Wav(VoiceSeconds), cancellationToken);
+    }
+
+    public async Task PrepareRecordingAsync(string input, string output, CancellationToken cancellationToken)
+    {
+        lock (Recordings)
+        {
+            Recordings.Add(Convert.ToHexString(File.ReadAllBytes(input), 0, 4));
+        }
+        await File.WriteAllBytesAsync(output, Wav(RecordingSeconds), cancellationToken);
+    }
+
+    public async Task<SpeechResult> CleanAsync(CleanJob job, Action<string> stage, Action<double> progress, CancellationToken cancellationToken)
+    {
+        lock (Cleanups)
+        {
+            Cleanups.Add(job);
+        }
+        stage("loading");
+        stage("cleaning");
+        progress(0.5);
+        await Gate.Task.WaitAsync(cancellationToken);
+        if (Failure is { } failure)
+        {
+            throw new SpeechException(failure);
+        }
+        await File.WriteAllBytesAsync(job.Output, Wav(RecordingSeconds), cancellationToken);
+        return new SpeechResult(1.5, 9.75, 1.2);
     }
 
     public async Task<SpeechResult> SpeakAsync(SpeechJob job, Action<string> stage, CancellationToken cancellationToken)
@@ -1085,6 +1167,142 @@ public sealed class FakeImages : Images.IImageEngine
     }
 }
 
+/// <summary>Claude writing lyrics: off (no key) unless a test switches it on; can be held back or made to fail.</summary>
+public sealed class FakeCloudLyrics : ICloudLyricsModel
+{
+    public bool Configured { get; set; }
+
+    public string Answer { get; set; } = "**Verse:**\nCloud line\n\n[Chorus]\nSky line";
+
+    public TaskCompletionSource Gate { get; set; } = CompletedGate();
+
+    public string? Failure { get; set; }
+
+    public List<(string Model, string System, string Prompt, string? Image)> Calls { get; } = [];
+
+    public async Task<string> WriteAsync(string model, string system, string prompt, string? image, CancellationToken cancellationToken)
+    {
+        lock (Calls)
+        {
+            Calls.Add((model, system, prompt, image));
+        }
+        await Gate.Task.WaitAsync(cancellationToken);
+        return Failure is { } failure ? throw new LyricsUnavailableException(failure) : Answer;
+    }
+
+    private static TaskCompletionSource CompletedGate()
+    {
+        var gate = new TaskCompletionSource();
+        gate.SetResult();
+        return gate;
+    }
+}
+
+/// <summary>Claude: answers every sketch with <see cref="Plan"/>; can be held back or made to fail.</summary>
+public sealed class FakeSketchModel : Sketches.ISketchModel
+{
+    public Sketches.SketchPlan Plan { get; set; } = SketchSamples.Plan();
+
+    public TaskCompletionSource Gate { get; set; } = CompletedGate();
+
+    public string? Failure { get; set; }
+
+    public List<(string Sketch, string? Instruction)> Calls { get; } = [];
+
+    public List<string> Models { get; } = [];
+
+    public async Task<Sketches.SketchAnswer> PlanAsync(string sketch, string? instruction, string model, CancellationToken cancellationToken)
+    {
+        lock (Calls)
+        {
+            Calls.Add((sketch, instruction));
+            Models.Add(model);
+        }
+        await Gate.Task.WaitAsync(cancellationToken);
+        if (Failure is { } failure)
+        {
+            throw new Sketches.SketchModelException(failure);
+        }
+        return new Sketches.SketchAnswer(Plan, "claude-test", 1200, 9000);
+    }
+
+    private static TaskCompletionSource CompletedGate()
+    {
+        var gate = new TaskCompletionSource();
+        gate.SetResult();
+        return gate;
+    }
+}
+
+/// <summary>
+/// acestep.cpp: records what it was asked for and writes a WAV per song, with the request as ace-lm would fill it in
+/// (lyrics, tempo, key) when the LM runs; can be held back to see a job in the works.
+/// </summary>
+public sealed class FakeAce : Ace.IAceEngine
+{
+    public bool Installed { get; set; } = true;
+
+    public Ace.AceModelFiles Models { get; set; } = new(
+        ["acestep-5Hz-lm-4B-Q8_0.gguf", "acestep-5Hz-lm-1.7B-Q8_0.gguf"],
+        ["acestep-v15-turbo-Q8_0.gguf", "acestep-v15-sft-Q8_0.gguf"],
+        true,
+        true,
+        ["singer.safetensors"]);
+
+    /// <summary>Held open to keep a job running; completed by default.</summary>
+    public TaskCompletionSource Gate { get; set; } = CompletedGate();
+
+    /// <summary>Set to make the next jobs fail with it.</summary>
+    public string? Failure { get; set; }
+
+    public List<Ace.AceRun> Runs { get; } = [];
+
+    /// <summary>What the source WAV held when the job ran, for covers.</summary>
+    public byte[]? Source { get; private set; }
+
+    public Ace.AceModelFiles Files() => Models;
+
+    public async Task<IReadOnlyList<Ace.AceOutput>> GenerateAsync(Ace.AceRun run, Action<string, double> progress, CancellationToken cancellationToken)
+    {
+        lock (Runs)
+        {
+            Runs.Add(run);
+        }
+        Source = run.SourceAudio is { } source ? await File.ReadAllBytesAsync(source, cancellationToken) : null;
+        progress(run.UsesLm ? "composing" : "synthesizing", 0.4);
+        await Gate.Task.WaitAsync(cancellationToken);
+        if (Failure is { } failure)
+        {
+            throw new Ace.AceException(failure);
+        }
+        var batch = (int?)run.Request["lm_batch_size"] ?? (int?)run.Request["synth_batch_size"] ?? 1;
+        List<Ace.AceOutput> outputs = [];
+        for (var i = 0; i < batch; i++)
+        {
+            var wave = Path.Combine(run.WorkDirectory, $"request{i}0.wav");
+            await File.WriteAllBytesAsync(wave, FakeSpeech.Wav(2.5), cancellationToken);
+            var request = run.Request.DeepClone().AsObject();
+            request["seed"] = (long)run.Request["seed"]! + i;
+            if (run.UsesLm)
+            {
+                request["lyrics"] ??= $"[Verse]\nWritten by the LM {i}";
+                request["bpm"] ??= 120;
+                request["keyscale"] ??= "A minor";
+                request["audio_codes"] = "1,2,3";
+            }
+            outputs.Add(new Ace.AceOutput(wave, request));
+        }
+        return outputs;
+    }
+
+    private static TaskCompletionSource CompletedGate()
+    {
+        var gate = new TaskCompletionSource();
+        gate.SetResult();
+        return gate;
+    }
+}
+
 /// <summary>Basic Pitch: records what it was asked to convert and writes a few MIDI bytes, or fails as told.</summary>
 public sealed class FakeAudioMidi : AudioMidi.IAudioMidiEngine
 {
@@ -1119,5 +1337,95 @@ public sealed class FakeAudioMidi : AudioMidi.IAudioMidiEngine
         }
         await File.WriteAllBytesAsync(job.Output, Output?.Invoke(job) ?? Midi, cancellationToken);
         return new AudioMidi.AudioMidiResult(Notes, 1.5);
+    }
+}
+
+/// <summary>Loki's push endpoint: keeps every body it is sent.</summary>
+public sealed class FakeLoki
+{
+    private readonly Lock _gate = new();
+    private readonly List<(string Path, JsonObject Body)> _pushes = [];
+
+    /// <summary>Answers the next pushes with this status before taking them, e.g. 503 while Loki starts.</summary>
+    public Queue<HttpStatusCode> Refusals { get; } = new();
+
+    public (string Path, JsonObject Body)[] Pushes()
+    {
+        lock (_gate)
+        {
+            return [.. _pushes];
+        }
+    }
+
+    /// <summary>Every line pushed so far with its labels.</summary>
+    public (JsonObject Labels, string Line)[] Lines() =>
+        [.. Pushes().SelectMany(push => push.Body["streams"]!.AsArray()
+            .SelectMany(stream => stream!["values"]!.AsArray()
+                .Select(value => (stream["stream"]!.AsObject(), value![1]!.GetValue<string>()))))];
+
+    public sealed class Handler(FakeLoki loki) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
+            lock (loki._gate)
+            {
+                if (loki.Refusals.TryDequeue(out var refusal))
+                {
+                    return new HttpResponseMessage(refusal);
+                }
+                loki._pushes.Add((request.RequestUri!.AbsolutePath, body));
+            }
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        }
+    }
+}
+
+/// <summary>librosa: hears what it is given per song id; off by default.</summary>
+public sealed class FakeSongListener : Analysis.ISongListener
+{
+    public bool Installed { get; set; }
+
+    /// <summary>Tempo and key by song id; a song missing here fails.</summary>
+    public Dictionary<string, (double Tempo, string Key)> Songs { get; } = [];
+
+    public List<IReadOnlyList<Analysis.SongToHear>> Batches { get; } = [];
+
+    public Task<IReadOnlyList<Analysis.HeardSong>> HearAsync(IReadOnlyList<Analysis.SongToHear> songs, CancellationToken cancellationToken)
+    {
+        lock (Batches)
+        {
+            Batches.Add(songs);
+        }
+        return Task.FromResult<IReadOnlyList<Analysis.HeardSong>>(
+        [
+            .. songs.Select(s => Songs.TryGetValue(s.Id, out var heard)
+                ? new Analysis.HeardSong(s.Id, heard.Tempo, heard.Key, null)
+                : new Analysis.HeardSong(s.Id, null, null, "unreadable")),
+        ]);
+    }
+}
+
+/// <summary>Whisper: hears the words it is given; off by default, so the other tests' songs are not timed.</summary>
+public sealed class FakeListener : Timing.IWordListener
+{
+    public bool Installed { get; set; }
+
+    public List<Timing.HeardWord> Words { get; set; } = [];
+
+    /// <summary>Set to make the next songs fail with it.</summary>
+    public string? Failure { get; set; }
+
+    public List<(string Audio, string? Language, string Prompt)> Calls { get; } = [];
+
+    public Task<IReadOnlyList<Timing.HeardWord>> ListenAsync(string audio, string? language, string prompt, CancellationToken cancellationToken)
+    {
+        lock (Calls)
+        {
+            Calls.Add((audio, language, prompt));
+        }
+        return Failure is not null
+            ? Task.FromException<IReadOnlyList<Timing.HeardWord>>(new Timing.TimingException(Failure))
+            : Task.FromResult<IReadOnlyList<Timing.HeardWord>>(Words);
     }
 }

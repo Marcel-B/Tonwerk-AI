@@ -58,7 +58,10 @@ public static class LyricsEndpoints
             {
                 return Results.Problem(title: exception.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
-        });
+        })
+            .WithName("ListLyricsModels")
+            .Produces<LyricsModels>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         api.MapPost("/lyrics", async (LyricsRequest request, JobQueue queue, CancellationToken cancellationToken) =>
         {
@@ -85,7 +88,47 @@ public static class LyricsEndpoints
                 return invalid;
             }
             return Results.Accepted(value: await queue.LyricsAsync(request with { Lyrics = null, Instruction = null }, cancellationToken));
-        });
+        })
+            .WithName("WriteLyrics")
+            .Produces<LyricsState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem();
+
+        // A song from a few words in one call, for an iPhone shortcut: the draft first, the song once it is done.
+        api.MapPost("/quick", async (QuickSongRequest request, JobQueue queue, QuickSongs quick, Library.SongLibrary library, CancellationToken cancellationToken) =>
+        {
+            var errors = new Dictionary<string, string[]>();
+            if (string.IsNullOrWhiteSpace(request.Keywords) || request.Keywords.Length > MaxKeywordsLength)
+            {
+                errors["keywords"] = [$"What the song is about, up to {MaxKeywordsLength} characters."];
+            }
+            var language = QuickSongs.LanguageFrom(request.Language);
+            if (language is null)
+            {
+                errors["language"] = ["de or en."];
+            }
+            var style = string.IsNullOrWhiteSpace(request.Style) ? NewestStyle(library) : request.Style.Trim();
+            if (style is null)
+            {
+                errors["style"] = ["No song to take the style from yet; send one."];
+            }
+            var title = string.IsNullOrWhiteSpace(request.Title) ? QuickSongs.TitleFrom(request.Keywords ?? "") : request.Title.Trim();
+            // Checked now with stand-in lyrics, so a wrong batch or quality is refused before the draft is written.
+            var song = new GenerateRequest(style ?? "", "[verse]\n…", title, Batch: request.Batch ?? 1, Quality: request.Quality ?? "draft");
+            foreach (var (key, messages) in song.Validate())
+            {
+                errors[key] = messages;
+            }
+            if (errors.Count > 0)
+            {
+                return Results.ValidationProblem(errors);
+            }
+            var draft = await queue.LyricsAsync(new LyricsRequest(request.Keywords!.Trim(), style, language), cancellationToken);
+            await quick.ExpectAsync(draft.Id, song, cancellationToken);
+            return Results.Accepted(value: new QuickSongStarted(draft.Id, draft.Stage, title, style!));
+        })
+            .WithName("StartQuickSong")
+            .Produces<QuickSongStarted>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem();
         return api;
     }
 
@@ -128,6 +171,10 @@ public static class LyricsEndpoints
                 ["model"] = [$"A model id as GET /api/lyrics/models lists it, up to {MaxModelLength} characters."],
             })
             : null;
+
+    /// <summary>The style of the newest run that has one: what is being made these days.</summary>
+    private static string? NewestStyle(Library.SongLibrary library) =>
+        library.ListRuns().Select(run => run.Style).FirstOrDefault(style => !string.IsNullOrWhiteSpace(style));
 
     /// <summary>Checked here so that LM Studio is not loaded for a request it cannot read.</summary>
     private static bool IsImage(string image)

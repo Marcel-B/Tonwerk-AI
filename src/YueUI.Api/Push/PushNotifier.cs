@@ -14,7 +14,12 @@ namespace YueUI.Api.Push;
 /// again once it runs. Cancelled songs stay silent, since whoever cancelled them knows. Sending is decoupled from
 /// reading, so a slow push service never makes this subscriber fall behind and get dropped by <see cref="Status.StatusHub"/>.
 /// </remarks>
-public sealed class PushNotifier(Status.StatusHub hub, PushStore store, IPushSender sender, ILogger<PushNotifier> logger) : BackgroundService
+public sealed class PushNotifier(
+    Status.StatusHub hub,
+    PushStore store,
+    IPushSender sender,
+    ILogger<PushNotifier> logger,
+    Lyrics.QuickSongs? quick = null) : BackgroundService
 {
     public const string AppUrl = "/ui/";
 
@@ -77,6 +82,10 @@ public sealed class PushNotifier(Status.StatusHub hub, PushStore store, IPushSen
         {
             _finished[$"video:{video.Id}"] = video.Finished;
         }
+        foreach (var job in snapshot.Ace ?? [])
+        {
+            _finished[$"ace:{job.Id}"] = job.Finished;
+        }
         if (snapshot.Lyrics is { } lyrics)
         {
             _finished[$"lyrics:{lyrics.Id}"] = lyrics.Finished;
@@ -106,7 +115,12 @@ public sealed class PushNotifier(Status.StatusHub hub, PushStore store, IPushSen
             case Video.VideoState video when Finishes($"video:{video.Id}", video.Finished) && video.Stage != "cancelled":
                 Queue($"video:{video.Id}", language => PushTexts.Video(video, language));
                 break;
-            case LyricsState lyrics when Finishes($"lyrics:{lyrics.Id}", lyrics.Finished):
+            case Ace.AceJob job when Finishes($"ace:{job.Id}", job.Finished) && job.Stage != "cancelled":
+                Queue($"ace:{job.Id}", language => PushTexts.Ace(job, language));
+                break;
+            // A shortcut's draft is announced by its song; only a failure is worth hearing about at once.
+            case LyricsState lyrics when Finishes($"lyrics:{lyrics.Id}", lyrics.Finished)
+                && !(lyrics.Stage == "done" && quick?.Owns(lyrics.Id) == true):
                 Queue("lyrics", language => PushTexts.Lyrics(lyrics, language));
                 break;
         }

@@ -28,6 +28,12 @@ namespace YueUI.Api.Data;
 /// Version 13: reference voices of this app's own (<see cref="SqliteReferenceVoiceStore"/>).
 /// Version 14: notes written to songs (<see cref="SqliteSongNoteStore"/>).
 /// Version 15: uploaded recordings sung with another voice (<see cref="SqliteSwapStore"/>).
+/// Version 21: songs asked of ACE-Step, from queued to done (<see cref="SqliteAceStore"/>).
+/// Version 22: the measured loudness of audio files, a cache (<see cref="Share.Loudness"/>).
+/// Version 23: songs asked for from a shortcut, waiting for their lyrics draft (<see cref="Lyrics.QuickSongs"/>).
+/// Version 24: speech takes that clean an uploaded recording, and their progress (<see cref="SqliteSpeechStore"/>).
+/// Version 25: what was heard in songs, tempo, key and how clearly the lyrics are sung (<see cref="SqliteSongTraitStore"/>).
+/// Version 26: written song sketches and their plans (<see cref="SqliteSketchStore"/>).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -470,6 +476,99 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     ALTER TABLE song_videos ADD COLUMN media TEXT NULL;
                     ALTER TABLE song_videos ADD COLUMN motif TEXT NULL;
                     PRAGMA user_version = 20;
+                    """);
+            }
+            if (current < 21)
+            {
+                // ACE-Step's jobs; the job is JSON, since nothing queries its fields. The songs lie in ace-songs/.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE ace_jobs (
+                        id TEXT PRIMARY KEY,
+                        job TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 21;
+                    """);
+            }
+            if (current < 22)
+            {
+                // loudnorm's first pass per file; size and time tell a render's new FLAC from the old one.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE loudness (
+                        path TEXT PRIMARY KEY,
+                        length INTEGER NOT NULL,
+                        modified TEXT NOT NULL,
+                        measured TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 22;
+                    """);
+            }
+            if (current < 23)
+            {
+                // The song a shortcut asked for, by the id of the lyrics draft it waits for; the request is JSON.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE quick_songs (
+                        draft_id TEXT PRIMARY KEY,
+                        request TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 23;
+                    """);
+            }
+            if (current < 24)
+            {
+                // A take that cleans an uploaded recording instead of speaking a text: the recording's name, and how
+                // far the cleaning is, since a long talk takes minutes.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    ALTER TABLE speech_takes ADD COLUMN source TEXT;
+                    ALTER TABLE speech_takes ADD COLUMN progress REAL;
+                    PRAGMA user_version = 24;
+                    """);
+            }
+            if (current < 25)
+            {
+                // Tempo and key from the audio (or the score), clarity from the lyrics timing; each half set on its own.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE song_traits (
+                        song_id TEXT PRIMARY KEY,
+                        tempo REAL NULL,
+                        song_key TEXT NULL,
+                        heard_from TEXT NULL,
+                        clarity REAL NULL,
+                        clarity_from TEXT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 25;
+                    """);
+            }
+            if (current < 26)
+            {
+                // Written song sketches and the plans Claude made of them (Sketches/SketchMaker.cs), one JSON each.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE song_sketches (
+                        id TEXT PRIMARY KEY,
+                        sketch TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 26;
                     """);
             }
             _ready = true;

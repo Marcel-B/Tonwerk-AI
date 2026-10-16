@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import Checkbox from 'primevue/checkbox'
 import Panel from 'primevue/panel'
 import { exampleScore, planningFor, type FormState } from '../form'
 import { abcKey, keyChoices, keyParts, transposeAbc, transposeToKey, vocalRange } from '../abcTranspose'
@@ -12,7 +13,7 @@ import TextActions from './TextActions.vue'
 /**
  * The song's own score, between the song's fields and the advanced parameters: a score decides melody, chords and
  * form, so it was too deep inside the parameters. Collapsed while empty, since most songs have none; the example and
- * the MIDI import stay in the header so they need no extra tap.
+ * the MIDI import stay in the header so they need no extra tap. The checkbox there sends the score or keeps it unsent.
  */
 const emit = defineEmits<{
   notice: [message: string]
@@ -36,7 +37,9 @@ watch(fieldErrors, (errors) => {
 })
 
 // The API refuses this too; saying so before sending saves a round trip from the phone.
-const scoreWithoutPlanning = computed(() => hasScore.value && form.value.cot === 'off' && !form.value.instrumental)
+const scoreWithoutPlanning = computed(
+  () => hasScore.value && form.value.useAbc && form.value.cot === 'off' && !form.value.instrumental,
+)
 
 const scoreKey = computed(() => abcKey(form.value.abc))
 const keyOptions = computed(() =>
@@ -67,7 +70,7 @@ function useMidi(): void {
     importingMidi.value = true
     try {
       const midi = await midiToAbc(file)
-      form.value = { ...form.value, abc: midi.abc, cot: planningFor(midi.abc) }
+      form.value = { ...form.value, abc: midi.abc, cot: planningFor(midi.abc), useAbc: true }
       if (midi.warnings.length > 0) {
         emit('notice', t('midiWarnings', { messages: midi.warnings.join(' ') }))
       }
@@ -81,11 +84,13 @@ function useMidi(): void {
 </script>
 
 <template>
-  <Panel v-model:collapsed="collapsed" toggleable>
+  <!-- The header lays its actions out inline, which left a checkbox and a tag on the baseline below the buttons. -->
+  <Panel v-model:collapsed="collapsed" toggleable :pt="{ headerActions: { class: 'flex items-center gap-1' } }">
     <template #header>
       {{ t('abc') }}
     </template>
     <template #icons>
+      <Checkbox v-if="hasScore" v-model="form.useAbc" binary :aria-label="t('abcUse')" v-tooltip="t('abcUse')" />
       <Button
         v-if="!hasScore"
         v-tooltip="t('abcExample')"
@@ -108,11 +113,13 @@ function useMidi(): void {
       />
     </template>
 
+    <small v-if="hasScore && !form.useAbc" class="muted block mb-2">{{ t('abcUnused') }}</small>
     <Textarea
       fluid
       id="gen-abc"
       v-model="form.abc"
       class="mono"
+      :class="{ 'opacity-60': hasScore && !form.useAbc }"
       :rows="8"
       spellcheck="false"
       autocapitalize="off"

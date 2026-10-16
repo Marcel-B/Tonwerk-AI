@@ -20,27 +20,60 @@ public static class VoiceEndpoints
     public static RouteGroupBuilder MapVoiceEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/voice", (IOptions<VoiceOptions> options) =>
-            new VoiceInfo(options.Value.VoicesConfigured, options.Value.ConversionConfigured, options.Value.StemsConfigured));
+            new VoiceInfo(options.Value.VoicesConfigured, options.Value.ConversionConfigured, options.Value.StemsConfigured))
+            .WithName("GetVoiceInfo")
+            .Produces<VoiceInfo>(StatusCodes.Status200OK);
         api.MapGet("/voices", (VoiceEngine voices, CancellationToken cancellationToken) =>
-            Call(async () => Results.Ok(await voices.ListVoicesAsync(cancellationToken))));
+            Call(async () => Results.Ok(await voices.ListVoicesAsync(cancellationToken))))
+            .WithName("ListVoices")
+            .Produces<IReadOnlyList<ReferenceVoice>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
         api.MapPost("/voices", AddVoiceAsync)
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(MaxVoiceBytes + 64 * 1024))
-            .WithFormOptions(multipartBodyLengthLimit: MaxVoiceBytes);
-        api.MapGet("/voices/{id}/audio", VoiceAudioAsync);
+            .WithFormOptions(multipartBodyLengthLimit: MaxVoiceBytes)
+            .WithName("CreateVoice")
+            .Produces<ReferenceVoice>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
+        api.MapGet("/voices/{id}/audio", VoiceAudioAsync)
+            .WithName("GetVoiceAudio")
+            .ProducesFile("audio/wav")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
         api.MapDelete("/voices/{id}", (string id, VoiceEngine voices, CancellationToken cancellationToken) =>
             Call(async () =>
             {
                 await voices.DeleteVoiceAsync(id, cancellationToken);
                 return Results.NoContent();
-            }));
+            }))
+            .WithName("DeleteVoice")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
 
-        api.MapPost("/songs/{run}/{song}/versions", AddVersionAsync);
+        api.MapPost("/songs/{run}/{song}/versions", AddVersionAsync)
+            .WithName("CreateVersion")
+            .Produces<VersionState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
         // Range requests, as for the song itself: the player seeks and starts before the whole FLAC is there.
         api.MapGet("/songs/{run}/{song}/versions/{id}/audio", (string run, string song, string id, bool? download, SqliteVersionStore store, SongLibrary library, TaggedFiles tagged) =>
-            VersionAudio(run, song, id, download == true, store, library, tagged));
+            VersionAudio(run, song, id, download == true, store, library, tagged))
+            .WithName("GetVersionAudio")
+            .ProducesFile("audio/flac")
+            .Produces(StatusCodes.Status404NotFound);
         // The player's copy, as for the song itself (LibraryEndpoints.StreamAsync).
-        api.MapGet("/songs/{run}/{song}/versions/{id}/stream", VersionStreamAsync);
+        api.MapGet("/songs/{run}/{song}/versions/{id}/stream", VersionStreamAsync)
+            .WithName("GetVersionStream")
+            .ProducesFile("audio/mp4", "audio/flac")
+            .Produces(StatusCodes.Status404NotFound);
         api.MapDelete("/songs/{run}/{song}/versions/{id}", (string run, string song, string id, SqliteVersionStore store, VoiceConverter converter) =>
         {
             if (store.Get(id) is not { } version || version.SongId != $"{run}/{song}")
@@ -49,7 +82,10 @@ public static class VoiceEndpoints
             }
             converter.Delete(version);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteVersion")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 

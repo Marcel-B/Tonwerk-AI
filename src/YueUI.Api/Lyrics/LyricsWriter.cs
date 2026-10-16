@@ -22,11 +22,14 @@ public sealed class LyricsBusyException(string message) : Exception(message);
 /// with its model loaded, the lyrics model is loaded for the request with a small context and unloaded right
 /// after. Meanwhile <see cref="IsWriting"/> keeps new songs from starting. A model someone loaded in LM Studio
 /// themselves is used as it is and left loaded.
+/// A Claude model (<see cref="LyricsOptions.ClaudeModels"/>) runs at Anthropic instead: no memory is claimed, no
+/// worker stopped, and songs go on while it writes.
 /// </remarks>
 public sealed partial class LyricsWriter(
     IHttpClientFactory httpClients,
     IOptions<LyricsOptions> options,
     ILmStudioStarter starter,
+    ICloudLyricsModel cloud,
     WorkerHost worker,
     Status.StatusHub hub,
     ModelMemory memory,
@@ -88,6 +91,10 @@ public sealed partial class LyricsWriter(
     /// <param name="revision">Lyrics to change as instructed, instead of new ones.</param>
     /// <param name="id">The id the draft was promised under while it waited in the queue; a new one otherwise.</param>
     /// <exception cref="LyricsBusyException">Another draft is in progress, YuE2 is generating, or another model holds the memory.</exception>
+    /// <summary>Whether <paramref name="model"/> is one of the Claude models, which run in the cloud.</summary>
+    public bool IsCloud(string? model) =>
+        !string.IsNullOrWhiteSpace(model) && options.Value.ClaudeModels.Contains(model.Trim(), StringComparer.Ordinal);
+
     public LyricsState Start(
         string? keywords,
         string? style,
@@ -97,8 +104,10 @@ public sealed partial class LyricsWriter(
         LyricsRevision? revision = null,
         string? id = null)
     {
-        // From here on no song can start (see IsWriting).
-        if (!memory.TryClaim(LargeModel.Lyrics))
+        model = string.IsNullOrWhiteSpace(model) ? options.Value.Model : model.Trim();
+        var local = !IsCloud(model);
+        // From here on no song can start (see IsWriting); a cloud draft takes nothing from the Mac's memory.
+        if (local && !memory.TryClaim(LargeModel.Lyrics))
         {
             throw new LyricsBusyException(
                 IsWriting ? "Lyrics are already being written."
@@ -110,7 +119,7 @@ public sealed partial class LyricsWriter(
         var state = new LyricsState { Id = id ?? NewId(), UpdatedAt = time.GetUtcNow() };
         hub.UpdateLyrics(state);
         var brief = new Brief(keywords?.Trim() ?? "", style, language, image, revision);
-        _ = Task.Run(() => RunAsync(state, brief, string.IsNullOrWhiteSpace(model) ? options.Value.Model : model.Trim()));
+        _ = Task.Run(() => RunAsync(state, brief, model, local));
         return state;
     }
 
@@ -120,12 +129,13 @@ public sealed partial class LyricsWriter(
     /// <summary>What the song is to be about, as the form sent it.</summary>
     private sealed record Brief(string Keywords, string? Style, LyricsLanguage Language, string? Image, LyricsRevision? Revision);
 
-    private async Task RunAsync(LyricsState state, Brief brief, string model)
+    private async Task RunAsync(LyricsState state, Brief brief, string model, bool local)
     {
         LyricsState result;
         try
         {
-            result = state with { Stage = "done", Lyrics = await WriteAsync(model, brief, CancellationToken.None) };
+            var lyrics = local ? await WriteAsync(model, brief, CancellationToken.None) : await WriteInCloudAsync(model, brief, CancellationToken.None);
+            result = state with { Stage = "done", Lyrics = lyrics };
         }
         catch (LyricsUnavailableException exception)
         {
@@ -139,10 +149,26 @@ public sealed partial class LyricsWriter(
         finally
         {
             // Before the result goes out, so that a song started in answer to it is not refused.
-            memory.Release(LargeModel.Lyrics);
+            if (local)
+            {
+                memory.Release(LargeModel.Lyrics);
+            }
         }
         hub.UpdateLyrics(result with { UpdatedAt = time.GetUtcNow() });
     }
+
+    /// <summary>The same prompts as LM Studio gets, so a draft reads alike whichever writes it.</summary>
+    /// <exception cref="LyricsUnavailableException">No key, or Claude refused or failed.</exception>
+    private async Task<string> WriteInCloudAsync(string model, Brief brief, CancellationToken cancellationToken)
+    {
+        var answer = await cloud.WriteAsync(model, SystemPrompt(brief.Language), PromptOf(brief), brief.Image, cancellationToken);
+        var lyrics = Clean(answer);
+        return lyrics.Length > 0 ? lyrics : throw new LyricsUnavailableException("Claude returned no lyrics.");
+    }
+
+    private static string PromptOf(Brief brief) => brief.Revision is { } revision
+        ? RevisionPrompt(revision, brief.Keywords, brief.Style)
+        : UserPrompt(brief.Keywords, brief.Style, brief.Image is not null);
 
     /// <exception cref="LyricsUnavailableException">LM Studio could not be reached or refused.</exception>
     private async Task<string> WriteAsync(string model, Brief brief, CancellationToken cancellationToken)
@@ -266,22 +292,37 @@ public sealed partial class LyricsWriter(
 
     /// <summary>
     /// The models the picker offers: what LM Studio has downloaded, whether loaded or not, without embedding models.
-    /// Starts LM Studio's server like a draft would; that loads no model.
+    /// Starts LM Studio's server like a draft would; that loads no model. The Claude models follow while a key is set.
     /// </summary>
-    /// <exception cref="LyricsUnavailableException">LM Studio could not be reached or started.</exception>
+    /// <exception cref="LyricsUnavailableException">LM Studio could not be reached or started, and there is no Claude to offer.</exception>
     public async Task<LyricsModels> ListModelsAsync(CancellationToken cancellationToken)
     {
         var settings = options.Value;
-        using var http = CreateClient();
-        await EnsureServerAsync(http, cancellationToken);
-        var models = await NativeModelsAsync(http, cancellationToken) ?? await OpenAiModelsAsync(http, cancellationToken);
+        List<LyricsModel> claude = cloud.Configured
+            ? [.. settings.ClaudeModels.Distinct().Select(id => new LyricsModel(id, Sketches.ClaudeModelChoice.NameOf(id), null, false, true, Cloud: true))]
+            : [];
+        List<LyricsModel> models;
+        try
+        {
+            using var http = CreateClient();
+            await EnsureServerAsync(http, cancellationToken);
+            models = await NativeModelsAsync(http, cancellationToken) ?? await OpenAiModelsAsync(http, cancellationToken);
+        }
+        catch (LyricsUnavailableException exception) when (claude.Count > 0)
+        {
+            // Claude can still write; the configured model is kept as the default, as the form would use it anyway.
+            logger.LogInformation("LM Studio's models are not listed: {Message}", exception.Message);
+            models = [];
+        }
         // The configured model stays choosable even when LM Studio does not list it, e.g. while it is still downloading.
         if (!models.Any(m => m.Id == settings.Model))
         {
             models.Insert(0, new LyricsModel(settings.Model, settings.Model, null, false, null));
         }
+        models.AddRange(claude);
         return new LyricsModels(settings.Model, models);
     }
+
 
     /// <summary>
     /// LM Studio's own list, with names and sizes: the size is what decides whether a model fits beside the apps on
@@ -398,9 +439,7 @@ public sealed partial class LyricsWriter(
     private static async Task<string> CompleteAsync(
         HttpClient http, LyricsOptions settings, string model, int context, Brief brief, ILogger logger, CancellationToken cancellationToken)
     {
-        var text = brief.Revision is { } revision
-            ? RevisionPrompt(revision, brief.Keywords, brief.Style)
-            : UserPrompt(brief.Keywords, brief.Style, brief.Image is not null);
+        var text = PromptOf(brief);
         // The OpenAI form for images, which LM Studio passes to a vision model; a model without vision refuses it.
         JsonNode prompt = brief.Image is null
             ? text

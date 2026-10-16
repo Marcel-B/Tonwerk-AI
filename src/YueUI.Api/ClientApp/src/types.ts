@@ -64,6 +64,7 @@ export const logSources = [
   'voices',
   'speech',
   'images',
+  'ace',
   'video',
   'export',
   'logic',
@@ -113,10 +114,12 @@ export interface StatusSnapshot {
   images?: ImageState[] | null
   /** Which large model besides YuE2 holds the memory; the server decides it (Memory/ModelMemory.cs). */
   memory?: MemoryInfo | null
+  /** ACE-Step's songs in the works (and the last finished one); null from a server before them. */
+  ace?: AceJob[] | null
 }
 
 /** The large models besides YuE2 that take turns in the memory. */
-export type LargeModel = 'lyrics' | 'voices' | 'speech' | 'images'
+export type LargeModel = 'lyrics' | 'voices' | 'speech' | 'images' | 'ace'
 
 export interface MemoryInfo {
   holder: LargeModel | null
@@ -272,6 +275,24 @@ export interface SongInfo {
   note: string | null
   /** The formats the song has a finished music video in; empty while it has none. */
   videoFormats: VideoFormat[]
+  /** `ace` for a song ACE-Step made; absent or null for YuE2's. */
+  engine?: 'ace' | null
+  /** Tempo, key and how clearly the lyrics are sung, as far as heard yet; null before anything was. */
+  traits?: SongTraits | null
+}
+
+/** What was heard in a song (Analysis/SongAnalyzer.cs, Timing/LyricsTimer.cs). */
+export interface SongTraits {
+  /** Beats per minute. */
+  tempo: number | null
+  /** As the key picker spells it: `C`, `F#m`, `Bb`. */
+  key: string | null
+  /** `audio` when heard in the song, `score` when only what its score asked for. */
+  from: 'audio' | 'score' | null
+  /** The share of the lyrics Whisper understood, 0 to 1. */
+  clarity: number | null
+  /** `vocals` when Whisper heard a vocal stem, `mix` when the whole song (which scores lower). */
+  clarityFrom: 'vocals' | 'mix' | null
 }
 
 /**
@@ -313,6 +334,53 @@ export interface RunInfo {
   bytes: number
 }
 
+/** A lyrics line with when it is sung (Timing/LyricsAligner.cs). */
+export interface TimedLine {
+  text: string
+  section: string | null
+  start: number
+  end: number
+  /** How many of its words Whisper heard; 0 where the time is only guessed. */
+  heard: number
+}
+
+export interface LyricsTiming {
+  lines: TimedLine[]
+  source: 'vocals' | 'mix'
+  /** The share of the lyrics' words Whisper heard, 0 to 1. */
+  coverage: number
+  createdAt: string
+}
+
+/** `GET /api/songs/{run}/{song}/timing`: the timing, or how far a song without one is. */
+export interface TimingAnswer {
+  timing: LyricsTiming | null
+  info: { installed: boolean; state: 'none' | 'queued' | 'listening' | 'failed'; message: string | null }
+}
+
+/** One style block or setting against the stars of the songs made with it (Library/Insights.cs). */
+export interface InsightEntry {
+  value: string
+  count: number
+  average: number
+  /** The average pulled towards the overall one, so a value on one song does not lead; the lists are sorted by it. */
+  score: number
+}
+
+export type InsightKey = 'style' | 'engine' | 'quality' | 'lora' | 'steps' | 'length' | 'instrumental'
+
+export interface InsightGroup {
+  key: InsightKey
+  entries: InsightEntry[]
+}
+
+/** `GET /api/insights`: what the rated songs were made with. */
+export interface InsightReport {
+  rated: number
+  average: number
+  groups: InsightGroup[]
+}
+
 /** A playlist (PlaylistEndpoints.cs): song ids (`run/songN`) in the order they play. */
 export interface PlaylistInfo {
   id: number
@@ -335,7 +403,7 @@ export interface PromptTemplate {
 /** What a lyrics draft is written in (Lyrics/LyricsLanguage.cs). */
 export type LyricsLanguage = 'english' | 'german'
 
-/** A language model LM Studio offers for drafts (Lyrics/LyricsModels.cs). */
+/** A language model LM Studio, or Claude in the cloud, offers for drafts (Lyrics/LyricsModels.cs). */
 export interface LyricsModel {
   id: string
   name: string
@@ -345,6 +413,8 @@ export interface LyricsModel {
   loaded: boolean
   /** Can read a photo, as LM Studio says; null when the server does not say. */
   vision: boolean | null
+  /** Runs at Anthropic: the draft neither waits for nor stops a song, and the text leaves the Mac. */
+  cloud: boolean
 }
 
 /** What the lyrics model picker offers; `default` is the configured model, used when a draft names none. */
@@ -399,6 +469,58 @@ export interface BackupStatus {
 export interface StorageInfo {
   freeBytes: number
   totalBytes: number
+}
+
+/** Where the disk space goes; Storage/StorageScanner.cs. */
+export interface StorageOverview {
+  volumes: StorageVolume[]
+  categories: StorageCategory[]
+  /** What failed or cancelled versions, stems, swaps and videos still take; `cleanupStorage('failed')` removes them. */
+  failed: number
+}
+
+/** `/` is the Mac's own disk, `/Volumes/…` another one (an external SSD after deploy/move-to-volume.sh). */
+export interface StorageVolume {
+  mount: string
+  free: number
+  total: number
+}
+
+export type StorageGroup = 'work' | 'app' | 'models'
+
+export type StorageItemKind =
+  'song' | 'version' | 'stems' | 'swap' | 'video' | 'cover' | 'image' | 'transcription' | 'take'
+
+export interface StorageCategory {
+  key: string
+  group: StorageGroup
+  bytes: number
+  /** How many entries it has, where it has entries. */
+  count: number
+  volume: string | null
+  /** Files without a database entry, older than a day; `cleanupStorage('orphans')` removes them. */
+  orphaned: number
+  /** Its largest entries, at most 30. */
+  largest: StorageItem[]
+}
+
+export interface StorageItem {
+  kind: StorageItemKind
+  /** The entry's own id; for a song and a cover the song id. */
+  id: string
+  songId: string | null
+  title: string
+  /** Untranslated: a voice, a video format, a model, a file name. */
+  detail: string | null
+  bytes: number
+  createdAt: string | null
+}
+
+export type StorageCleanupTarget = 'stream' | 'images' | 'videos' | 'orphans' | 'failed'
+
+export interface StorageCleanup {
+  bytes: number
+  removed: number
 }
 
 /** Whether voices can be managed (Seed-VC or ChangeMyVoice) and songs sung with them (the separator as well); VoiceEndpoints.cs. */
@@ -611,14 +733,19 @@ export interface SpeechVoice {
   createdAt: string
 }
 
-export type SpeechStage = 'queued' | 'loading' | 'speaking' | 'done' | 'failed' | 'cancelled'
+export type SpeechStage = 'queued' | 'loading' | 'speaking' | 'cleaning' | 'done' | 'failed' | 'cancelled'
 
-/** One text spoken by one model; live changes arrive as `speech` events. */
+/** One text spoken by one model, or one recording cleaned by one; live changes arrive as `speech` events. */
 export interface SpeechTake {
   id: string
   modelId: string
   modelLabel: string
+  /** Empty for a cleaned recording. */
   text: string
+  /** The uploaded recording's name when the take cleans it (Sprache säubern); null for a spoken take. */
+  source: string | null
+  /** How much of the recording is cleaned, 0 to 1, while it is. */
+  progress: number | null
   voiceId: string | null
   voiceLabel: string | null
   stage: SpeechStage
@@ -643,6 +770,8 @@ export interface SpeechInfo {
   /** Recordings need ffmpeg on the server. */
   ffmpegInstalled: boolean
   models: SpeechModelInfo[]
+  /** The models that clean a speech recording of noise. */
+  cleanModels: SpeechModelInfo[]
   voices: SpeechVoice[]
   /** Newest first. */
   takes: SpeechTake[]
@@ -706,4 +835,176 @@ export interface ImageInfo {
   installed: boolean
   python: string
   models: ImageModelInfo[]
+}
+
+/** ACE-Step's tasks: a new song, a new style over a library song, or a stretch of one made again. */
+export type AceTask = 'text2music' | 'cover' | 'repaint'
+
+/**
+ * A song asked of ACE-Step (Ace/AceModels.cs `AceSongRequest`); null leaves a value to the model: the LM writes lyrics
+ * and picks tempo, key, metre, length and language, the DiT takes its preset's steps, guidance and shift.
+ */
+export interface AceSongRequest {
+  title?: string | null
+  caption: string
+  lyrics?: string | null
+  instrumental?: boolean | null
+  language?: string | null
+  duration?: number | null
+  bpm?: number | null
+  key?: string | null
+  timeSignature?: number | null
+  seed?: number | null
+  batch?: number | null
+  lmModel?: string | null
+  ditModel?: string | null
+  steps?: number | null
+  guidance?: number | null
+  shift?: number | null
+  solver?: string | null
+  lmTemperature?: number | null
+  lmCfgScale?: number | null
+  lmTopP?: number | null
+  lmTopK?: number | null
+  negativePrompt?: string | null
+  enrichCaption?: boolean | null
+  adapter?: string | null
+  adapterScale?: number | null
+  task?: AceTask | null
+  /** `run/songN` a cover or repaint starts from. */
+  source?: string | null
+  coverStrength?: number | null
+  repaintStart?: number | null
+  repaintEnd?: number | null
+}
+
+export type AceStage =
+  | 'queued'
+  | 'loading'
+  | 'writing'
+  | 'composing'
+  | 'synthesizing'
+  | 'decoding'
+  | 'saving'
+  | 'done'
+  | 'failed'
+  | 'cancelled'
+
+/** A song (or batch) being made by ACE-Step (Ace/AceModels.cs `AceJob`). */
+export interface AceJob {
+  id: string
+  title: string
+  request: AceSongRequest
+  seed: number
+  stage: AceStage
+  /** Of the whole job, roughly. */
+  fraction: number
+  message: string | null
+  /** The run folder the songs went into, once done. */
+  run: string | null
+  seconds: number | null
+  createdAt: string
+  updatedAt: string
+  finished: boolean
+}
+
+/** `GET /api/ace`: whether acestep.cpp is built, which GGUF files are there, and the jobs, newest first. */
+export interface AceInfo {
+  installed: boolean
+  ready: boolean
+  binaries: string
+  models: string
+  lmModels: string[]
+  ditModels: string[]
+  adapters: string[]
+  jobs: AceJob[]
+}
+
+/** A written song sketch planned by Claude (Sketches/SketchModels.cs `SketchPlan`). */
+export interface SketchPlan {
+  title: string
+  style: string
+  tempo: number
+  beatsPerBar: number
+  key: string
+  sections: SketchSection[]
+  notes: string[]
+}
+
+export interface SketchSection {
+  name: string
+  tag: string
+  parts: string[]
+  energy: number
+  lyrics: string[]
+  bars: SketchBar[]
+}
+
+export interface SketchBar {
+  chords: string
+  vocal: string | null
+  lyric: string | null
+  ins: string | null
+  parts: string[] | null
+}
+
+export type SketchStage = 'queued' | 'writing' | 'done' | 'failed'
+
+export interface SketchJob {
+  id: string
+  title: string
+  stage: SketchStage
+  message: string | null
+  source: string
+  instruction: string | null
+  model: string | null
+  plan: SketchPlan | null
+  inputTokens: number | null
+  outputTokens: number | null
+  createdAt: string
+  updatedAt: string
+  finished: boolean
+}
+
+export interface SketchSummary {
+  id: string
+  title: string
+  stage: SketchStage
+  message: string | null
+  createdAt: string
+  updatedAt: string
+  bars: number | null
+  seconds: number | null
+}
+
+/** Something the server repaired in a plan or doubts about it; `code` picks the words (i18n `sketchWarning_*`). */
+export interface SketchWarning {
+  code: 'barLength' | 'note' | 'chord' | 'chordSimplified' | 'syllables' | 'key' | 'tooLong'
+  bar: number | null
+  detail: string | null
+}
+
+/** A finished sketch with what was made of its plan; one still in the works has only `job`. */
+export interface SketchResult {
+  job: SketchJob
+  abc?: string
+  lyrics?: string
+  request?: SongRequest
+  warnings?: SketchWarning[]
+  bars?: number
+  seconds?: number
+}
+
+export interface SketchInfo {
+  configured: boolean
+  /** The default model. */
+  model: string
+  /** The Claude models to choose from, the default first. */
+  models: ClaudeModelChoice[]
+}
+
+/** A Claude model a picker offers (Sketches/SketchModels.cs). */
+export interface ClaudeModelChoice {
+  id: string
+  name: string
 }

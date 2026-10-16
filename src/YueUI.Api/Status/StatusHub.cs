@@ -50,6 +50,7 @@ public sealed class StatusHub(Func<IWorkerStatus> worker, IOptions<QueueOptions>
     private readonly Dictionary<string, SwapState> _swaps = [];
     private readonly Dictionary<string, Video.VideoState> _videos = [];
     private readonly Dictionary<string, Images.ImageState> _images = [];
+    private readonly Dictionary<string, Ace.AceJob> _ace = [];
     /// <summary>The speech lab's takes in the works, in the order they are spoken (a list, since several share a time).</summary>
     private readonly List<Speech.SpeechTake> _speech = [];
     private LyricsState? _lyrics;
@@ -63,6 +64,30 @@ public sealed class StatusHub(Func<IWorkerStatus> worker, IOptions<QueueOptions>
         lock (_gate)
         {
             return SnapshotLocked(source.Part());
+        }
+    }
+
+    /// <summary>The newest lyrics draft, without a whole snapshot.</summary>
+    public LyricsState? Lyrics
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _lyrics;
+            }
+        }
+    }
+
+    /// <summary>The jobs waiting in <see cref="JobQueue"/>, without a whole snapshot (<c>/metrics</c>).</summary>
+    public IReadOnlyList<QueuedJob> Queue
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _queue;
+            }
         }
     }
 
@@ -161,6 +186,13 @@ public sealed class StatusHub(Func<IWorkerStatus> worker, IOptions<QueueOptions>
     public void UpdateImage(Images.ImageState image) => Keep(_images, image.Id, image, i => i.Finished, "image");
 
     /// <summary>
+    /// Keeps an ACE-Step job (Ace/AceComposer.cs) for the snapshot, so the queue page shows what holds or waits for the
+    /// memory after a reload, and sends it to the browsers; a finished one leaves the snapshot with the next, since the
+    /// ACE-Step page lists it from then on.
+    /// </summary>
+    public void UpdateAce(Ace.AceJob job) => Keep(_ace, job.Id, job, j => j.Finished, "ace");
+
+    /// <summary>
     /// Keeps a take of the speech lab (Speech/SpeechLab.cs) for the snapshot, so the queue shows what holds or waits for
     /// the memory after a reload, and sends it to the browsers; a finished take leaves the snapshot with the next change,
     /// since the lab page lists it from then on.
@@ -234,7 +266,8 @@ public sealed class StatusHub(Func<IWorkerStatus> worker, IOptions<QueueOptions>
         [.. _swaps.Values.OrderBy(s => s.CreatedAt)],
         [.. _videos.Values.OrderBy(v => v.CreatedAt)],
         [.. _images.Values.OrderBy(i => i.CreatedAt)],
-        _memory);
+        _memory,
+        [.. _ace.Values.OrderBy(j => j.CreatedAt)]);
 
     public sealed class Subscription(StatusSnapshot snapshot, ChannelReader<ServerEvent> reader, Action unsubscribe) : IDisposable
     {

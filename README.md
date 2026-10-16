@@ -27,10 +27,10 @@ Auf einem Mac, auf dem außer macOS nichts installiert ist, richtet ein Skript a
 ```sh
 xcode-select --install                 # Command Line Tools (git, clang), einmal
 git clone https://github.com/Marcel-B/YuE-UI.git ~/repos/YueUI
-~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage oder --all für mehr
+~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper oder --all für mehr
 ```
 
-Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos.
+Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell.
 
 Die Schritte entsprechen denen des Installers der App und landen in denselben Ordnern (`~/Library/Application Support/YuE Studio`, Songs in `~/Music/YuE Studio`). Tonwerk braucht deshalb keine andere Konfiguration, und eine später installierte App findet die Modelle. Öffnet man die App, installiert sie ihre eigene Kopie über den Checkout; das funktioniert, nur die Git-Historie ist dann weg. Umgekehrt lässt das Skript eine Installation der App unangetastet, solange es nicht mit `--engine-from-source` läuft.
 
@@ -92,7 +92,7 @@ Auf der Playlist-Seite wählt das Feld oben, welche Playlist sie zeigt; daneben 
 
 Das Plus neben einem Song setzt ihn ans Ende der Playlist, der Haken nimmt ihn wieder heraus; denselben Knopf hat der Player für den Song, der gerade läuft. Gibt es mehrere Playlists, öffnet der Knopf eine Liste, in der jeder Tipp den Song in eine Playlist legt oder herausnimmt; der Haken am Knopf heißt dann, dass der Song in mindestens einer steckt. Die Playlists liegen auf dem Server in `~/Library/Application Support/YuE UI/yueui.db` (SQLite), Handy und Mac sehen also dieselben. Gelöschte Songs fallen von selbst heraus.
 
-Der Pfeil neben einem Lauf übernimmt Titel, Stil und Text als **Vorlage** ins Formular. **Alles übernehmen** beim Song (auf dem Handy im Menü „…“, im Player und in der Playlist ebenso) trägt alles ein, womit genau dieser Song erzeugt wurde: Titel, Stil, Text, Seed, Partitur samt Planung, Qualität, Länge und die erweiterten Parameter. „Erzeugen“ macht ihn dann noch einmal, oder man ändert vorher den Seed oder einzelne Werte. **Als Partitur übernehmen** nimmt dagegen nur die Partitur, mit Stil, Text und Seed des Laufs.
+Der Pfeil neben einem Lauf übernimmt Titel, Stil und Text als **Vorlage** ins Formular. **Alles übernehmen** beim Song (auf dem Handy im Menü „…“, im Player und in der Playlist ebenso) trägt alles ein, womit genau dieser Song erzeugt wurde: Titel, Stil, Text, Seed, Partitur samt Planung, Qualität, Länge und die erweiterten Parameter. „Erzeugen“ macht ihn dann noch einmal, oder man ändert vorher den Seed oder einzelne Werte. Hatte der Song keine eigene Partitur, kommt die mit, die YuE2 für ihn geschrieben hat, aber mit ausgeschaltetem Haken bei **Eigene Partitur**: So entsteht beim Erzeugen derselbe Song, und eingeschaltet lässt sich auf ihr aufbauen, etwa in einer anderen Tonart (mit Partitur wird es auch beim selben Seed ein anderer Song). **Als Partitur übernehmen** setzt dagegen nur die Partitur samt Planung und lässt den Rest des Formulars stehen. Auch die **erweiterten Parameter** haben einen Haken: ausgeschaltet gehen ihre Standardwerte hinaus, die eingetragenen Werte bleiben stehen. Der Seed steht deshalb neben der Anzahl, außerhalb der erweiterten Parameter.
 
 Der Stift neben einem Lauf gibt ihm einen neuen Titel. Er gilt für Bibliothek, Player, Playlist, Warteschlange und die Dateinamen beim Herunterladen; der Ordner behält seinen Namen, damit Playlist, Links und YuE Studio den Song weiter finden. Der neue Titel liegt ebenfalls in `yueui.db`, ein leeres Feld stellt den ursprünglichen wieder her.
 
@@ -103,7 +103,13 @@ Zu jedem Song lässt sich eine Notiz schreiben: Die Sprechblase neben FLAC und A
 **Abspielen unterwegs.** Der Player spielt nicht die FLAC (rund 1 Mbit/s), sondern eine AAC-Kopie mit 192 kbit/s, etwa ein Sechstel davon: Der Mac hängt an einem Anschluss mit langsamem Upload, und über Mobilfunk hat die FLAC oft lange geladen. Die Kopie entsteht mit `afconvert` (sonst `ffmpeg`), sobald ein Song oder eine Fassung fertig ist, bei älteren Songs beim ersten Abspielen. Sie liegt in `stream/` neben der Datenbank (die einer Fassung neben deren FLAC in `versions/`), wird nach einem Neu-Rendern neu gemacht und geht mit dem Song. Wie ein Export trägt sie Titel, Album, Nummer, Songtext, Stil samt Seed und das eigene Cover des Songs (Fassungen mit der Stimme im Titel); ändern sich Titel, Cover oder Text, bekommt sie beim nächsten Abspielen neue Tags, ohne neu kodiert zu werden. Songs ohne eigenes Cover haben keins in der Datei, das gezeichnete gibt es nur im Browser. Herunterladen, Exportieren und die Logic-Seite nehmen weiter die FLAC (Downloads und Exporte mit denselben Tags, siehe unten); ohne Encoder spielt auch der Player sie.
 
 
+**Offline hören:** Die Wolke neben dem Namen einer Playlist legt ihre Songs auf dieses Gerät, etwa vor einer Fahrt ohne Netz. Gespeichert wird die AAC-Kopie des Players mit Cover (ein Song etwa 4 bis 6 MB); die Zeile über der Liste sagt, wie viele Songs schon da sind und wie viel Platz sie brauchen, ein Haken markiert jeden gespeicherten Song. Gespeicherte Songs kommen auch mit Verbindung vom Gerät statt vom Mac. Kommt ein Song neu gerendert oder fliegt er aus der Playlist, gleicht Tonwerk das beim nächsten Öffnen mit Verbindung ab. Ohne Verbindung zeigt die App die zuletzt geladene Bibliothek und Playlist. Das gilt je Gerät und Browser: Die App auf dem Home-Bildschirm des iPhones hat ihren eigenen Speicher, getrennt von Safari.
+
 **Teilen / Exportieren** beim Song (auf dem Handy im Menü „…“, auch im Menü von Player und Playlist) ist ein Knopf für beides: Erst wählst du das Format, dann wird die Datei erstellt, und danach speicherst du sie oder schickst sie über das Teilen-Menü des Handys an wen du willst. **Klein** ist eine AAC mit 128 kbit/s (etwa ein Zehntel der FLAC) für Messenger, dazu MP3 (320 kbit/s, braucht `ffmpeg`), M4A (AAC, 256 kbit/s) oder FLAC für die Musiksammlung; das zuletzt gewählte Format merkt sich der Browser. Erstellt wird mit `afconvert`, das zu macOS gehört (anderswo mit `ffmpeg`). Browser ohne Teilen-Menü für Dateien bieten nur Speichern an. Titel, Album (der Songtitel), Jahr, Nummer innerhalb des Laufs, Songtext und Stil samt Seed (als Kommentar) stehen in den Tags des Formats (ID3v2.3, iTunes-Atome, Vorbis-Kommentare). Interpret und Genre fragt der Dialog; der Interpret bleibt pro Browser gespeichert, das Genre schlägt er aus dem Stil vor. **Cover** gibt es an genau einer Stelle: **Cover wählen** beim Song nimmt ein Foto, schneidet es quadratisch zu und speichert es beim Song. Die Bibliothek zeigt es neben dem Song, der Player und der Sperrbildschirm beim Abspielen, und jede Datei, die Tonwerk verlässt, trägt es mitsamt Songtext: Teilen / Exportieren, FLAC-Download (auch einer Fassung) und die Kopie des Players. **Cover entfernen** nimmt es wieder weg. Ein Song ohne eigenes Cover bekommt nur bei Teilen / Exportieren eins, das der Browser aus Songtitel und einem Farbverlauf zeichnet (Farben aus der Song-ID); der Export-Dialog zeigt, welches hineinkommt. Der Songordner von YuE Studio bleibt unberührt: Downloads sind getaggte Kopien. Die Bilder liegen in `covers/` neben der Datenbank, der Songordner bleibt unberührt. 
+
+**Lautheit:** Alles, was Tonwerk zum Anhören verlässt, kommt auf −14 LUFS mit höchstens −1 dBTP Spitze: Teilen / Exportieren (auch FLAC), die Kopie des Players und die Musikvideos. Das ist der Pegel, auf den YouTube, Spotify und Apple Music lautere Songs ohnehin herunterdrehen, und so klingen alle Songs gleich laut. `ffmpeg` misst jede Datei einmal (`loudnorm`, die Messung bleibt in `yueui.db`) und ändert dann nur die Lautstärke des ganzen Songs, die Dynamik bleibt; nur wo die Spitzen sonst zu hoch würden, greift sein Begrenzer. FLAC-Download, Stems und die Logic-Seite behalten das Original zum Weiterarbeiten. Abschalten oder ein anderes Ziel: `Loudness:Enabled`, `Loudness:Target`, `Loudness:TruePeak` in `appsettings.Production.json`; die Kopien des Players werden danach einmal neu gemacht.
+
+**Auswertung** (unter Werkzeuge) zeigt, womit die bewerteten Songs gemacht wurden, gegen ihre Sterne: Stil-Bausteine, Modell (YuE2 oder ACE-Step), Qualität, LoRA, Schritte, Länge und ob instrumental. Gezählt wird ab zwei Songs; damit ein einzelner Glückstreffer nicht vorn landet, rechnet die Reihenfolge zu jedem Wert drei Songs mit Durchschnittsbewertung dazu. Die Bausteine über dem Schnitt bietet „Erstellen“ bei den Bausteinen im Reiter **Bewährt** an.
 
 **Musikvideo** beim Song (auf dem Handy im Menü „…“, auch im Menü von Player und Playlist) macht aus dem Song ein Video zum Hochladen, ohne gefilmte Bilder: das Cover vor einer weichgezeichneten, abgedunkelten Kopie seiner selbst (mit **Cover zeigen** aus bleibt nur diese Kopie als Hintergrund), auf Wunsch der Titel darunter (er blendet am Anfang ein, mit dem Interpreten aus dem Export-Dialog als zweiter Zeile), dazu unter **Analyzer** **Balken** nach Tonhöhe, gerechnet wie der Analyzer im Player (dieselben Bänder bis 16 kHz und dieselbe Dezibel-Skala, sodass auch die Höhen sichtbar sind; sie steigen sofort und fallen langsam zurück), eine **Welle** oder **Aus**, beide in einer Farbe aus dem Cover (seinem kräftigsten Farbton, hell genug für den dunklen Hintergrund; ein graues Cover behält Tonwerks Grün), und als Bewegung dahinter **Partikel**, die langsam aufsteigen und mit dem Bass heller werden, eine **Plasmakugel**, deren Blitze aus der Mitte zucken (zwölfmal in der Sekunde eine neue Form) und mit dem Bass aufleuchten, oder **Keine**. Mit Cover zucken die Blitze hinter ihm hervor, ohne Cover laufen sie von einem glühenden Kern bis zum Bildrand. Formate: **YouTube 16:9** (1920×1080) und **Shorts/Reels 9:16** (1080×1920, alles oberhalb des unteren Fünftels, das die Apps mit Text und Knöpfen belegen). Beides in 30 fps als H.264 (High, CRF 18) mit AAC 320 kbit/s bei 48 kHz und dem Index vorn, also so, wie YouTube, Instagram und TikTok es empfehlen; das Video blendet am Anfang auf und am Ende ab. Der Dialog zeigt vorher ein Standbild (Balken und Welle darin nur angedeutet). Song ohne eigenes Cover bekommen das gezeichnete wie beim Export. Gerechnet wird auf dem Mac mit `ffmpeg`, im Hintergrund und eins nach dem anderen; die Videos stehen dann in der Warteschlange unter **Musikvideos** und melden sich per Benachrichtigung. Sie brauchen keinen großen Speicher und warten deshalb nicht auf YuE2 oder die Stimmen, machen diese aber etwas langsamer. Fertige Videos listet derselbe Dialog zum Ansehen, Speichern, Teilen und Löschen. **Speichern** liefert das Video in voller Qualität für YouTube (ein Fotovideo mit vielen Schnitten kann einige hundert MB groß sein). **Teilen** liefert eine kleine Fassung für Messenger: 720p, höchstens 2,5 Mbit/s, ein Song von vier Minuten bleibt also unter 80 MB. Am Mac-Browser ohne Teilen-Menü wird sie gespeichert. Sie entsteht beim ersten Teilen, das deshalb bei einem langen Video etwa eine Minute dauert, und bleibt dann neben dem Video liegen. Pro Song und Format gibt es eins: ist ein neues fertig, ersetzt es das bisherige im selben Format (bis dahin bleibt das alte anzusehen), YouTube- und Shorts-Fassung bleiben nebeneinander. Songs mit Video tragen in der Bibliothek neben Länge und Qualität ein Kamera-Symbol, das den Dialog öffnet. Die Standbilder (der Browser zeichnet sie als PNG) und das MP4 liegen in `videos/` neben der Datenbank und gehen mit dem Song; in die Datensicherung kommen sie nicht, sie lassen sich jederzeit neu machen. Shorts dürfen höchstens drei Minuten lang sein; ein längerer Song wird auf YouTube ein normales Video.
 
@@ -121,7 +127,22 @@ Das Suchfeld über der Bibliothek sucht wahlweise in **Titel & Stil** oder im **
 
 **Benachrichtigungen einschalten** im Zahnrad-Menü oben rechts meldet per Web Push, wenn ein Song fertig ist oder fehlschlägt, eine Transkription endet oder ein Songtext-Entwurf steht, auch bei gesperrtem Handy. Abgebrochene Songs bleiben still. Auf iPhone und iPad geht das nur in der App auf dem Home-Bildschirm (ab iOS 16.4) und nur über HTTPS, also über `tailscale serve`; im normalen Safari-Tab erklärt der Eintrag das. Beim Einschalten kommt eine Test-Nachricht. Jedes Gerät schaltet für sich ein, die Texte kommen in der Sprache, die dort eingestellt ist.
 
+**Song per Kurzbefehl oder Siri:** `POST /api/quick` macht aus ein paar Wörtern in einem Aufruf einen Song. Erst schreibt das Textmodell den Songtext (wie „Text schreiben“ im Formular, Deutsch, wenn nichts anderes gesagt ist), danach kommt der Song von selbst in die Warteschlange; die Benachrichtigung meldet den fertigen Song (der Textentwurf meldet sich nur, wenn er scheitert). Der Stil ist der des neuesten Songs, wenn keiner mitkommt. So wird daraus ein Kurzbefehl auf dem iPhone (Tailscale muss verbunden sein):
+
+1. In der App **Kurzbefehle** einen neuen Kurzbefehl anlegen, z. B. „Tonwerk-Song“.
+2. Aktion **Text diktieren** (Sprache Deutsch).
+3. Aktion **Inhalte von URL abrufen** mit der URL `https://<mac-name>.<tailnet>.ts.net:8443/api/quick`, Methode **POST**, Anfragetext **JSON** und dem Feld `keywords` (Text) = **Diktierter Text**. Wahlweise weitere Felder: `style` (Text), `language` (`de` oder `en`), `batch` (Zahl, 1 bis 10), `quality` (`draft` oder `full`), `title` (sonst der Anfang der Stichwörter).
+4. Wahlweise **Mitteilung anzeigen** mit „Song ist unterwegs“.
+
+Danach reicht „Hey Siri, Tonwerk-Song“, dann sagen, worum es gehen soll. Die Antwort ist `202` mit `draftId`, `stage`, `title` und `style`, ein fehlendes oder falsches Feld ein `400` mit der Erklärung.
+
 Der Server legt beim ersten Mal ein VAPID-Schlüsselpaar an und speichert es mit den Abonnements in `~/Library/Application Support/YuE UI/push.json` (nur für den eigenen Benutzer lesbar). Diese Datei nicht löschen: Mit einem neuen Schlüssel kommt nichts mehr an, bis jedes Gerät die Benachrichtigungen einmal neu einschaltet. Die Nachrichten gehen über die Push-Dienste von Apple, Google oder Mozilla, der Mac braucht dafür Internet.
+
+## Tempo und Tonart
+
+Tonwerk hört jeden Song einmal auf Tempo und Tonart an (librosa: Beat-Tracking und Krumhansl-Tonartprofile über die Chroma) und zeigt beides beim Song, etwa „92 BPM · F♯-Moll“. Die Bibliothek filtert nach langsam (unter 90 BPM), mittel, schnell (ab 120 BPM), Dur und Moll und sortiert nach Tempo. Nach „Alles übernehmen“ steht das gehörte Tempo als erster Baustein unter Stil → Tempo; es kommt nicht von selbst in den Stil, weil der Song sonst anders würde.
+
+Neue Songs werden gehört, sobald sie fertig sind, ältere nach und nach, aber nur solange YuE2 und die anderen großen Modelle ruhen. Tonwerk nimmt dafür das Python der Fotovideos (`--montage`) oder von Audio zu MIDI (`--midi`), beide haben librosa; eine eigene Einrichtung gibt es nicht. Ohne beides zeigt die Bibliothek, was die Partitur (`Q:`, `K:`) oder ACE-Step verlangt hat, mit dem Hinweis „laut Partitur“, und hört nach, sobald eine der beiden Umgebungen da ist. Die Partitur gibt auch die Oktave des Tempos vor, damit ein Song nicht mit halbem oder doppeltem Tempo gehört wird. Abschalten: `Analysis:Auto` auf `false`.
 
 ## Speicherplatz
 
@@ -129,7 +150,9 @@ Jeder Song belegt mit FLAC, Tokens und Zwischendateien einiges an Platz. Die Bib
 
 ### Auf eine externe Platte verlegen
 
-Modelle, Songs und was Tonwerk sonst an großen Ordnern anlegt, lassen sich auf eine externe Platte verlegen. `deploy/move-to-volume.sh` ohne Angaben zeigt, was sich verlegen lässt, wie groß es ist und wo es liegt: `yue2` (die Modelle von YuE2, auch die von YuE Studio), `ane`, `songs`, `lmstudio`, `speech`, `images`, `separator`, `seedvc`, `versions`, `stems` und `videos`.
+Modelle, Songs und was Tonwerk sonst an großen Ordnern anlegt, lassen sich auf eine externe Platte verlegen. `deploy/move-to-volume.sh` ohne Angaben zeigt, was sich verlegen lässt, wie groß es ist und wo es liegt: `yue2` (die Modelle von YuE2, auch die von YuE Studio), `ane`, `songs`, `lmstudio`, `speech`, `images`, `montage` (die CLIP-Modelle der Fotovideos), `acestep` (Modelle von ACE-Step), `acesongs` (Songs von ACE-Step), `separator`, `seedvc`, `versions`, `stems` und `videos`.
+
+Ein Teil, den es noch nicht gibt, weil das Feature erst später installiert wird oder seine Modelle erst beim ersten Gebrauch lädt, lässt sich vorab verlegen: Das Skript legt dann einen leeren Ordner auf der Platte an und verlinkt ihn, sodass die Downloads gleich dort landen. Die Python-Umgebungen der Werkzeuge (`env`, je ein bis zwei GB) bleiben auf der internen Platte; Audio zu MIDI bringt sein kleines Modell darin mit und legt sonst nichts Großes an.
 
 ```sh
 deploy/move-to-volume.sh                              # Übersicht
@@ -179,6 +202,17 @@ Fertige LoRAs landen in `~/Library/Application Support/YuE UI/loras` und stehen 
 
 Grenzen: YuE2 gibt kein Werkzeug heraus, das aus fremder Musik die Song-Tokens gewinnt, die die Klangsynthese beim Generieren sieht. Trainiert wird deshalb im Modus, den YuE2 für Training ohne sie kennt (nur der Text-Prompt ist sichtbar). Beim Generieren wirkt eine LoRA dadurch oft etwas schwächer; eine Stärke um 1,5 gleicht das aus. Songs mit verschiedenen LoRAs warten bei der Synthese aufeinander, weil nur eine zur Zeit in den Gewichten stecken kann, und ein Song mit LoRA geht nicht aufs iPhone. Lizenz: Die Gewichte von YuE2 stehen unter CC BY-NC 4.0, aber Einzelpersonen dürfen erzeugte Songs ausdrücklich verkaufen und vermarkten ([MODEL_LICENSE](https://github.com/multimodal-art-projection/YuE/blob/main/MODEL_LICENSE)). Eine LoRA ist eine Bearbeitung der Gewichte: Sie selbst darf nicht verkauft und nur mit Nennung von YuE2 weitergegeben werden. Ob Songs, die mit einer LoRA entstanden sind, unter dieselbe Erlaubnis fallen, sagt die Lizenz nicht ausdrücklich. Die Rechte an den Trainingssongs bleiben bei ihren Urhebern.
 
+## Songtext mit Zeitmarken
+
+Tonwerk weiß, welche Zeile gerade gesungen wird: Whisper (`mlx-whisper` mit large-v3 turbo, etwa 1,6 GB) hört sich jeden neuen Song einmal an, am liebsten die Gesangsspur aus den Stems, wenn es welche gibt, sonst den ganzen Song. Den Text kennt Tonwerk schon, Whisper sagt nur, wann welches Wort kommt; die Zeilen werden dann auf die gehörten Wörter gelegt, auch wenn Whisper sich verhört oder Wörter auslässt, und ein wiederholter Refrain nimmt nie die Zeiten des ersten. Zeilen ohne gehörtes Wort teilen sich die Lücke zwischen ihren Nachbarn.
+
+- **Vollbild-Player:** Der Text läuft mit, die gesungene Zeile ist hell, die anderen gedimmt, und die Ansicht scrollt mit, außer man hat gerade selbst gescrollt. Ein Tipp auf eine Zeile springt dorthin. Ältere Songs werden beim ersten Öffnen im Vollbild angehört.
+- **Musikvideo:** **Songtext einblenden** zeigt die gesungene Zeile groß im Band über dem Analyzer. Daneben gibt es die Zeiten als Untertiteldatei (`.srt`), die YouTube beim Hochladen zum Video nimmt.
+
+- **Bibliothek:** Wie viel vom Text Whisper verstanden hat, steht als „Text 78 %“ beim Song, unter 50 % orange. Aus dem ganzen Song gehört fällt der Wert niedriger aus als aus der Gesangsspur; nach dem Trennen in Stems hört Whisper den Song beim nächsten Anfordern genauer. Der Filter „Text undeutlich“ und die Sortierung „Undeutlichster Text“ finden genuschelte Songs.
+
+Ein Song braucht auf dem Mac deutlich unter einer Minute; Whisper wartet, solange ein anderes großes Modell den Speicher hat. Einrichtung: `deploy/setup-mac.sh --whisper` (oder die gespeicherten Optionen mit `--whisper` dazu), das Modell lädt beim ersten Song. Abschalten des automatischen Anhörens: `Timing:Auto` auf `false`.
+
 ## Transkription mit SheetSage2
 
 Unter **Transkription** lässt sich eine Aufnahme hochladen (jedes Format, das macOS lesen kann, bis 300 MB). SheetSage2 macht daraus eine Melodie-Partitur im ABC-Format ohne Akkorde. **Als Partitur übernehmen** setzt sie als eigene Partitur ins Formular und stellt die Planung auf „Nur Melodie“, die Grundlage für ein Cover mit neuem Stil und Text. Jede Transkription landet als Ordner in `~/Music/YuE Studio/transcriptions` (Partitur, MIDI-Spuren, Analyse); die Liste zeigt auch die, die in YuE Studio entstanden sind.
@@ -195,7 +229,7 @@ Unter der Transkription macht **Audio zu MIDI** aus einer Aufnahme eine MIDI-Dat
 
 Die Spur heißt `Vocal`, eine Instrumentenspur aus den Stems nach ihrem Stem (`Bass`, `Drums`, …). Ein Bass-Stem wird immer einstimmig und nur im Tonbereich eines Basses (30–400 Hz) gehört. Beim Drum-Stem hört Basic Pitch keine Tonhöhen; dort sucht Tonwerk selbst die Schläge und ordnet sie nach Frequenzband: Kick, Snare und geschlossene Hi-Hat auf den General-MIDI-Noten 36, 38 und 42. Das ist eine Skizze des Grundbeats: Toms und Becken landen beim ähnlichsten Instrument, und eine Hi-Hat genau auf der Snare geht in ihr auf. Das Ergebnis lässt sich speichern oder direkt an die **Begleitstimmen** oder die **Logic-Seite** geben, die es als hochgeladene Melodie nehmen. Vibrato und Gleiter zerfallen manchmal in kurze Nachbarnoten, die man in Logic aufräumt.
 
-Auf der **Logic-Seite** können Bass und Schlagzeug eines Songs auch direkt aus seinen Stems kommen, statt aus den Akkorden erzeugt zu werden: Unter **Aus den Stems als MIDI** gibt es dafür je ein Häkchen, sobald der Song Stems eines Modells hat, das Bass und Schlagzeug trennt (`htdemucs`, `htdemucs-ft`, `htdemucs-6s`, …; die Gesangsmodelle machen nur Gesang und Instrumental). Die Spuren landen dann im Tempo und auf dem 16tel-Raster der Partitur in Vorschau, MIDI-Datei, MusicXML und Logic-Projekt, als `Bass` und als `Drums` (oder `Kick`, `Snare`, `HiHat` mit getrennten Schlagzeugspuren, auf den Noten einer Drum-Machine, wenn eine zugeordnet ist). Gesang und Instrument kommen weiter aus der Partitur. Jeder Stem wird nur beim ersten Mal umgewandelt, danach merkt sich der Server die Datei.
+Auf der **Logic-Seite** können Bass und Schlagzeug eines Songs auch direkt aus seinen Stems kommen, statt aus den Akkorden erzeugt zu werden: Unter **Aus den Stems als MIDI** gibt es dafür je ein Häkchen, sobald der Song Stems eines Modells hat, das Bass und Schlagzeug trennt (BS-RoFormer-SW, `htdemucs`, `htdemucs-ft`, `htdemucs-6s`, …; die Gesangsmodelle machen nur Gesang und Instrumental). Die Spuren landen dann im Tempo und auf dem 16tel-Raster der Partitur in Vorschau, MIDI-Datei, MusicXML und Logic-Projekt, als `Bass` und als `Drums` (oder `Kick`, `Snare`, `HiHat` mit getrennten Schlagzeugspuren, auf den Noten einer Drum-Machine, wenn eine zugeordnet ist). Gesang und Instrument kommen weiter aus der Partitur. Jeder Stem wird nur beim ersten Mal umgewandelt, danach merkt sich der Server die Datei.
 
 Basic Pitch ist klein (ein paar MB) und läuft über ONNX Runtime auf dem Prozessor, neben YuE2 und ohne Warteschlange; ein Song dauert Sekunden. Einrichten einmal auf dem Mac mit `deploy/install-midi.sh` oder `deploy/setup-mac.sh $(cat "$HOME/Library/Application Support/YuE UI/setup-options") --midi`; die Umgebung liegt unter `~/Library/Application Support/YuE UI/midi/`.
 
@@ -210,6 +244,20 @@ Statt oder neben den Stichwörtern kann ein **Foto** die Vorlage sein: Die Kamer
 Darunter lässt sich das Sprachmodell wählen: Die Liste zeigt alle Modelle, die in LM Studio heruntergeladen sind (ohne Embedding-Modelle), mit ihrer Größe, das eingestellte `Lyrics:Model` als „Standard“. Die Größe entspricht etwa dem Speicher, den das Modell braucht. Die Wahl merkt sich der Browser wie den Rest des Formulars; wird das Modell in LM Studio gelöscht, gilt wieder der Standard. Mit nur einem Modell bleibt die Auswahl ausgeblendet.
 
 LM Studio muss dafür nicht geöffnet sein: Antwortet sein Server nicht, startet Tonwerk ihn mit `~/.lmstudio/bin/lms daemon up` und `lms server start`. Tonwerk lädt das Modell (Standard: `google/gemma-4-26b-a4b-qat`) erst für die Anfrage, mit einem Kontext von 30000 Tokens, und entlädt es gleich danach wieder; ein Modell, das in LM Studio schon geladen ist, nutzt es mit und lässt es geladen. Dieses Modell (rund 15 GB) hat einen Mac mit 24 GB zusammen mit den üblichen offenen Apps schon bis zum Einfrieren in den Swap getrieben; vor einem Entwurf also möglichst viel schließen, oder das kleine `google/gemma-4-e4b` eintragen. Weigert sich LM Studio wegen zu wenig Speicher (seine Schutzgrenze „insufficient system resources“, etwa bei dichten Modellen wie Qwen 27B), entlädt Tonwerk zuerst andere noch geladene Modelle und versucht es dann mit halbem Kontext, bis hinunter zu `Lyrics:MinContextLength`; erst dann zeigt die Oberfläche seine Meldung. Die Schutzgrenze selbst bleibt an. Außerdem gilt: Solange YuE2 rechnet, gibt es keinen Entwurf; ein ruhender Worker wird vorher beendet; und solange ein Entwurf entsteht, startet kein Song. Der erste Entwurf dauert durch das Laden des Modells etwas länger.
+
+Liegt ein API-Schlüssel von Anthropic bereit (derselbe wie für die Ausarbeitung, `~/.config/tonwerk/anthropic.key`), stehen am Ende der Modellauswahl auch die Claude-Modelle mit dem Vermerk „Cloud“: Opus 5.5, Fable 5.1 (das stärkste, teuerste), Sonnet 5.5 und Haiku 5.5 (schnell und billig). Claude bekommt dieselben Regeln wie die lokalen Modelle, kann Fotos lesen und überarbeiten, schreibt aber bei Anthropic: Der Entwurf wartet auf nichts und hält nichts auf, auch nicht einen Song, den YuE2 gerade rechnet, und er geht auch ohne laufendes LM Studio. Dafür verlassen Stichwörter, Stil, Foto und Text den Mac, und jeder Entwurf kostet ein wenig nach der Preisliste von Anthropic. Der Standard bleibt das lokale Modell; welche Claude-Modelle angeboten werden, steht in `Lyrics:ClaudeModels`.
+
+## Ausarbeitung mit Claude
+
+Eine geschriebene Song-Ausarbeitung (Aufbau, Akkorde, Text, Ideen für die Melodie, auch als Markdown-Datei) macht **Werkzeuge → Ausarbeitung** zu einem Song. Die lokalen Sprachmodelle schaffen das nicht verlässlich, deshalb geht der Text an Claude (Anthropic API). Das Modell wählt die Seite unter **Claude-Modell**: Opus 5.5 (Standard), Fable 5.1 (denkt gründlicher, kostet gut das Doppelte) oder Sonnet 5.5 (halb so teuer); der Browser merkt sich die Wahl, „Noch einmal“ nimmt das Modell des Versuchs. Claude antwortet mit einem Songplan: Tempo, Tonart, Stil, Abschnitte mit ihren Instrumenten und je Takt Akkorde, Gesangsmelodie und Silben. Alles Weitere rechnet Tonwerk selbst, immer gleich aus demselben Plan:
+
+- **Als YuE-Song** füllt das Formular mit Stil, Songtext (mit `[Verse]`, `[Chorus]` …) und der Partitur im Dialekt von YuE2, Planung „voll“ und passender Tokenzahl; Partitur und Gesang stimmen damit Takt für Takt.
+- **MIDI-Entwurf** lädt eine MIDI-Datei mit Gesang, Instrumentallinie, Klavier, Pad, Bass und Schlagzeug, die abschnittsweise kommen und gehen, wie der Plan es sagt.
+- **Partitur** lädt die `score.abc`, **Logic-Seite** öffnet sie dort.
+
+Ein Feld für Wünsche („Refrain höher“, „Bridge nur Klavier“) geht mit; **Neu ausarbeiten** schickt dieselbe Ausarbeitung noch einmal. Hinweise (ein Takt zu lang, ein Akkord, den YuE2 nicht kennt und der vereinfacht wurde, eine Zeile mit deutlich mehr Silben als Noten) stehen unter dem Plan. Ein Plan dauert einige Minuten und läuft auf dem Mac weiter, wenn das Handy sperrt; eine Benachrichtigung meldet, wenn er fertig ist.
+
+Dafür braucht Tonwerk einen API-Schlüssel von Anthropic (console.anthropic.com), am einfachsten in `~/.config/tonwerk/anthropic.key` (eine Zeile, `chmod 600`), sonst in `ANTHROPIC_API_KEY` oder `Sketch:ApiKey`; die Datei wird bei jedem Plan gelesen, ein Neustart ist nicht nötig. Jeder Plan kostet nach der Preisliste von Anthropic; die Seite zeigt die verbrauchten Tokens (ein Song von hundert Takten braucht samt Denkphase grob 20000 bis 40000 Ausgabe-Tokens). Die Ausarbeitung verlässt dafür den Mac, Songs und Aufnahmen nicht.
 
 ## Als Logic-Projekt laden
 
@@ -281,6 +329,15 @@ Chatterbox und die beiden Higgs-Modelle sprechen am Stück höchstens etwa 40 Se
 
 Ein Modell wird für jedes Ergebnis geladen und danach wieder freigegeben. Es wartet wie eine Fassung, bis YuE2, das Textmodell und Stimmumwandlungen den Speicher freigeben, und so lange warten diese. Die Seite **Warteschlange** listet laufende und wartende Sprachtests unter **Sprachlabor** (mit Abbrechen) und zeigt dann eine vierte Kachel **Sprache**. Beim ersten Mal lädt sich ein Modell herunter (3 bis 9 GB), das dauert.
 
+### Sprache säubern
+
+Unten im Sprachlabor nimmt **Sprache säubern** einer Aufnahme von Sprache (Vortrag, Interview, Sprachnotiz, auch ein Video, dann nur der Ton) Rauschen und Störgeräusche. Datei wählen, Modell wählen, **Säubern**. Das Ergebnis steht darunter zum Anhören und Herunterladen (WAV, 48 kHz mono, `<Name>-clean.wav`); **Original anhören** spielt die Aufnahme, wie sie war. Zur Wahl stehen zwei Modelle zur Sprachverbesserung aus mlx-audio:
+
+- **MossFormer2 SE 48K** (Apache 2.0, aus Alibabas ClearerVoice-Studio, etwa 250 MB): nimmt Rauschen und viel vom Raumklang gründlich weg.
+- **DeepFilterNet 3** (MIT/Apache 2.0, wenige MB): klein, schnell und sanft; nimmt gleichmäßiges Rauschen weg und lässt die Stimme mit ihrem Hall.
+
+Eine Aufnahme darf bis zu 2 Stunden lang und 1 GB groß sein. Sie wartet in derselben Reihe wie die Sprachtests und belegt solange den Speicher; der Fortschritt steht in Prozent dabei und in der Warteschlange. Andere Kandidaten der Recherche (Oktober 2026) blieben draußen: Resemble Enhance erfindet beim Säubern Wörter hinzu, NVIDIAs RE-USE ist nicht kommerziell und braucht CUDA, Sidon gibt es nur als CoreML in einem Swift-Paket. Die Gesangstrennung der Stems ist für Musik trainiert und lässt Sprache dumpfer. Die Liste lässt sich unter `Speech:CleanModels` ersetzen. Auf dem Mac noch nicht gehört.
+
 **Einrichtung.** Das Labor braucht eine eigene Python-Umgebung mit mlx-audio, getrennt von der von YuE Studio. Dazu kommt PyTorch (etwa 1 GB), das nur Higgs Audio v3 braucht: Es liest seinen Audio-Codec über PyTorch. Fehlt ein Paket, sagt der Sprachtest das und nennt das Skript, das es nachinstalliert. Einmal auf dem Mac im Repository ausführen, nachdem `deploy/install.sh` gelaufen ist:
 
 ```sh
@@ -323,6 +380,25 @@ Danach zeigt das Zahnrad-Menü, wann zuletzt gesichert wurde, und **Jetzt in die
 
 Die Zeilen liegen als JSON, eine Datei pro Tag (`tonwerk-JJJJ-MM-TT.jsonl`), unter `~/Library/Application Support/YuE UI/logs` und werden nach 14 Tagen gelöscht. Wird eine Tagesdatei größer als 50 MB, kommen nur noch Warnungen und Fehler hinein. Das Update-Log bleibt, wo `update.sh` es schreibt, und wird mitgelesen. `yueui.log` (die Konsole des LaunchAgents) gibt es weiterhin.
 
+## Monitoring mit Grafana
+
+Für Verläufe über Tage und Wochen (wie lange ein Song dauert, was fehlschlägt, wer den Speicher hält, wie voll die Platte wird) liefert Tonwerk Messwerte und Protokoll an einen Monitoring-Stack aus Prometheus, Loki und Grafana. Der läuft **nicht auf dem Mac**, dessen Speicher den Modellen gehört, sondern in einem Container auf einer anderen Maschine, etwa einem LXC auf dem Proxmox, über Tailscale verbunden. Vorlage und Anleitung: [`deploy/monitoring/`](deploy/monitoring/README.md).
+
+- **Messwerte:** `GET /metrics` im Format von Prometheus, ohne eigene Einrichtung (ab `Monitoring:Metrics` = `false` aus). Prometheus holt sie über `tailscale serve` von `https://<Mac>.<tailnet>.ts.net:8443/metrics`. Darin: Zustand des Workers, welches Modell den Speicher hält, Warteschlange, laufende und wartende Aufträge je Art, fertige Aufträge nach Ergebnis (`done`, `failed`, `cancelled`) mit ihrer Arbeitszeit ohne die Wartezeit, Protokollzeilen nach Quelle und Stufe, freier Platz und der Speicher des Server-Prozesses. Die Zähler beginnen nach jedem Neustart bei null; Prometheus rechnet das heraus.
+- **Protokoll:** Mit `Monitoring:Loki:Url` schickt Tonwerk jede Zeile des Protokolls (ab `info`, siehe `Monitoring:Loki:MinLevel`) gebündelt an Loki, mit den Labels `app`, `host`, `source` und `level`. Ist Loki nicht erreichbar, wartet Tonwerk ein paar Versuche lang und verwirft dann; auf dem Mac bleibt alles in den Tagesdateien. Das Log von `update.sh` geht nicht mit.
+
+In `~/Library/Application Support/YueUI/app/appsettings.Production.json` auf dem Mac (Tailscale-Name oder 100.x-Adresse; eine Adresse im Heimnetz erreicht der LaunchAgent nicht):
+
+```json
+{
+  "Monitoring": {
+    "Loki": { "Url": "http://monitoring:3100", "Host": "mac-mini" }
+  }
+}
+```
+
+Danach Tonwerk neu starten (`launchctl kickstart -k gui/$(id -u)/de.bvelop.yueui`).
+
 ## Cover malen mit FLUX.2 Klein
 
 In den Songs malt **Cover malen** (im „…“-Menü des Songs) ein Cover mit [FLUX.2 Klein](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) auf dem Mac, ohne ComfyUI, über [mflux](https://github.com/filipstrand/mflux) (MLX):
@@ -348,6 +424,30 @@ Oder mit den bisherigen Optionen über das Einrichtungsskript, damit Updates die
 
 Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-forest-labs/FLUX.2-klein-9B](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B) annehmen, ein Lese-Token für das Konto anlegen und auf dem Mac in `~/.config/tonwerk/huggingface.token` speichern. Klein 4B braucht das nicht. Die Gewichte, die ComfyUI schon geladen hat, nutzt mflux nicht; es lädt sie im Format von Hugging Face neu.
 
+## Songs mit ACE-Step
+
+Neben YuE2 macht [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) Songs, über [acestep.cpp](https://github.com/ServeurpersoCom/acestep.cpp) (GGML mit Metal) und die quantisierten Modelle von [Serveurperso/ACE-Step-1.5-GGUF](https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF), MIT-lizenziert. Es hat eine eigene Seite unter **Werkzeuge → ACE-Step**, weil seine Parameter andere sind:
+
+- **Aufgabe:** *Neuer Song*, *Cover* (ein Song der Bibliothek im neuen Stil, mit *Nähe zum Original*) oder *Neu malen* (ein Abschnitt eines Songs in Sekunden wird neu erzeugt).
+- **Beschreibung** statt Tags: Genre, Instrumente, Stimme und Stimmung in freien Worten, am besten auf Englisch; die Bausteine passen auch hier.
+- **Text** ist bei einem neuen Song optional: leer schreibt das Sprachmodell (LM) ihn selbst. Abschnitte wie `[Verse]` und `[Chorus]` versteht ACE-Step. Die Sprache des Gesangs lässt sich festlegen (50 Sprachen, Deutsch dabei).
+- **Länge, Tempo, Tonart, Takt** legt man fest oder überlässt sie dem LM; bei Cover und Neu malen kommen sie vom Ausgangssong.
+- **Varianten** (1 bis 4) macht aus einem Auftrag mehrere Songs mit aufeinanderfolgenden Seeds.
+- **Erweiterte Parameter:** LM und DiT (aus dem Modellordner), Schritte, Guidance, Shift, Solver, Temperatur, CFG, Top p/k und negativer Prompt des LM, „Beschreibung ausbauen“ und ein Adapter (LoRA) mit Stärke. Leer gelassen gilt, was das Modell vorsieht.
+
+Die Songs landen in derselben Bibliothek, mit einem „ACE“-Schild, und lassen sich abspielen, bewerten, teilen und löschen wie alle anderen; eine Partitur (`score.abc`) gibt es nicht, also auch keinen Logic-Export daraus und kein Rendern. **Alles übernehmen** füllt bei einem ACE-Song die ACE-Seite, mit dem Text, den das LM geschrieben hat, und dem Seed des Songs. Sie liegen nicht bei YuE Studio, sondern in `ace-songs/` neben der Datenbank, und kommen mit in die Sicherung.
+
+Ein Auftrag wartet wie ein Bild, bis YuE2, das Textmodell, die Stimmen, das Sprachlabor und die Cover den Speicher freigeben, und so lange warten diese. Tonwerk startet für jeden Auftrag `ace-lm` und `ace-synth` neu, danach ist der Speicher wieder frei. Der Standardsatz (4B-LM, Turbo-DiT, Text-Encoder, VAE, Q8) ist etwa 7,7 GB groß. Die **Warteschlange** zeigt Aufträge unter **ACE-Step**; eine Benachrichtigung meldet fertige.
+
+**Einrichtung.** Einmal auf dem Mac im Repository, nach `deploy/install.sh`:
+
+```sh
+deploy/install-ace.sh           # acestep.cpp bauen (Commit fest im Skript), Standardmodelle laden
+deploy/install-ace.sh --sft     # dazu der SFT-DiT (feiner, etwa 50 Schritte statt 8)
+```
+
+Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit Updates den Build mitpflegen. Programm und Modelle liegen unter `~/Library/Application Support/YuE UI/ace/`, Adapter als `.safetensors` in `ace/adapters/`. Bisher nur in einem Linux-Container mit nachgebauten Programmen getestet, nicht auf dem Mac und nicht mit echten Modellen.
+
 ## Konfiguration
 
 `appsettings.json` bzw. Umgebungsvariablen:
@@ -364,6 +464,14 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `Lyrics:MinContextLength` (`Lyrics__MinContextLength`) | `8192` | Kleinster Kontext, auf den Tonwerk zurückgeht, wenn LM Studio das Modell wegen zu wenig Speicher ablehnt |
 | `Lyrics:ApiToken` (`Lyrics__ApiToken`) | – | nur nötig, wenn in LM Studio „Require Authentication“ an ist |
 | `Lyrics:Lms` (`Lyrics__Lms`) | `~/.lmstudio/bin/lms` | Kommandozeilenwerkzeug, mit dem Tonwerk den Server von LM Studio startet |
+| `Lyrics:ClaudeModels` (`Lyrics__ClaudeModels__0`) | `claude-opus-5-5`, `claude-fable-5-1`, `claude-sonnet-5-5`, `claude-haiku-5-5` | Claude-Modelle in der Auswahl für Textentwürfe, solange ein Schlüssel von Anthropic da ist; leer bietet keines an |
+| `Lyrics:ClaudeEffort` (`Lyrics__ClaudeEffort`) | `medium` | Wie gründlich Claude über einem Text nachdenkt (`low` bis `max`) |
+| `Sketch:Model` (`Sketch__Model`) | `claude-opus-5-5` | Claude-Modell für Ausarbeitungen |
+| `Sketch:Effort` (`Sketch__Effort`) | `high` | wie gründlich es nachdenkt (`low` bis `max`) |
+| `Sketch:Models` (`Sketch__Models__0`) | `claude-opus-5-5`, `claude-fable-5-1`, `claude-sonnet-5-5` | Claude-Modelle, unter denen die Ausarbeitung wählen lässt; `Sketch:Model` ist der Standard |
+| `Sketch:KeyFile` (`Sketch__KeyFile`) | `~/.config/tonwerk/anthropic.key` | Datei mit dem API-Schlüssel von Anthropic (oder `ANTHROPIC_API_KEY`, `Sketch:ApiKey`) |
+| `Sketch:MaxTokens` (`Sketch__MaxTokens`) | `64000` | Obergrenze der Antwort samt Denkphase |
+| `Sketch:Timeout` (`Sketch__Timeout`) | `00:20:00` | so lange darf ein Plan dauern |
 | `Logic:SplitSections` (`Logic__SplitSections`) | `false` | eine Region je Songabschnitt statt einer je Spur |
 | `Queue:BundleWindow` (`Queue__BundleWindow`) | `00:20:00` | so lange dürfen Songs für YuE2 an einem wartenden Textentwurf oder einer wartenden Fassung vorbei; `00:00:00` hält die Reihenfolge streng ein |
 | `Voice:EngineRoot` (`Voice__EngineRoot`) | `~/Library/Application Support/YuE UI/engines` | wo `--voices` Trennung und Seed-VC einrichtet; die folgenden fünf liegen darunter |
@@ -393,11 +501,22 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `Images:ModelCache` (`Images__ModelCache`) | `<Root>/models` | Hugging-Face-Cache der Bildmodelle (`HF_HOME`) |
 | `Images:TokenFile` (`Images__TokenFile`) | `~/.config/tonwerk/huggingface.token` | Hugging-Face-Token, nur für Klein 9B |
 | `Images:Timeout` (`Images__Timeout`) | `01:30:00` | so lange darf ein Bild samt erstem Download dauern |
+| `Ace:Root` (`Ace__Root`) | `~/Library/Application Support/YuE UI/ace` | Ordner für ACE-Step; die folgenden drei liegen darunter |
+| `Ace:Binaries` (`Ace__Binaries`) | `acestep.cpp/build` | `ace-lm` und `ace-synth` |
+| `Ace:Models` (`Ace__Models`) | `models` | GGUF-Dateien (LM, DiT, Text-Encoder, VAE) |
+| `Ace:Adapters` (`Ace__Adapters`) | `adapters` | LoRAs für den DiT |
+| `Ace:Songs` (`Ace__Songs`) | `ace-songs` neben der Datenbank | wo ACE-Songs gespeichert werden |
+| `Ace:Timeout` (`Ace__Timeout`) | `01:00:00` | so lange darf ein Auftrag dauern |
 | `Push:DataPath` (`Push__DataPath`) | `~/Library/Application Support/YuE UI/push.json` | VAPID-Schlüssel und Abonnements für Benachrichtigungen |
 | `Data:Path` (`Data__Path`) | `~/Library/Application Support/YuE UI/yueui.db` | SQLite-Datenbank von Tonwerk (Playlists, geänderte Titel, Bewertungen) |
 | `Logs:Directory` (`Logs__Directory`) | `~/Library/Application Support/YuE UI/logs` | Tagesdateien des Protokolls |
 | `Logs:RetentionDays` (`Logs__RetentionDays`) | `14` | So viele Tage bleiben sie liegen |
 | `Logs:UpdateLog` (`Logs__UpdateLog`) | `~/Library/Logs/tonwerk-update.log` | Das Log von `deploy/update.sh`, das die Seite mitliest |
+| `Monitoring:Metrics` (`Monitoring__Metrics`) | `true` | `GET /metrics` für Prometheus |
+| `Monitoring:Loki:Url` (`Monitoring__Loki__Url`) | – | Loki, z. B. `http://monitoring:3100`; leer schickt kein Protokoll |
+| `Monitoring:Loki:Host` (`Monitoring__Loki__Host`) | Name des Rechners | Label `host` |
+| `Monitoring:Loki:MinLevel` (`Monitoring__Loki__MinLevel`) | `info` | Zeilen darunter bleiben auf dem Mac |
+| `Monitoring:Loki:Username` / `Monitoring:Loki:Password` | – | Basic Auth, falls Loki hinter einem Proxy das verlangt |
 | `Push:Subject` (`Push__Subject`) | `https://github.com/Marcel-B/YuE-UI` | Kontaktadresse (`mailto:` oder `https:`) für die Push-Dienste; Apple lehnt Adressen wie `mailto:ich@localhost` ab |
 | `Backup:EnvFile` (`Backup__EnvFile`) | `~/.config/tonwerk/nextcloud.env` | `.env`-Datei mit `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME` und `NEXTCLOUD_APP_PASSWORD` für die Datensicherung; fehlt eins davon, ist sie aus |
 | `Backup:At` (`Backup__At`) | `03:00` | Uhrzeit der nächtlichen Sicherung; leer heißt nur von Hand |
@@ -411,9 +530,10 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `GET` | `/api/status` | Worker-Zustand, Songs in Arbeit, Protokoll |
 | `GET` | `/api/busy` | `{ busy, reasons }`: ob ein Neustart laufende Arbeit abbräche (`songs`, `transcription`, `lyrics`, `voices`, `speech`); für `deploy/update.sh` |
 | `GET` | `/api/logs` | Gesammeltes Protokoll, neueste Zeilen zuerst: `source` (kommagetrennt: `server`, `worker`, `queue`, `lyrics`, `voices`, `speech`, `video`, `export`, `logic`, `backup`, `push`, `update`), `level` (Mindeststufe `debug`/`info`/`warning`/`error`), `q` (Text), `before` (Zeit der letzten Zeile, für die nächste Seite), `limit` (Standard 200) → `{ entries, more }` |
+| `GET` | `/metrics` | Messwerte im Textformat von Prometheus (`404`, wenn `Monitoring:Metrics` aus ist) |
 | `GET` | `/api/logs/report` | Bericht als Text für einen Chat: Version, Engines, Zustand, Warnungen und Fehler der letzten `hours` Stunden (Standard 24) mit Kontext |
 | `GET` | `/api/events` | dasselbe live als Server-Sent Events (`snapshot`, `song`, `worker`, `log`, `library`, `transcription`, `lyrics`, `version`, `speech`, `queue`, `ping`) |
-| `POST` | `/api/generate` | neuer Lauf: `{ style, lyrics, title?, batch?, quality?: "draft"\|"full", cot?, seed?, instrumental?, engines?, draftSteps?, maxTokens?: 200–15000, abc?, fullSteps?: 1–64, abcSampling?, semanticSampling?, voice?, lora?, loraStrength?: 0–3 }`; `lora` ist der Name einer LoRA aus `/api/loras` (`400`, wenn es sie nicht gibt), `voice` ist `{ voiceId, semiToneShift?, strength?, diffusionSteps?, keepReverb? }` wie bei den Fassungen und singt jeden fertigen Song danach mit dieser Stimme (`400` für eine unbekannte Stimme, `501` ohne Einrichtung); `abc` braucht `cot` "full" oder "melody", Sampling ist `{ temperature?, topP?, topK?, repetitionPenalty?, penaltyWindow? }`, über 9000 Tokens, `fullSteps` und Sampling nur mit der Worker-Erweiterung; antwortet `202`, ohne Inhalt, wenn der Lauf an den Worker ging, sonst mit dem wartenden Auftrag `{ id, kind, title, createdAt, songId, batch, quality, revision, voiceLabel }` |
+| `POST` | `/api/generate` | neuer Lauf: `{ style, lyrics, title?, batch?: 1–10, quality?: "draft"\|"full", cot?, seed?, instrumental?, engines?, draftSteps?, maxTokens?: 200–15000, abc?, fullSteps?: 1–64, abcSampling?, semanticSampling?, voice?, lora?, loraStrength?: 0–3 }`; `lora` ist der Name einer LoRA aus `/api/loras` (`400`, wenn es sie nicht gibt), `voice` ist `{ voiceId, semiToneShift?, strength?, diffusionSteps?, keepReverb? }` wie bei den Fassungen und singt jeden fertigen Song danach mit dieser Stimme (`400` für eine unbekannte Stimme, `501` ohne Einrichtung); `abc` braucht `cot` "full" oder "melody", Sampling ist `{ temperature?, topP?, topK?, repetitionPenalty?, penaltyWindow? }`, über 9000 Tokens, `fullSteps` und Sampling nur mit der Worker-Erweiterung; antwortet `202`, ohne Inhalt, wenn der Lauf an den Worker ging, sonst mit dem wartenden Auftrag `{ id, kind, title, createdAt, songId, batch, quality, revision, voiceLabel }` |
 | `GET` | `/api/loras` | `{ folder, loras }`: die LoRAs im Ordner mit `name`, `sizeBytes`, `modifiedAt`, `triggerWord`, `steps`, `songs`, `minutes` |
 | `POST` | `/api/loras` | LoRA hochladen (Formular: `file` als `.safetensors` bis 1 GB, `name` optional); `201` mit der LoRA |
 | `DELETE` | `/api/loras/{name}` | LoRA löschen |
@@ -434,6 +554,7 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `GET` | `/api/songs/{run}/{song}/audio` | FLAC (Range-fähig; `?download=true` als Download, eine Kopie mit Titel, Songtext und Cover in den Tags) |
 | `GET` | `/api/songs/{run}/{song}/score` | `score.abc` |
 | `GET` | `/api/songs/{run}/{song}/stream` | Was der Player spielt: AAC-Kopie mit 192 kbit/s (Range-fähig, beim ersten Mal erzeugt), ohne Encoder die FLAC |
+| `POST` | `/api/quick` | Song aus Stichwörtern in einem Aufruf (JSON: `keywords`, optional `style`, `language` `de`/`en`, `title`, `batch`, `quality`): erst der Songtext, dann der Song; `202` mit `draftId`, `title`, `style` |
 | `POST` | `/api/songs/{run}/{song}/export` | Song als MP3, M4A oder FLAC mit Tags und Cover (Formular: `format` = `small` (AAC 128 kbit/s zum Teilen)/`mp3`/`m4a`/`flac`, `artist`, `genre`, `cover` als JPEG/PNG bis 5 MB, ohne `cover` das eigene Cover des Songs); `501`, wenn der Encoder fehlt |
 | `GET` | `/api/songs/{run}/{song}/cover` | Das eigene Cover des Songs; `404` ohne |
 | `PUT` | `/api/songs/{run}/{song}/cover` | Setzt das Cover (Formular: `cover` als JPEG/PNG bis 5 MB) |
@@ -459,7 +580,7 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `PUT` | `/api/runs/{run}/title` | Lauf umbenennen (`{"title": "…"}`, leer = ursprünglicher Titel); Ordner und Song-IDs bleiben |
 | `DELETE` | `/api/runs/{run}` | Lauf mit allen Songs löschen; `409`, solange der Worker an einem davon arbeitet |
 | `GET` | `/api/storage` | `{ freeBytes, totalBytes }` des Datenträgers der Bibliothek |
-| `GET` | `/api/lyrics/models` | Modelle für Textentwürfe: `{ default, models: [{ id, name, sizeBytes, loaded, vision }] }` (`vision`: kann Fotos lesen, `null`, wenn der Server es nicht sagt); startet den Server von LM Studio bei Bedarf, `503`, wenn er nicht erreichbar ist |
+| `GET` | `/api/lyrics/models` | Modelle für Textentwürfe: `{ default, models: [{ id, name, sizeBytes, loaded, vision, cloud }] }` (`vision`: kann Fotos lesen, `null`, wenn der Server es nicht sagt; `cloud`: Claude bei Anthropic); startet den Server von LM Studio bei Bedarf, `503`, wenn er nicht erreichbar ist und kein Claude angeboten wird |
 | `POST` | `/api/lyrics` | Songtext entwerfen: `{ keywords, style?, language?, model?, image? }` (ohne `model` das eingestellte; `image` ein Foto als `data:image/jpeg;base64,…`-URL, dann ist `keywords` optional); mit `lyrics` und `instruction` statt dessen einen vorhandenen Text wie angewiesen überarbeiten (`keywords` optional, kein `image`); antwortet `202` mit `{ id, stage }`, der Entwurf kommt als `lyrics`-Event (`writing`, dann `done` mit `lyrics` oder `failed` mit `message`); solange YuE2 rechnet oder schon ein Entwurf entsteht, wartet er in der Warteschlange (`stage` ist dann `queued`) |
 | `GET` | `/api/voice` | `{ voicesConfigured, conversionConfigured, stemsConfigured }`: ob Stimmen (Seed-VC oder ChangeMyVoice), dazu die Trennung, bzw. die Trennung eingerichtet ist |
 | `GET` | `/api/voices` | Referenzstimmen: `[{ id, label, seconds, createdAt }]` |
@@ -474,8 +595,12 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `POST` | `/api/swaps` | Stimmenspur tauschen: Formular mit `file` (bis 300 MB), `voiceId`, `semiToneShift?`, `strength?`, `diffusionSteps?`, `separate?` (ganzer Song: erst trennen, dann zurückmischen) und `keepReverb?`; antwortet `202`, der Fortschritt kommt als `swap`-Event wie bei einer Fassung; `501` ohne Seed-VC (oder mit `separate` ohne Trennung) |
 | `GET` | `/api/swaps/{id}/audio` / `source` | Ergebnis als FLAC (`?download=true` mit Dateinamen) bzw. der Upload, beide Range-fähig |
 | `DELETE` | `/api/swaps/{id}` | Tausch abbrechen oder löschen |
+| `GET` | `/api/timing` | Ob Whisper installiert ist, wo Tonwerk seine Python-Umgebung sucht und welches Modell es nimmt |
+| `GET` | `/api/songs/{run}/{song}/timing` | Zeitmarken des Songtexts (`timing`: Zeilen mit `start`, `end`, `section`, `heard`; `source`, `coverage`) und wie weit ein Song ohne sie ist (`info`) |
+| `POST` | `/api/songs/{run}/{song}/timing` | Song (neu) anhören lassen; `202`, `501` ohne Whisper |
+| `GET` | `/api/songs/{run}/{song}/timing.srt` | Die Zeitmarken als Untertitel (SubRip) |
 | `GET` | `/api/songs/{run}/{song}/videos` | Musikvideos des Songs, neueste zuerst |
-| `POST` | `/api/songs/{run}/{song}/videos` | Musikvideo rendern: Formular mit `format` (`landscape`/`portrait`), `effect` (`bars`/`wave`/`none`), `color?` (`#rrggbb`, sonst Tonwerks Grün), `motion` (`particles`/`plasma`/`none`), `showCover?` (Standard an), `showTitle?` und den Ebenen als PNG: `background`, `cover` (mit `showCover`), `title` (mit `showTitle`), `particles` in Bildgröße, `plasma0` bis `plasma7` (die Blitze, mit Cover als Quadrat um seine Mitte, 1000×1000 bzw. 1080×1080, ohne in Bildgröße). Ein Fotovideo hat `media` (ein Ordner aus `GET /api/videos/media`), `motif?` und statt `background` die Abdunklung `shade?`, keine `motion`; antwortet `202`, der Fortschritt kommt als `video`-Event; `501` ohne `ffmpeg` oder, für ein Fotovideo, ohne dessen Python-Umgebung |
+| `POST` | `/api/songs/{run}/{song}/videos` | Musikvideo rendern: Formular mit `format` (`landscape`/`portrait`), `effect` (`bars`/`wave`/`none`), `color?` (`#rrggbb`, sonst Tonwerks Grün), `motion` (`particles`/`plasma`/`none`), `showCover?` (Standard an), `showTitle?`, `showLyrics?` (nur mit Zeitmarken) und den Ebenen als PNG: `background`, `cover` (mit `showCover`), `title` (mit `showTitle`), `particles` in Bildgröße, `plasma0` bis `plasma7` (die Blitze, mit Cover als Quadrat um seine Mitte, 1000×1000 bzw. 1080×1080, ohne in Bildgröße), `lyrics0`, `lyrics1`, … (je bis zu 24 Zeilen in Feldern von der Größe des Bands, darüber ein leeres). Ein Fotovideo hat `media` (ein Ordner aus `GET /api/videos/media`), `motif?` und statt `background` die Abdunklung `shade?`, keine `motion`; antwortet `202`, der Fortschritt kommt als `video`-Event; `501` ohne `ffmpeg` oder, für ein Fotovideo, ohne dessen Python-Umgebung |
 | `GET` | `/api/videos/media` | Ordner für Fotovideos: `installed`, `root` und je Ordner `name`, `photos`, `videos` |
 | `GET` | `/api/videos/{id}/file` | Das MP4 (`?download=true` mit Dateinamen, `&small=true` die 720p-Fassung für Messenger, beim ersten Abruf gerechnet), Range-fähig |
 | `DELETE` | `/api/videos/{id}` | Video abbrechen oder löschen |
@@ -488,10 +613,18 @@ Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-
 | `GET` | `/api/audio-midi` | Audio zu MIDI: `{ installed, python }` |
 | `POST` | `/api/audio-midi` | Aufnahme zu MIDI: Formular mit `file` (jedes Format, das ffmpeg liest, bis 200 MB), `mono?` (Standard an), `quantize?`, `bends?`, `tempo?`; antwortet sofort mit der MIDI-Datei, die Zahl der Noten im Header `X-Audio-Midi-Notes`; `400` für das Raster ohne Tempo, `422` ohne Noten, `501` ohne Basic Pitch |
 | `POST` | `/api/songs/{run}/{song}/stems/{id}/{name}/midi` | Ein Stem zu MIDI: `{ mono?, quantize?, bends?, tempo? }`, Tempo sonst aus `score.abc` des Songs; Antwort wie oben |
+| `GET` | `/api/ace` | ACE-Step: `{ installed, ready, binaries, models, lmModels, ditModels, adapters, jobs }` |
+| `POST` | `/api/ace` | Song bei ACE-Step bestellen (`caption`, optional `title`, `lyrics`, `instrumental`, `language`, `duration`, `bpm`, `key`, `timeSignature`, `seed`, `batch`, `task`, `source`, Modelle und Parameter); antwortet `202` mit dem Auftrag, der Fortschritt kommt als `ace`-Event (`queued`, `loading`, `writing`, `composing`, `synthesizing`, `decoding`, `saving`, dann `done` mit `run` oder `failed`); `501` ohne acestep.cpp oder Modelle |
+| `DELETE` | `/api/ace/{id}` | Auftrag abbrechen oder aus der Liste nehmen |
+| `GET` | `/api/songs/{run}/{song}/ace` | Einstellungen eines ACE-Songs für „Alles übernehmen“ |
 | `GET` | `/api/images` | Gemalte Cover: `{ installed, python, models }` (Modelle mit Lizenz, `commercial`, `downloaded`, `tokenFound`) |
 | `GET` / `POST` | `/api/songs/{run}/{song}/images` | Vorschläge des Songs, neueste zuerst, bzw. `{ prompt, model?, seed? }` malen; antwortet `202`, der Fortschritt kommt als `image`-Event (`queued`, `loading`, `painting` mit `fraction`, dann `done` oder `failed`); `501` ohne mflux |
 | `GET` / `DELETE` | `/api/images/{id}` | Vorschlag als JPEG bzw. abbrechen oder löschen |
 | `PUT` | `/api/images/{id}/cover` | Vorschlag als Cover des Songs übernehmen |
+| `GET` | `/api/sketches/info` | Ausarbeitung: `{ configured, model }` |
+| `GET` / `POST` | `/api/sketches` | Ausarbeitungen, neueste zuerst, bzw. `{ text, instruction? }` an Claude schicken; antwortet `202`, `400` für leeren oder zu langen Text, `501` ohne Schlüssel |
+| `GET` / `DELETE` | `/api/sketches/{id}` | `{ job }`, solange der Plan entsteht, danach `{ job, abc, lyrics, request, warnings, bars, seconds }` (`request` wie bei „Alles übernehmen“); bzw. abbrechen oder löschen |
+| `GET` | `/api/sketches/{id}/midi`, `/api/sketches/{id}/score` | MIDI-Entwurf bzw. Partitur als Datei |
 | `GET` | `/api/playlists` | `[{ id, name, songIds }]`: alle Playlists, älteste zuerst, Songs in Reihenfolge (`run/songN`), gelöschte weggelassen |
 | `POST` | `/api/playlists` | `{ name }`: neue, leere Playlist (`201`) |
 | `PUT` | `/api/playlists/{id}/name` | `{ name }`: umbenennen (1 bis 100 Zeichen) |
@@ -531,6 +664,7 @@ Ideen und geplante Änderungen, ohne feste Reihenfolge. Erledigtes abhaken oder 
 - [x] Spektrum-Analyzer im Player und in der Vorschau, Hintergrund zur Musik
 - [x] Player über den ganzen Bildschirm mit Songtext, Analyzer und Effekten
 - [x] Stimme schon im Formular wählen; die Fassung entsteht dann von selbst, sobald der Song fertig ist
+- [x] Messwerte für Prometheus, Protokoll an Loki, Grafana-Vorlage
 - [ ] Eine Fassung statt der Originalstimme ins Logic-Projekt
 - [x] PrimeVue-Importe optimieren (nur benötigte Komponenten, kleineres Bundle)
 - [x] Restliche Oberfläche auf PrimeVue umstellen (`.button`, `.card`, `.link` und Eingabefelder aus `style.css` ablösen)

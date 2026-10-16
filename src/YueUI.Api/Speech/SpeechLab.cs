@@ -8,7 +8,8 @@ namespace YueUI.Api.Speech;
 
 /// <summary>
 /// The speech lab's takes, spoken one at a time: a text, a model and optionally a recorded voice to clone
-/// (<see cref="ISpeechEngine"/>). For hearing which local model could speak a podcast before building one.
+/// (<see cref="ISpeechEngine"/>). For hearing which local model could speak a podcast before building one. A take can
+/// also be a speech recording cleaned of noise (<see cref="SpeechTake.Source"/>), which waits in the same line.
 /// </summary>
 /// <remarks>
 /// A speech model is 3 to 17 GB, so it follows the rule the lyrics writer and the voice converter follow on 24 GB:
@@ -55,6 +56,30 @@ public sealed class SpeechLab(
             takes.Add(take);
         }
         return takes;
+    }
+
+    /// <summary>
+    /// A recording to clean, already decoded to <see cref="SqliteSpeechStore.SourcePath"/> under <paramref name="id"/>.
+    /// It waits in the same line as the spoken takes: an enhancement model is small, but loads through the same
+    /// mlx-audio and would otherwise run beside a 9 GB speech model.
+    /// </summary>
+    public SpeechTake EnqueueCleanup(string id, string source, SpeechModel model)
+    {
+        var now = time.GetUtcNow();
+        var take = new SpeechTake
+        {
+            Id = id,
+            ModelId = model.Id,
+            ModelLabel = model.Label,
+            Text = "",
+            Source = source,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        store.AddTake(take);
+        hub.UpdateSpeech(take);
+        _queue.Writer.TryWrite(take.Id);
+        return take;
     }
 
     /// <summary>Stops the take if it is being spoken, and removes it with its audio.</summary>
@@ -122,9 +147,15 @@ public sealed class SpeechLab(
         var work = Path.Combine(Path.GetTempPath(), $"yueui-speech-{id}");
         try
         {
-            var model = options.Value.ResolvedModels.FirstOrDefault(m => m.Id == take.ModelId)
+            var cleaning = take.Source is not null;
+            var model = (cleaning ? options.Value.ResolvedCleanModels : options.Value.ResolvedModels).FirstOrDefault(m => m.Id == take.ModelId)
                 ?? throw new SpeechException($"The model {take.ModelId} is no longer offered.");
             var voice = take.VoiceId is { } voiceId ? store.Voice(voiceId) ?? throw new SpeechException("The recorded voice is gone.") : null;
+            var source = store.SourcePath(id);
+            if (cleaning && !File.Exists(source))
+            {
+                throw new SpeechException("The recording is gone.");
+            }
 
             await memory.ClaimAsync(LargeModel.Speech, options.Value.WaitInterval, time, cancel.Token);
             // YuE2 keeps its model for ten idle minutes; the speech model needs the memory now.
@@ -133,8 +164,16 @@ public sealed class SpeechLab(
             take = Update(take, t => t with { Stage = "loading" });
             Directory.CreateDirectory(work);
             var output = Path.Combine(work, "take.wav");
-            var job = new SpeechJob(model, take.Text, voice is null ? null : store.VoicePath(voice.Id), voice?.Transcript is { Length: > 0 } words ? words : null, output);
-            var result = await engine.SpeakAsync(job, stage => take = Update(take, t => t with { Stage = stage is "loading" ? "loading" : "speaking" }), cancel.Token);
+            var working = cleaning ? "cleaning" : "speaking";
+            void Staged(string stage) => take = Update(take, t => t with { Stage = stage is "loading" ? "loading" : working });
+            // The script reports in steps of a percent at most, so every report may go to the browsers.
+            void Progressed(double share) => take = Update(take, t => t with { Stage = working, Progress = Math.Round(share, 3) });
+            var result = cleaning
+                ? await engine.CleanAsync(new CleanJob(model, source, output, WavInfo.Seconds(source) ?? 0), Staged, Progressed, cancel.Token)
+                : await engine.SpeakAsync(
+                    new SpeechJob(model, take.Text, voice is null ? null : store.VoicePath(voice.Id), voice?.Transcript is { Length: > 0 } words ? words : null, output),
+                    Staged,
+                    cancel.Token);
 
             var target = store.TakePath(id);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);

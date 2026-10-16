@@ -21,6 +21,7 @@ describe('holderOf', () => {
   test("takes the server's holder over the worker", () => {
     expect(holderOf({ ...idle, busy: true }, 'voices')).toBe('voice')
     expect(holderOf(idle, 'images')).toBe('image')
+    expect(holderOf(idle, 'ace')).toBe('ace')
   })
 
   test('else YuE2 while busy, then a transcription, then none', () => {
@@ -49,6 +50,7 @@ describe('waitReason', () => {
   test('nothing starts while a take speaks or a cover is painted', () => {
     expect(waitReason([job('song', 'song')], 0, 'speech', [], window, now)).toBe(t('waitSpeech'))
     expect(waitReason([job('draft', 'lyrics')], 0, 'image', [], window, now)).toBe(t('waitImage'))
+    expect(waitReason([job('song', 'song')], 0, 'ace', [], window, now)).toBe(t('waitAce'))
   })
 
   test('transcriptions keep a lane of their own', () => {
@@ -64,5 +66,11 @@ describe('speechWaitReason', () => {
     expect(speechWaitReason(0, 'voice')).toBe(t('waitVoice'))
     expect(speechWaitReason(0, null)).toBe(t('waitStarting'))
     expect(speechWaitReason(1, null)).toBe(t('waitTurn'))
+  })
+
+  test("ACE-Step's songs wait the same way, for the lab too", () => {
+    expect(speechWaitReason(0, 'ace', 'ace')).toBe(t('waitTurn'))
+    expect(speechWaitReason(0, 'speech', 'ace')).toBe(t('waitSpeech'))
+    expect(speechWaitReason(0, 'ace')).toBe(t('waitAce'))
   })
 })

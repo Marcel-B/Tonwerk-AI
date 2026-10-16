@@ -8,11 +8,15 @@ using YueUI.Api.Library;
 using YueUI.Api.Logs;
 using YueUI.Api.Loras;
 using YueUI.Api.Logic;
+using YueUI.Api.Monitoring;
 using YueUI.Api.Lyrics;
+using YueUI.Api.Timing;
 using YueUI.Api.Push;
 using YueUI.Api.Queue;
 using YueUI.Api.Share;
 using YueUI.Api.Images;
+using YueUI.Api.Ace;
+using YueUI.Api.Sketches;
 using YueUI.Api.Speech;
 using YueUI.Api.Video;
 using YueUI.Api.Voices;
@@ -46,12 +50,15 @@ builder.Services.AddSingleton<YueUI.Api.Memory.ModelMemory>();
 builder.Services.Configure<LyricsOptions>(builder.Configuration.GetSection(LyricsOptions.Section));
 builder.Services.AddSingleton<ILmStudioStarter, LmsCli>();
 builder.Services.AddSingleton<LyricsWriter>();
+builder.Services.AddSingleton<ICloudLyricsModel, ClaudeLyricsModel>();
 builder.Services.AddHttpClient(LyricsWriter.HttpClientName, client => client.Timeout = TimeSpan.FromMinutes(10));
 // Logic Pro projects and MIDI read back into scores, by YueToLogic.Core in this process.
 builder.Services.Configure<LogicOptions>(builder.Configuration.GetSection(LogicOptions.Section));
 builder.Services.AddYueToLogic();
 
 // Sharing a song from the phone as a small AAC instead of the FLAC.
+builder.Services.Configure<LoudnessOptions>(builder.Configuration.GetSection(LoudnessOptions.Section));
+builder.Services.AddSingleton<ILoudness, Loudness>();
 builder.Services.AddSingleton<IAudioEncoder, AacEncoder>();
 builder.Services.AddSingleton<StreamCopies>();
 builder.Services.AddHostedService<StreamCopyMaker>();
@@ -73,6 +80,7 @@ builder.Services.AddSingleton<SqlitePlaylistStore>();
 builder.Services.AddSingleton<SqliteRunTitleStore>();
 builder.Services.AddSingleton<SqliteSongRatingStore>();
 builder.Services.AddSingleton<SqliteSongNoteStore>();
+builder.Services.AddSingleton<SqliteSongTraitStore>();
 builder.Services.AddSingleton<SqlitePromptTemplateStore>();
 builder.Services.AddSingleton<SqliteVersionStore>();
 builder.Services.AddSingleton<SqliteStemStore>();
@@ -99,6 +107,17 @@ builder.Services.AddHttpClient(StemClient.HttpClientName, client => client.Timeo
 builder.Services.AddSingleton<VoiceConverter>();
 builder.Services.AddHostedService(services => services.GetRequiredService<VoiceConverter>());
 builder.Services.AddHostedService<AutoVersions>();
+builder.Services.AddSingleton<QuickSongs>();
+builder.Services.Configure<TimingOptions>(builder.Configuration.GetSection(TimingOptions.Section));
+builder.Services.AddSingleton<TimingFiles>();
+builder.Services.AddSingleton<IWordListener, WhisperListener>();
+builder.Services.AddSingleton<LyricsTimer>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<LyricsTimer>());
+builder.Services.Configure<YueUI.Api.Analysis.AnalysisOptions>(builder.Configuration.GetSection(YueUI.Api.Analysis.AnalysisOptions.Section));
+builder.Services.AddSingleton<YueUI.Api.Analysis.ISongListener, YueUI.Api.Analysis.LibrosaListener>();
+builder.Services.AddSingleton<YueUI.Api.Analysis.SongAnalyzer>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<YueUI.Api.Analysis.SongAnalyzer>());
+builder.Services.AddHostedService(provider => provider.GetRequiredService<QuickSongs>());
 
 // Music videos: the browser draws the still layers, ffmpeg animates and encodes them, one at a time.
 builder.Services.AddSingleton<IVideoRenderer, FfmpegVideoRenderer>();
@@ -117,6 +136,19 @@ builder.Services.Configure<ImageOptions>(builder.Configuration.GetSection(ImageO
 builder.Services.AddSingleton<IImageEngine, MfluxEngine>();
 builder.Services.AddSingleton<ImageMaker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<ImageMaker>());
+// ACE-Step 1.5 through acestep.cpp: songs of a second engine, one job at a time, into a library folder of their own.
+builder.Services.Configure<AceOptions>(builder.Configuration.GetSection(AceOptions.Section));
+builder.Services.AddSingleton<SqliteAceStore>();
+builder.Services.AddSingleton<IAceEngine, AceCppEngine>();
+builder.Services.AddSingleton<AceComposer>();
+builder.Services.AddHostedService(services => services.GetRequiredService<AceComposer>());
+builder.Services.Configure<SketchOptions>(builder.Configuration.GetSection(SketchOptions.Section));
+builder.Services.AddSingleton<SqliteSketchStore>();
+builder.Services.AddSingleton<ISketchModel, ClaudeSketchModel>();
+// The SDK keeps its own timeout (Sketch:Timeout); HttpClient's 100 seconds would cut a plan off long before.
+builder.Services.AddHttpClient(ClaudeSketchModel.HttpClientName, client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddSingleton<SketchMaker>();
+builder.Services.AddHostedService(services => services.GetRequiredService<SketchMaker>());
 builder.Services.Configure<AudioMidiOptions>(builder.Configuration.GetSection(AudioMidiOptions.Section));
 builder.Services.AddSingleton<IAudioMidiEngine, BasicPitchEngine>();
 builder.Services.AddSingleton<StemParts>();
@@ -136,14 +168,26 @@ builder.Services.AddHostedService(services => services.GetRequiredService<CloudB
 
 // Every log message, the worker's output and the updater's log in daily files, read on the log page.
 builder.Services.Configure<LogOptions>(builder.Configuration.GetSection(LogOptions.Section));
+builder.Services.AddSingleton<LogFeed>();
 builder.Services.AddSingleton<LogStore>();
 builder.Services.AddSingleton<ILoggerProvider, LogStoreProvider>();
 builder.Services.AddSingleton<LogReport>();
 
+builder.Services.AddSingleton<YueUI.Api.Storage.StorageScanner>();
+
+// Metrics for Prometheus (GET /metrics) and the log for Loki, collected by a monitoring stack on another machine
+// (deploy/monitoring/); shipping to Loki is off until Monitoring:Loki:Url is set.
+builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection(MonitoringOptions.Section));
+builder.Services.AddSingleton<JobMetrics>();
+builder.Services.AddHostedService(services => services.GetRequiredService<JobMetrics>());
+builder.Services.AddHostedService<LokiShipper>();
+// Without its loggers: each push would log four lines of its own, which the next push would send, forever.
+builder.Services.AddHttpClient(LokiShipper.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30)).RemoveAllLoggers();
+
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
+builder.Services.AddApiDocument();
 
 var app = builder.Build();
 
@@ -154,14 +198,17 @@ if (!app.Environment.IsDevelopment())
 
 app.UseClientAppAssets();
 
-app.MapOpenApi("/api/openapi");
+app.MapOpenApi(ApiDocument.Path);
 
 var api = app.MapGroup("/api");
 // HEAD as well, since uptime monitors often probe with it.
-api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"));
+api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"))
+    .WithName("GetHealth")
+    .Produces<string>(StatusCodes.Status200OK, "text/plain");
 api.MapWorkerEndpoints();
 api.MapLoraEndpoints();
 api.MapLibraryEndpoints();
+api.MapTimingEndpoints();
 api.MapExportEndpoints();
 api.MapCoverEndpoints();
 api.MapTranscriptionEndpoints();
@@ -179,10 +226,14 @@ api.MapVideoEndpoints();
 api.MapQueueEndpoints();
 api.MapSpeechEndpoints();
 api.MapImageEndpoints();
+api.MapAceEndpoints();
+api.MapSketchEndpoints();
 api.MapAudioMidiEndpoints();
 api.MapBackupEndpoints();
 api.MapLogEndpoints();
+api.MapStorageEndpoints();
 
+app.MapMetrics();
 app.MapClientApp();
 
 app.Run();

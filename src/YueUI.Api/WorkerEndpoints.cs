@@ -22,27 +22,49 @@ public static class WorkerEndpoints
 
     public static RouteGroupBuilder MapWorkerEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/status", (Status.StatusHub hub) => hub.Snapshot());
-        api.MapGet("/busy", Busy);
+        api.MapGet("/status", (Status.StatusHub hub) => hub.Snapshot())
+            .WithName("GetStatus");
+        api.MapGet("/busy", Busy)
+            .WithName("GetBusy");
         api.MapGet("/events", (Status.StatusHub hub, CancellationToken cancellationToken) =>
-            TypedResults.ServerSentEvents(Stream(hub, cancellationToken)));
+            TypedResults.ServerSentEvents(Stream(hub, cancellationToken)))
+            .WithName("StreamEvents")
+            .Produces<Status.ServerEvents>(StatusCodes.Status200OK, "text/event-stream");
 
-        api.MapPost("/generate", Generate);
-        api.MapPost("/songs/{run}/{song}/render", Render);
+        api.MapPost("/generate", Generate)
+            .WithName("Generate")
+            .Produces<QueuedJob>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+        api.MapPost("/songs/{run}/{song}/render", Render)
+            .WithName("RenderSong")
+            .Produces<QueuedJob>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
         api.MapPost("/songs/{run}/{song}/cancel", async (string run, string song, WorkerHost host, CancellationToken cancellationToken) =>
             await host.CancelAsync($"{run}/{song}", cancellationToken)
                 ? Results.Accepted()
-                : Results.Problem(title: "Not in the queue", statusCode: StatusCodes.Status404NotFound));
+                : Results.Problem(title: "Not in the queue", statusCode: StatusCodes.Status404NotFound))
+            .WithName("CancelSong")
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status404NotFound);
         api.MapPost("/stop", async (WorkerHost host, CancellationToken cancellationToken) =>
         {
             await host.StopAllAsync(cancellationToken);
             return Results.Accepted();
-        });
+        })
+            .WithName("StopAll")
+            .Produces(StatusCodes.Status202Accepted);
         api.MapPost("/worker/shutdown", async (WorkerHost host) =>
         {
             await host.ShutdownWorkerAsync();
             return Results.NoContent();
-        });
+        })
+            .WithName("ShutDownWorker")
+            .Produces(StatusCodes.Status204NoContent);
         return api;
     }
 
@@ -68,6 +90,7 @@ public static class WorkerEndpoints
                 Memory.LargeModel.Lyrics => "lyrics",
                 Memory.LargeModel.Voices => "voices",
                 Memory.LargeModel.Speech => "speech",
+                Memory.LargeModel.Ace => "ace",
                 _ => "images",
             });
         }

@@ -138,6 +138,24 @@ public sealed record VideoLayout(int Width, int Height, int BandY, int BandHeigh
             ? (0, 70, 1080, 1080)
             : (460, -130, 1000, 1000);
 
+    /// <summary>
+    /// Lyrics come as strips of this many lines, each a slot of the band's size under an empty one (the browser draws
+    /// them, <c>video.ts</c> <c>drawLyricsStrips</c>): a whole song in one picture would be taller than iOS lets a
+    /// canvas be.
+    /// </summary>
+    public const int LyricsPerStrip = 24;
+
+    /// <summary>How long a line stays after it was sung, unless the next one starts sooner.</summary>
+    public const double LyricsLinger = 1.5;
+
+    /// <summary>When each timed line is on screen: from its start until the next starts, at most a moment past its end.</summary>
+    public static IReadOnlyList<LyricsCue> Cues(Timing.LyricsTiming timing) =>
+    [
+        .. timing.Lines.Select((line, i) => new LyricsCue(
+            line.Start,
+            Math.Max(line.Start, Math.Min(line.End + LyricsLinger, i + 1 < timing.Lines.Count ? timing.Lines[i + 1].Start : double.MaxValue)))),
+    ];
+
     /// <remarks>
     /// The vertical band sits above the bottom fifth, which Shorts, Reels and TikTok cover with caption and buttons.
     /// </remarks>
@@ -156,7 +174,22 @@ public sealed record VideoLayout(int Width, int Height, int BandY, int BandHeigh
 /// A photo video's darkening over its pictures, towards the bottom and the edges as the cover video's background has it,
 /// so the band and the title stay readable on a bright photo.
 /// </param>
-public sealed record VideoLayers(string Background, string? Cover, string? Title, IReadOnlyList<string> Motion, string? Shade = null);
+/// <param name="Lyrics">
+/// The timed lyrics' strips (<see cref="VideoLayout.LyricsPerStrip"/>), each with the times of its lines; none without.
+/// </param>
+public sealed record VideoLayers(
+    string Background,
+    string? Cover,
+    string? Title,
+    IReadOnlyList<string> Motion,
+    string? Shade = null,
+    IReadOnlyList<LyricsStrip>? Lyrics = null);
+
+/// <summary>When a lyrics line is on screen, in seconds of the song.</summary>
+public sealed record LyricsCue(double Start, double End);
+
+/// <summary>A picture of lyrics lines, an empty slot first, then one slot per line, with when each is shown.</summary>
+public sealed record LyricsStrip(string Path, IReadOnlyList<LyricsCue> Cues);
 
 /// <summary>Makes the video from a song's FLAC and the layers. Tests replace it.</summary>
 public interface IVideoRenderer

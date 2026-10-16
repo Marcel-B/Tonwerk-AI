@@ -22,15 +22,25 @@ public static class VideoEndpoints
     public static RouteGroupBuilder MapVideoEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/songs/{run}/{song}/videos", (string run, string song, SongLibrary library, SqliteVideoStore store) =>
-            library.SongDirectory(run, song) is null ? Results.NotFound() : Results.Ok(store.ForSong($"{run}/{song}")));
+            library.SongDirectory(run, song) is null ? Results.NotFound() : Results.Ok(store.ForSong($"{run}/{song}")))
+            .WithName("ListSongVideos")
+            .Produces<IReadOnlyList<VideoState>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
         // The folders a photo video can take its pictures from, and whether the planner is installed at all.
         api.MapGet("/videos/media", (IMontageBuilder montage, IOptions<MontageOptions> options) =>
-            new MediaInfo(montage.Installed, options.Value.ResolvedMediaRoot, MediaFolders.List(options.Value.ResolvedMediaRoot)));
+            new MediaInfo(montage.Installed, options.Value.ResolvedMediaRoot, MediaFolders.List(options.Value.ResolvedMediaRoot)))
+            .WithName("GetVideoMedia")
+            .Produces<MediaInfo>(StatusCodes.Status200OK);
         api.MapPost("/songs/{run}/{song}/videos", AddAsync)
             // Posted from a plain form; there is no login and no cookie that a forged request could use.
             .DisableAntiforgery()
             .WithFormOptions(multipartBodyLengthLimit: 4 * MaxLayerBytes)
-            .WithMetadata(new RequestSizeLimitAttribute(4 * MaxLayerBytes + 64 * 1024));
+            .WithMetadata(new RequestSizeLimitAttribute(4 * MaxLayerBytes + 64 * 1024))
+            .WithName("CreateVideo")
+            .Produces<VideoState>(StatusCodes.Status202Accepted)
+            .ProducesValidationProblem()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         // Range requests: Safari plays a video only from a source that answers them.
         // With small, the copy for a messenger, made on the first request (see VideoMaker.SmallAsync).
         api.MapGet("/videos/{id}/file", async (
@@ -66,7 +76,11 @@ public static class VideoEndpoints
                 }
             }
             return Results.File(path, "video/mp4", download == true ? FileName(video, small == true) : null, enableRangeProcessing: true);
-        });
+        })
+            .WithName("GetVideoFile")
+            .ProducesFile("video/mp4")
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
         api.MapDelete("/videos/{id}", (string id, SqliteVideoStore store, VideoMaker maker) =>
         {
             if (store.Get(id) is not { } video)
@@ -75,7 +89,10 @@ public static class VideoEndpoints
             }
             maker.Delete(video);
             return Results.NoContent();
-        });
+        })
+            .WithName("DeleteVideo")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
         return api;
     }
 
@@ -94,12 +111,14 @@ public static class VideoEndpoints
         [FromForm] bool? showTitle,
         [FromForm] string? media,
         [FromForm] string? motif,
+        [FromForm] bool? showLyrics,
         IFormFileCollection files,
         SongLibrary library,
         SqliteVideoStore store,
         VideoMaker maker,
         IMontageBuilder montage,
         IOptions<MontageOptions> montageOptions,
+        Timing.TimingFiles timings,
         TimeProvider time,
         CancellationToken cancellationToken)
     {
@@ -190,6 +209,25 @@ public static class VideoEndpoints
                 wanted.Add(($"plasma{i}", area.Width, area.Height));
             }
         }
+        // Lyrics come as strips of lines, an empty slot above them, each slot the band's size; the times are the
+        // server's own, so the strips need only the right number of lines.
+        IReadOnlyList<LyricsCue>? cues = null;
+        if (showLyrics == true)
+        {
+            if (timings.Get(run, song) is not { Lines.Count: > 0 } timing)
+            {
+                errors["showLyrics"] = ["The song's lyrics have no times yet."];
+            }
+            else
+            {
+                cues = VideoLayout.Cues(timing);
+                var strip = 0;
+                foreach (var chunk in cues.Chunk(VideoLayout.LyricsPerStrip))
+                {
+                    wanted.Add(($"lyrics{strip++}", layout.Width, layout.BandHeight * (chunk.Length + 1)));
+                }
+            }
+        }
         var layers = new Dictionary<string, byte[]>();
         foreach (var (name, wantedWidth, wantedHeight) in wanted)
         {
@@ -228,6 +266,10 @@ public static class VideoEndpoints
         foreach (var (name, data) in layers)
         {
             await File.WriteAllBytesAsync(Path.Combine(store.Folder(video.Id), $"{name}.png"), data, cancellationToken);
+        }
+        if (cues is not null)
+        {
+            await File.WriteAllTextAsync(store.LyricsCuesPath(video.Id), System.Text.Json.JsonSerializer.Serialize(cues, SqliteVideoStore.Json), cancellationToken);
         }
         return Results.Accepted($"/api/videos/{video.Id}/file", maker.Enqueue(video));
     }

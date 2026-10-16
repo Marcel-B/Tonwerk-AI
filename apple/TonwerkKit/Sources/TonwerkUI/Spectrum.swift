@@ -180,16 +180,39 @@ enum SpectrumTap {
                     context.analyzer.feed(left: first, right: second.map { UnsafePointer($0) }, frames: count, sampleRate: context.sampleRate)
                 }
             })
-        var tap: Unmanaged<MTAudioProcessingTap>?
-        guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PostEffects, &tap) == noErr,
-              let tap
-        else {
+        guard let tap = create(MTAudioProcessingTapCreate, &callbacks) else {
             Unmanaged<Context>.fromOpaque(info).release()
             return nil
         }
-        // Created, so owned by us; the audio mix keeps its own reference.
-        return tap.takeRetainedValue()
+        return tap
     }
+
+    /// The SDKs disagree on what `MTAudioProcessingTapCreate` hands back: CI's Xcode an `Unmanaged` tap, a newer one
+    /// the tap itself. Taking the function as a value lets the compiler pick whichever this SDK declares.
+    private static func create<Handle: TapHandle>(
+        _ make: (CFAllocator?, UnsafePointer<MTAudioProcessingTapCallbacks>, MTAudioProcessingTapCreationFlags,
+                 UnsafeMutablePointer<Handle?>) -> OSStatus,
+        _ callbacks: inout MTAudioProcessingTapCallbacks
+    ) -> MTAudioProcessingTap? {
+        var handle: Handle?
+        guard make(kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PostEffects, &handle) == noErr
+        else { return nil }
+        return handle?.tap
+    }
+}
+
+/// What `MTAudioProcessingTapCreate` writes out, whichever way the SDK declares it.
+protocol TapHandle {
+    var tap: MTAudioProcessingTap { get }
+}
+
+extension MTAudioProcessingTap: TapHandle {
+    var tap: MTAudioProcessingTap { self }
+}
+
+extension Unmanaged: TapHandle where Instance == MTAudioProcessingTap {
+    /// Created, so owned by us; the audio mix keeps its own reference. Read once.
+    var tap: MTAudioProcessingTap { takeRetainedValue() }
 }
 
 extension AVAudioNode {

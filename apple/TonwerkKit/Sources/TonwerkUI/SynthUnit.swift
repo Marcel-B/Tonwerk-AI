@@ -32,6 +32,21 @@ final class TonwerkSynthUnit: AUAudioUnit {
         return (node, unit)
     }
 
+    /// The same, made asynchronously as Apple asks for an `AUAudioUnit` subclass; for the instruments page's keyboard,
+    /// which must not make it inside a gesture.
+    @MainActor
+    static func loadInstrument(playing sound: SynthSound) async -> (AVAudioUnitMIDIInstrument, TonwerkSynthUnit)? {
+        _ = registration
+        lastMade = nil
+        guard let made = try? await AVAudioUnit.instantiate(with: component, options: .loadInProcess),
+            let node = made as? AVAudioUnitMIDIInstrument,
+            let unit = node.auAudioUnit as? TonwerkSynthUnit ?? lastMade
+        else { return nil }
+        lastMade = nil
+        unit.play(sound)
+        return (node, unit)
+    }
+
     private let state: RenderState
     private var busArray: AUAudioUnitBusArray!
 

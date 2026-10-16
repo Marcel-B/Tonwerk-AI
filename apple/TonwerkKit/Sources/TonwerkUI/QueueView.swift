@@ -6,56 +6,70 @@ import TonwerkKit
 struct QueueView: View {
     @Environment(AppModel.self) private var model
 
+    private var empty: Bool {
+        model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
+    }
+
     var body: some View {
-        Group {
-            if model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty {
-                ContentUnavailableView(
-                    "Nichts in Arbeit", systemImage: "hourglass",
-                    description: Text("Songs, Songtexte und Transkriptionen erscheinen hier, sobald sie bestellt sind."))
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if !model.inProgress.isEmpty {
-                            heading("In Arbeit")
-                            ForEach(model.inProgress, id: \.id) { state in
-                                WorkingCard(state: state)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
-                            }
-                        }
-                        if !model.voiceJobs.isEmpty {
-                            heading("Stimmen und Stems")
-                                .padding(.top, model.inProgress.isEmpty ? 0 : 8)
-                            ForEach(model.voiceJobs) { job in
-                                VoiceJobCard(job: job)
-                                    .transition(.opacity)
-                            }
-                        }
-                        if !model.videoJobs.isEmpty {
-                            heading("Videos")
-                                .padding(.top, model.inProgress.isEmpty && model.voiceJobs.isEmpty ? 0 : 8)
-                            ForEach(model.videoJobs, id: \.id) { video in
-                                VideoJobCard(video: video)
-                                    .transition(.opacity)
-                            }
-                        }
-                        if !model.queue.isEmpty {
-                            heading("Wartet")
-                                .padding(.top, model.inProgress.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty ? 0 : 8)
-                            ForEach(Array(model.queue.enumerated()), id: \.element.id) { index, job in
-                                WaitingCard(job: job, first: index == 0, last: index == model.queue.count - 1)
-                                    .transition(.opacity)
-                            }
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                heading("Speicher")
+                ModelOverview()
+                if empty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "hourglass")
+                            .font(.system(size: 34, weight: .light))
+                            .foregroundStyle(.tertiary)
+                        Text("Nichts in Arbeit")
+                            .font(.headline)
+                        Text("Songs, Songtexte, Stimmen und Videos erscheinen hier, sobald sie bestellt sind.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
                     }
-                    .padding()
-                    .frame(maxWidth: 760)
                     .frame(maxWidth: .infinity)
-                    .animation(.easeInOut(duration: 0.25), value: model.inProgress.map(\.id))
-                    .animation(.easeInOut(duration: 0.25), value: model.queue.map(\.id))
-                    .animation(.easeInOut(duration: 0.25), value: model.voiceJobs.map(\.id))
-                    .animation(.easeInOut(duration: 0.25), value: model.videoJobs.map(\.id))
+                    .padding(.vertical, 40)
+                }
+                if !model.inProgress.isEmpty {
+                    heading("In Arbeit")
+                        .padding(.top, 8)
+                    ForEach(model.inProgress, id: \.id) { state in
+                        WorkingCard(state: state)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                if !model.voiceJobs.isEmpty {
+                    heading("Stimmen und Stems")
+                        .padding(.top, 8)
+                    ForEach(model.voiceJobs) { job in
+                        VoiceJobCard(job: job)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.videoJobs.isEmpty {
+                    heading("Videos")
+                        .padding(.top, 8)
+                    ForEach(model.videoJobs, id: \.id) { video in
+                        VideoJobCard(video: video)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.queue.isEmpty {
+                    heading("Wartet")
+                        .padding(.top, 8)
+                    ForEach(Array(model.queue.enumerated()), id: \.element.id) { index, job in
+                        WaitingCard(job: job, first: index == 0, last: index == model.queue.count - 1)
+                            .transition(.opacity)
+                    }
                 }
             }
+            .padding()
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+            .animation(.easeInOut(duration: 0.25), value: model.inProgress.map(\.id))
+            .animation(.easeInOut(duration: 0.25), value: model.queue.map(\.id))
+            .animation(.easeInOut(duration: 0.25), value: model.voiceJobs.map(\.id))
+            .animation(.easeInOut(duration: 0.25), value: model.videoJobs.map(\.id))
         }
         .navigationTitle("Warteschlange")
     }

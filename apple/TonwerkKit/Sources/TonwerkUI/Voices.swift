@@ -819,7 +819,7 @@ extension AppModel {
             .appending(path: "Tonwerk-MIDI", directoryHint: .isDirectory)
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let file = folder.appending(path: "\(LogicSession.projectName(stem)).mid")
+        let file = folder.appending(path: "\(Self.projectName(stem)).mid")
         try data.write(to: file)
         let notes = response.value(forHTTPHeaderField: "X-Audio-Midi-Notes").flatMap(Int.init) ?? 0
         return MidiFile(url: file, notes: notes)
@@ -836,7 +836,7 @@ extension AppModel {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let ext = (stem.file as NSString).pathExtension
         let file = folder.appending(
-            path: "\(LogicSession.projectName("\(title) - \(VoicesSession.stemName(stem.name))")).\(ext.isEmpty ? "flac" : ext)")
+            path: "\(Self.projectName("\(title) - \(VoicesSession.stemName(stem.name))")).\(ext.isEmpty ? "flac" : ext)")
         try data.write(to: file)
         return file
     }

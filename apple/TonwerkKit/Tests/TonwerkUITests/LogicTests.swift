@@ -76,4 +76,15 @@ final class LogicTests: XCTestCase {
         XCTAssertEqual(AppModel.projectName("AC/DC: Live"), "AC-DC- Live")
         XCTAssertEqual(AppModel.projectName("  "), "Tonwerk")
     }
+
+    func testAFileOfOnesOwnIsTheSameSourceWhateverWasReadOfItAndNamedWithoutItsExtension() {
+        let url = URL(fileURLWithPath: "/tmp/Tonwerk-Uploads/a/Melodie.mid")
+        let picked = ScoreSource.file(PickedFile(url: url, name: "Melodie.mid"))
+        var read = PickedFile(url: url, name: "Melodie.mid")
+        read.seconds = 12
+        XCTAssertEqual(picked, .file(read))
+        XCTAssertNotEqual(picked, .file(PickedFile(url: URL(fileURLWithPath: "/tmp/b/Melodie.mid"), name: "Melodie.mid")))
+        XCTAssertEqual(picked.baseName, "Melodie")
+        XCTAssertNil(picked.song)
+    }
 }

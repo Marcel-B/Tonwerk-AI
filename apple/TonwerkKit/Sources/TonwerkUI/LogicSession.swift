@@ -2,13 +2,44 @@ import Foundation
 import Observation
 import TonwerkKit
 
+/// What a score comes from: a library song, whose files the server reads, or a MIDI file or score.abc of one's own,
+/// uploaded as `file` (the server reads a MIDI file back into a score first).
+enum ScoreSource: Equatable {
+    case song(Song)
+    case file(PickedFile)
+
+    /// The same song stays the same source when the library reloads with a new rating or title.
+    var id: String {
+        switch self {
+        case .song(let song): "song:\(song.id)"
+        case .file(let file): "file:\(file.url.path)"
+        }
+    }
+
+    var song: Song? {
+        if case .song(let song) = self { return song }
+        return nil
+    }
+
+    /// The song's title or the file's name without its extension, for file names.
+    var baseName: String {
+        switch self {
+        case .song(let song): song.displayTitle
+        case .file(let file): file.baseName
+        }
+    }
+
+    static func == (lhs: ScoreSource, rhs: ScoreSource) -> Bool { lhs.id == rhs.id }
+}
+
 /// The Logic page's state, the native counterpart of `LogicPage.vue`: one song's score converted on the server,
 /// shown and played track by track, and exported as a Logic project. Kept by ``AppModel`` once opened, so a page
 /// change does not lose the conversion or stop the instruments.
 @MainActor
 @Observable
 final class LogicSession {
-    private(set) var song: Song?
+    private(set) var source: ScoreSource?
+    var song: Song? { source?.song }
     var form: LogicForm {
         didSet {
             guard form != oldValue else { return }
@@ -68,9 +99,9 @@ final class LogicSession {
 
     // MARK: Song and conversion
 
-    func open(_ song: Song) {
-        guard song.id != self.song?.id else { return }
-        self.song = song
+    func open(_ source: ScoreSource) {
+        guard source.id != self.source?.id else { return }
+        self.source = source
         conversion = nil
         player.stop()
         recordingFile = nil
@@ -83,15 +114,15 @@ final class LogicSession {
     }
 
     func convert() async {
-        guard let song else { return }
+        guard let source else { return }
         converting = true
         problem = nil
         defer { converting = false }
         do {
             let asked = form
             let options = asked.options(assignments: assignments, instruments: instruments)
-            let result = try await model.convertLogic(song, options: options)
-            guard song.id == self.song?.id else { return }
+            let result = try await model.convertScore(source, options: options)
+            guard source.id == self.source?.id else { return }
             conversion = result
             convertedForm = asked
             if let score = result.score {
@@ -220,9 +251,9 @@ final class LogicSession {
     // MARK: Export
 
     func export() async throws -> (URL, [LogicDiagnostic]) {
-        guard let song else { throw ServerError(String(localized: "Kein Song gewählt.")) }
+        guard let source else { throw ServerError(String(localized: "Kein Song gewählt.")) }
         return try await model.exportLogic(
-            song, options: form.options(assignments: assignments, instruments: instruments),
+            source, options: form.options(assignments: assignments, instruments: instruments),
             splitSections: form.splitSections,
             instruments: LogicForm.exportInstruments(assignments, instruments))
     }
@@ -235,7 +266,16 @@ extension AppModel {
         if logic == nil {
             logic = LogicSession(model: self)
         }
-        logic?.open(song)
+        logic?.open(.song(song))
+        page = .logic
+    }
+
+    /// A MIDI file or score.abc of one's own, from the file picker or handed over by another page.
+    func openInLogic(file: PickedFile) {
+        if logic == nil {
+            logic = LogicSession(model: self)
+        }
+        logic?.open(.file(file))
         page = .logic
     }
 
@@ -293,56 +333,58 @@ extension AppModel {
         return target
     }
 
-    private func logicForm(_ fields: [(String, String)]) -> (String, Data) {
-        let boundary = "tonwerk-\(UUID().uuidString)"
-        var body = Data()
-        for (name, value) in fields {
-            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
-        }
-        body.append(Data("--\(boundary)--\r\n".utf8))
-        return (boundary, body)
-    }
-
     private static func json(_ object: Any) -> String {
         (try? JSONSerialization.data(withJSONObject: object)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
     }
 
-    /// The song's score through the converter; a score that cannot be converted answers its errors (422).
-    func convertLogic(_ song: Song, options: [String: Any]) async throws -> LogicConversion {
-        guard let server else { throw ServerError(String(localized: "Kein Server verbunden.")) }
-        let (boundary, body) = logicForm([("song", song.id), ("options", Self.json(options))])
-        var request = URLRequest(url: server.appending(path: "api/logic/convert"))
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 120
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 || status == 422 else {
-            throw ServerError(problem: ServerError.text(of: data) ?? String(localized: "Der Server antwortete \(status)."))
+    /// A Logic page request with its score: a song by its id, a file as the upload `file`. 200 and 422 both come
+    /// back, since a score that cannot be converted answers its errors.
+    private func postScore(
+        _ path: String, _ source: ScoreSource, fields: [(String, String)], timeout: TimeInterval
+    ) async throws -> (Data, HTTPURLResponse) {
+        let url = try address(path)
+        switch source {
+        case .file(let file):
+            return try await uploadFile(url, fields: fields, fileField: "file", file: file, accept: [200, 422])
+        case .song(let song):
+            let boundary = "tonwerk-\(UUID().uuidString)"
+            var body = Data()
+            for (name, value) in [("song", song.id)] + fields {
+                body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+            }
+            body.append(Data("--\(boundary)--\r\n".utf8))
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = timeout
+            let (data, response) = try await URLSession.shared.upload(for: request, from: body)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard let http = response as? HTTPURLResponse, status == 200 || status == 422 else {
+                throw ServerError(problem: ServerError.text(of: data) ?? String(localized: "Der Server antwortete \(status)."))
+            }
+            return (data, http)
         }
+    }
+
+    /// The score through the converter, for the Logic page and the backing vocals.
+    func convertScore(_ source: ScoreSource, options: [String: Any]) async throws -> LogicConversion {
+        let (data, _) = try await postScore("api/logic/convert", source, fields: [("options", Self.json(options))], timeout: 120)
         return try JSONDecoder().decode(LogicConversion.self, from: data)
     }
 
     /// The Logic project as a ZIP in the temporary folder, with the export's warnings.
     func exportLogic(
-        _ song: Song, options: [String: Any], splitSections: Bool, instruments: [String: Any]
+        _ source: ScoreSource, options: [String: Any], splitSections: Bool, instruments: [String: Any]
     ) async throws -> (URL, [LogicDiagnostic]) {
-        guard let server else { throw ServerError(String(localized: "Kein Server verbunden.")) }
-        let name = Self.projectName(song.displayTitle)
+        let name = Self.projectName(source.baseName)
         var fields = [
-            ("song", song.id), ("options", Self.json(options)), ("name", name),
-            ("splitSections", splitSections ? "true" : "false"),
+            ("options", Self.json(options)), ("name", name), ("splitSections", splitSections ? "true" : "false"),
         ]
         if !instruments.isEmpty {
             fields.append(("instruments", Self.json(instruments)))
         }
-        let (boundary, body) = logicForm(fields)
-        var request = URLRequest(url: server.appending(path: "api/logic/export"))
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 300
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
-        let http = response as? HTTPURLResponse
+        let (data, response) = try await postScore("api/logic/export", source, fields: fields, timeout: 300)
+        let http: HTTPURLResponse? = response
         if http?.statusCode == 422, let refused = try? JSONDecoder().decode(LogicConversion.self, from: data) {
             throw ServerError(refused.diagnostics.first { $0.severity == "Error" }?.message
                 ?? String(localized: "Aus dem Song lässt sich kein Projekt machen."))

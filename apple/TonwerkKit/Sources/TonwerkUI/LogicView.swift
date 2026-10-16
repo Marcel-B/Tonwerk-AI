@@ -1,5 +1,6 @@
 import SwiftUI
 import TonwerkKit
+import UniformTypeIdentifiers
 
 /// The Logic page: a song's score with generated accompaniment, shown as a piano roll, played track by track in the
 /// app or on MIDI instruments, mixed, and exported as a Logic project.
@@ -8,7 +9,7 @@ struct LogicView: View {
 
     var body: some View {
         Group {
-            if let session = model.logic, session.song != nil {
+            if let session = model.logic, session.source != nil {
                 LogicSessionView(session: session)
             } else {
                 LogicStart()
@@ -18,16 +19,53 @@ struct LogicView: View {
     }
 }
 
-/// No song yet: the songs with a score to choose from.
+/// No song yet: the songs with a score to choose from, or a MIDI file or score.abc of one's own.
 private struct LogicStart: View {
     @Environment(AppModel.self) private var model
+    @State private var importing = false
+    @State private var problem: String?
 
     var body: some View {
         let songs = model.songs.filter(\.hasScore)
+        VStack(spacing: 0) {
+            HStack {
+                Text("MIDI-Datei oder score.abc")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Datei öffnen …") { importing = true }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            if let problem {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                    .padding(.horizontal)
+            }
+            Divider()
+            songList(songs)
+        }
+        .fileImporter(
+            isPresented: $importing,
+            allowedContentTypes: [.midi, UTType(filenameExtension: "abc") ?? .plainText, .plainText]
+        ) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                do {
+                    model.openInLogic(file: try await PickedFile.copy(from: url))
+                    problem = nil
+                } catch {
+                    problem = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func songList(_ songs: [Song]) -> some View {
         if songs.isEmpty {
             ContentUnavailableView(
                 "Kein Song mit Partitur", systemImage: "pianokeys",
-                description: Text("Die Logic-Seite braucht die Partitur eines Songs, YuE2 schreibt sie mit Planung."))
+                description: Text("Die Logic-Seite braucht die Partitur eines Songs, YuE2 schreibt sie mit Planung. Eine MIDI-Datei oder score.abc geht auch."))
         } else {
             List(songs) { song in
                 Button {
@@ -89,7 +127,7 @@ private struct LogicSessionView: View {
                 Button {
                     choosing = true
                 } label: {
-                    Label("Anderer Song", systemImage: "music.note.list")
+                    Label("Anderer Song oder Datei", systemImage: "music.note.list")
                 }
             }
         }
@@ -106,7 +144,7 @@ private struct LogicSessionView: View {
             #if os(macOS)
             .frame(minWidth: 420, minHeight: 480)
             #endif
-            .onChange(of: session.song?.id) { choosing = false }
+            .onChange(of: session.source?.id) { choosing = false }
         }
         #if os(iOS)
         .sheet(isPresented: $bluetooth) {
@@ -129,10 +167,18 @@ private struct LogicSessionView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            if let song = session.song {
-                CoverView(song: song).frame(width: 56, height: 56)
+            if let source = session.source {
+                if let song = source.song {
+                    CoverView(song: song).frame(width: 56, height: 56)
+                } else {
+                    Image(systemName: "doc.text")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 56, height: 56)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(song.displayTitle).font(.title3.weight(.semibold)).lineLimit(1)
+                    Text(source.baseName).font(.title3.weight(.semibold)).lineLimit(1)
                     if let score = session.score {
                         Text("\(Int(score.tempoBpm.rounded())) BPM · \(Song.clock(score.durationSeconds)) · \(score.voices.count) Spuren")
                             .font(.caption)
@@ -148,7 +194,8 @@ private struct LogicSessionView: View {
     }
 
     private func transport(_ score: LogicScore) -> some View {
-        LogicTransport(player: session.player, recording: $session.playsRecording)
+        // A file of one's own has no recording to play along.
+        LogicTransport(player: session.player, recording: session.song == nil ? nil : $session.playsRecording)
     }
 
     // MARK: Tracks
@@ -292,7 +339,7 @@ private struct LogicSessionView: View {
             }
         }
         .card()
-        .onChange(of: session.song?.id) { exportFile = nil }
+        .onChange(of: session.source?.id) { exportFile = nil }
         .onChange(of: session.assignments) { exportFile = nil }
     }
 

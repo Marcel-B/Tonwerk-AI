@@ -86,18 +86,7 @@ struct HarmonySettings: Codable, Equatable {
 @MainActor
 @Observable
 final class HarmonySession {
-    enum Source: Equatable {
-        case file(PickedFile)
-        case song(Song)
-
-        static func == (lhs: Source, rhs: Source) -> Bool {
-            switch (lhs, rhs) {
-            case (.file(let a), .file(let b)): a == b
-            case (.song(let a), .song(let b)): a.id == b.id
-            default: false
-            }
-        }
-    }
+    typealias Source = ScoreSource
 
     var settings: HarmonySettings {
         didSet {
@@ -171,7 +160,7 @@ final class HarmonySession {
             }
             let asked = settings
             let options = asked.options(assignments: await assignments, instruments: await instruments)
-            let result = try await model.convertHarmony(source, options: options)
+            let result = try await model.convertScore(source, options: options)
             conversion = result
             stale = settings != asked || self.source != source
             if let score = result.score {
@@ -209,11 +198,7 @@ final class HarmonySession {
     }
 
     nonisolated static func fileName(_ source: Source) -> String {
-        let base = switch source {
-        case .file(let file): file.baseName
-        case .song(let song): song.displayTitle
-        }
-        return "\(AppModel.projectName(base))-begleitstimmen.mid"
+        "\(AppModel.projectName(source.baseName))-begleitstimmen.mid"
     }
 
     func stop() {
@@ -227,40 +212,5 @@ extension AppModel {
             harmonyPage = HarmonySession(model: self)
         }
         page = .harmony
-    }
-
-    /// The melody through the Logic page's converter; a MIDI file or score.abc goes up as `file`, a library song by
-    /// its id. A score that cannot be converted answers its errors (422).
-    func convertHarmony(_ source: HarmonySession.Source, options: [String: Any]) async throws -> LogicConversion {
-        let json = (try? JSONSerialization.data(withJSONObject: options)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-        let answer: (Data, HTTPURLResponse)
-        switch source {
-        case .file(let file):
-            answer = try await uploadFile(
-                address("api/logic/convert"), fields: [("options", json)], fileField: "file", file: file,
-                accept: [200, 422])
-        case .song(let song):
-            answer = try await uploadFields(address("api/logic/convert"), fields: [("song", song.id), ("options", json)])
-        }
-        return try JSONDecoder().decode(LogicConversion.self, from: answer.0)
-    }
-
-    private func uploadFields(_ url: URL, fields: [(String, String)]) async throws -> (Data, HTTPURLResponse) {
-        let boundary = "tonwerk-\(UUID().uuidString)"
-        var body = Data()
-        for (name, value) in fields {
-            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
-        }
-        body.append(Data("--\(boundary)--\r\n".utf8))
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 120
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard let http = response as? HTTPURLResponse, status == 200 || status == 422 else {
-            throw ServerError(problem: ServerError.text(of: data) ?? String(localized: "Der Server antwortete \(status)."))
-        }
-        return (data, http)
     }
 }

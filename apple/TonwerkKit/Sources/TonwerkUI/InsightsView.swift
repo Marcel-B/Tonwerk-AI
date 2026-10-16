@@ -78,7 +78,7 @@ struct InsightsView: View {
         return HStack(spacing: 10) {
             Text(Insights.valueName(group: group, entry.value))
                 .fontWeight(tone == .good ? .semibold : .regular)
-                .foregroundStyle(tone == .weak ? .secondary : .primary)
+                .foregroundStyle(tone == .weak ? Color.secondary : Color.primary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ProgressView(value: min(max(entry.average / 5, 0), 1))

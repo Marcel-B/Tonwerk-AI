@@ -14,6 +14,7 @@ enum Page: Hashable {
     case speech
     case ace
     case insights
+    case sketch
     case log
     case storage
     case templates
@@ -65,6 +66,7 @@ struct MainView: View {
                     Label("Sprachlabor", systemImage: "bubble.left.and.text.bubble.right").tag(Page.speech)
                     Label("ACE-Step", systemImage: "waveform.path").tag(Page.ace)
                     Label("Auswertung", systemImage: "chart.bar").tag(Page.insights)
+                    Label("Ausarbeitung", systemImage: "pencil.and.scribble").tag(Page.sketch)
                     Label("Protokoll", systemImage: "doc.text.magnifyingglass").tag(Page.log)
                     Label("Speicher", systemImage: "internaldrive").tag(Page.storage)
                     Label("Vorlagen", systemImage: "bookmark").tag(Page.templates)
@@ -129,6 +131,8 @@ struct MainView: View {
                 AceView()
             case .insights:
                 InsightsView()
+            case .sketch:
+                SketchView()
             case .log:
                 LogView()
             case .storage:

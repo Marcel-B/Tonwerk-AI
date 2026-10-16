@@ -71,6 +71,8 @@ public final class AppModel {
     var aceForm = AceForm()
     /// The last report of what the rated songs were made with, for its page and the proven style blocks.
     var insights: Components.Schemas.InsightReport?
+    /// The sketch page's state, kept like the ACE-Step page's.
+    var sketchPage: SketchSession?
     /// The log page's state, kept so its filter outlasts a page change.
     var logPage: LogSession?
     /// The storage page's state, kept like the log's.
@@ -142,6 +144,8 @@ public final class AppModel {
         liveAce = [:]
         acePage = nil
         insights = nil
+        sketchPage?.stop()
+        sketchPage = nil
         transcriptionPage = nil
         logPage = nil
         storagePage = nil

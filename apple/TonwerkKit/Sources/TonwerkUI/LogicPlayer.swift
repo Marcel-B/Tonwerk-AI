@@ -60,6 +60,8 @@ final class LogicPlayer {
     private var countIn: Double = 0
     private var score: LogicScore?
     private var clock: Task<Void, Never>?
+    /// Counts loads, so one overtaken while its instruments were being made leaves the score to the newer one.
+    private var loads = 0
 
     init() {
         engine.attach(recordingNode)
@@ -70,7 +72,21 @@ final class LogicPlayer {
 
     /// A new score: the sequencer is built anew, every voice on its track, samplers made for the voices that need
     /// one. Keeps playing from where it was if it was playing.
-    func load(_ score: LogicScore, tracks: [Track], mixer: LogicMixer) {
+    func load(_ score: LogicScore, tracks: [Track], mixer: LogicMixer) async {
+        loads += 1
+        let load = loads
+        // The synthesizers are made asynchronously and in this process: made synchronously, the Mac loads an Audio
+        // Unit out of process, where a unit registered only in this one does not exist, and the app was aborted on
+        // the first MIDI it got (playing, or the all-notes-off of the next load).
+        for track in tracks where instruments[track.voice.id] == nil {
+            let instrument = await makeInstrument(for: track)
+            guard instruments[track.voice.id] == nil else { continue }
+            engine.attach(instrument.node)
+            engine.connect(instrument.node, to: engine.mainMixerNode, format: nil)
+            instruments[track.voice.id] = instrument
+        }
+        guard load == loads else { return }
+
         let wasPlaying = isPlaying
         let from = position
         stop()
@@ -84,12 +100,6 @@ final class LogicPlayer {
         for (name, instrument) in instruments where !tracks.contains(where: { $0.voice.id == name }) {
             engine.detach(instrument.node)
             instruments[name] = nil
-        }
-        for track in tracks where instruments[track.voice.id] == nil {
-            let instrument = makeInstrument(for: track)
-            engine.attach(instrument.node)
-            engine.connect(instrument.node, to: engine.mainMixerNode, format: nil)
-            instruments[track.voice.id] = instrument
         }
         playSounds()
         if recording != nil {
@@ -135,8 +145,8 @@ final class LogicPlayer {
     }
 
     /// The synthesizer for a pitched track, the sampler for drums or if the synthesizer cannot be made.
-    private func makeInstrument(for track: Track) -> Instrument {
-        if let sound = track.sound, case let (node, unit)? = TonwerkSynthUnit.instrument(playing: sound) {
+    private func makeInstrument(for track: Track) async -> Instrument {
+        if let sound = track.sound, case let (node, unit)? = await TonwerkSynthUnit.loadInstrument(playing: sound) {
             return .synth(node, unit)
         }
         let sampler = AVAudioUnitSampler()
@@ -169,7 +179,7 @@ final class LogicPlayer {
         let channelsChanged = zip(tracks, self.tracks).contains { $0.route != $1.route }
         self.tracks = tracks
         if channelsChanged, let score {
-            load(score, tracks: tracks, mixer: currentMixer)
+            Task { await load(score, tracks: tracks, mixer: currentMixer) }
         } else {
             playSounds()
             route()

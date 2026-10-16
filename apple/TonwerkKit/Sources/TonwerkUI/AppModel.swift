@@ -59,6 +59,10 @@ public final class AppModel {
     var liveTranscriptions: [String: Components.Schemas.TranscriptionState] = [:]
     /// The transcription page's state, kept like the voices page's.
     var transcriptionPage: TranscriptionSession?
+    /// Speech lab takes in the works or finished since, by id, from the snapshot and `speech` events.
+    var liveSpeech: [String: Components.Schemas.SpeechTake] = [:]
+    /// The speech lab's state, kept like the transcription page's.
+    var speechPage: SpeechSession?
     /// The log page's state, kept so its filter outlasts a page change.
     var logPage: LogSession?
     /// The storage page's state, kept like the log's.
@@ -124,6 +128,8 @@ public final class AppModel {
         liveSwaps = [:]
         liveVideos = [:]
         liveTranscriptions = [:]
+        liveSpeech = [:]
+        speechPage = nil
         transcriptionPage = nil
         logPage = nil
         storagePage = nil
@@ -188,6 +194,7 @@ public final class AppModel {
             liveVideos = Dictionary((snapshot.videos ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             liveTranscriptions = Dictionary(
                 (snapshot.transcriptions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveSpeech = Dictionary((snapshot.speech ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
         case .worker(let info):
@@ -222,6 +229,8 @@ public final class AppModel {
             if state.stage == "done" && before != "done" {
                 transcriptionPage?.finished()
             }
+        case .speech(let take):
+            liveSpeech[take.id] = take
         case .library:
             Task { await reloadLibrary() }
         default:

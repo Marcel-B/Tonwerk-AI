@@ -688,10 +688,16 @@ extension AppModel {
         try JSONDecoder.tonwerk().decode(type, from: data)
     }
 
-    /// A multipart form with one file, written to a temporary file so a long song is not held twice in memory.
     private func upload(
         _ url: URL, fields: [(String, String)], fileField: String, file: PickedFile, accept: Set<Int>
     ) async throws -> Data {
+        try await uploadFile(url, fields: fields, fileField: fileField, file: file, accept: accept).0
+    }
+
+    /// A multipart form with one file, written to a temporary file so a long song is not held twice in memory.
+    func uploadFile(
+        _ url: URL, fields: [(String, String)], fileField: String, file: PickedFile, accept: Set<Int>
+    ) async throws -> (Data, HTTPURLResponse) {
         let boundary = "tonwerk-\(UUID().uuidString)"
         let body = FileManager.default.temporaryDirectory.appending(path: "upload-\(UUID().uuidString)")
         FileManager.default.createFile(atPath: body.path, contents: nil)
@@ -717,11 +723,12 @@ extension AppModel {
         request.timeoutInterval = 600
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         let (data, response) = try await URLSession.shared.upload(for: request, fromFile: body)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard accept.contains(status) else {
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
+        guard let http, accept.contains(status) else {
             throw ServerError(problem: ServerError.text(of: data) ?? Self.refusal(status))
         }
-        return data
+        return (data, http)
     }
 
     func voiceInfo() async -> Components.Schemas.VoiceInfo? {

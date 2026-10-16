@@ -8,6 +8,7 @@ struct QueueView: View {
 
     private var empty: Bool {
         model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
+            && model.runningTranscriptions.isEmpty
     }
 
     var body: some View {
@@ -51,6 +52,14 @@ struct QueueView: View {
                         .padding(.top, 8)
                     ForEach(model.videoJobs, id: \.id) { video in
                         VideoJobCard(video: video)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.runningTranscriptions.isEmpty {
+                    heading("Transkription")
+                        .padding(.top, 8)
+                    ForEach(model.runningTranscriptions, id: \.id) { state in
+                        TranscriptionJobCard(state: state)
                             .transition(.opacity)
                     }
                 }
@@ -279,6 +288,46 @@ private struct VideoJobCard: View {
                 if video.stage == "rendering" {
                     ProgressView(value: min(max(video.fraction ?? 0, 0), 1))
                 }
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// The transcription SheetSage2 is on, with its progress; the waiting ones are in the queue below.
+private struct TranscriptionJobCard: View {
+    @Environment(AppModel.self) private var model
+    let state: Components.Schemas.TranscriptionState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "music.quarternote.3")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(state.fileName).lineLimit(1)
+                        Text(TranscriptionSession.Melody.name(of: state.task))
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(AppModel.transcriptionStage(state.stage))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.cancelTranscription(state.id) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                TranscriptionProgress(state: state)
             }
         }
         .card(padding: 12)

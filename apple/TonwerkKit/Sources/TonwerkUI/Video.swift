@@ -564,7 +564,7 @@ enum VideoArt {
             }
             if let image = canvas.image { frames.append(image) }
         }
-        return (frames, area.minX, area.minY)
+        return (frames, Double(area.minX), Double(area.minY))
     }
 
     /// How far a ray from the point at this angle runs inside the box before it leaves it.

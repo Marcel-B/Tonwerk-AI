@@ -20,6 +20,11 @@ struct PlayerBar: View {
                     .buttonStyle(.plain)
                     .help("Player groß öffnen")
                     Spacer(minLength: 8)
+                    // The small analyzer, as in the web player's bar; a tap opens the large one.
+                    SpectrumBars(analyzer: player.analyzer, bars: 10, colour: barColour, active: player.isPlaying)
+                        .frame(width: 40, height: 22)
+                        .contentShape(Rectangle())
+                        .onTapGesture { expanded = true }
                     #if os(macOS)
                     RatingView(rating: model.song(song.id)?.rating ?? song.rating) { stars in
                         Task { await model.rate(song, stars) }
@@ -80,6 +85,10 @@ struct PlayerBar: View {
             }
         }
         .contentShape(Rectangle())
+    }
+
+    private var barColour: Color {
+        Color(cgColor: VideoArt.cgColor(hex: player.coverColour ?? VideoArt.accent))
     }
 
     private var controls: some View {

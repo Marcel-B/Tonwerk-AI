@@ -7,6 +7,10 @@ struct NowPlayingView: View {
     @Environment(Player.self) private var player
     @Environment(\.dismiss) private var dismiss
     @AppStorage("nowPlayingLyrics") private var showLyrics = true
+    @AppStorage("nowPlayingAnalyzer") private var showAnalyzer = true
+    @AppStorage("nowPlayingEffects") private var showEffects = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var beat = BeatLevels()
     @State private var times: [LineTimes]?
     @State private var scrubbing: Double?
     @State private var sharing: Song?
@@ -36,6 +40,11 @@ struct NowPlayingView: View {
                     Spacer(minLength: 0)
                     titleBlock(song)
                 }
+                if showAnalyzer {
+                    SpectrumBars(analyzer: player.analyzer, bars: 40, peaks: true, colour: colour, active: player.isPlaying)
+                        .frame(height: 56)
+                        .transition(.opacity)
+                }
                 progress
                 controls
             }
@@ -43,6 +52,7 @@ struct NowPlayingView: View {
             .padding(.vertical, 16)
             .frame(maxWidth: 640)
             .animation(.easeInOut(duration: 0.3), value: lyricsShown)
+            .animation(.easeInOut(duration: 0.25), value: showAnalyzer)
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
@@ -53,6 +63,9 @@ struct NowPlayingView: View {
         ZStack {
             Color.black
             CoverBackdrop(song: song, opacity: 1)
+            if effectsOn {
+                glows
+            }
             LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
         }
         .ignoresSafeArea()
@@ -82,6 +95,9 @@ struct NowPlayingView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Teilen")
+            switchButton("chart.bar.fill", on: $showAnalyzer, label: "Analyzer")
+            switchButton("sparkles", on: $showEffects, label: "Effekte")
+                .help(reduceMotion ? "Das System wünscht weniger Bewegung, die Effekte bleiben still." : "Effekte")
             if !song.lyrics.isEmpty {
                 Button {
                     showLyrics.toggle()
@@ -98,7 +114,83 @@ struct NowPlayingView: View {
         }
     }
 
+    private func switchButton(_ symbol: String, on: Binding<Bool>, label: String) -> some View {
+        Button {
+            on.wrappedValue.toggle()
+        } label: {
+            Image(systemName: symbol)
+                .font(.title3)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+                .opacity(on.wrappedValue ? 1 : 0.4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityValue(on.wrappedValue ? "An" : "Aus")
+    }
+
+    private var colour: Color {
+        Color(cgColor: VideoArt.cgColor(hex: player.coverColour ?? VideoArt.accent))
+    }
+
+    private var effectsOn: Bool { showEffects && !reduceMotion }
+
+    /// Three glows in the cover's colour that swell with bass, mids and highs (`NowPlaying.vue`); only scale and
+    /// opacity change per frame.
+    private var glows: some View {
+        let base = VideoArt.cgColor(hex: player.coverColour ?? VideoArt.accent)
+        let tints = [
+            Color(cgColor: base).opacity(0.55),
+            Self.mix(base, with: (1, 1, 1)).opacity(0.4),
+            Self.mix(base, with: (0.545, 0.361, 0.965)).opacity(0.4),
+        ]
+        let places: [UnitPoint] = [UnitPoint(x: 0.25, y: 0.8), UnitPoint(x: 0.85, y: 0.3), UnitPoint(x: 0.2, y: 0.15)]
+        return GeometryReader { geometry in
+            let diameter = max(geometry.size.width, geometry.size.height) * 0.8
+            TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !player.isPlaying)) { timeline in
+                let levels = beat.step(player.analyzer, at: timeline.date)
+                ZStack {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(RadialGradient(
+                                stops: [.init(color: tints[index], location: 0), .init(color: .clear, location: 0.65)],
+                                center: .center, startRadius: 0, endRadius: diameter / 2))
+                            .frame(width: diameter, height: diameter)
+                            .scaleEffect(0.6 + levels[index] * 0.9)
+                            .opacity(0.1 + levels[index] * 0.9)
+                            .position(
+                                x: geometry.size.width * places[index].x, y: geometry.size.height * places[index].y)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// The cover's colour, 60 % of it mixed with another, as the web page's `color-mix` does.
+    private static func mix(_ colour: CGColor, with other: (Double, Double, Double)) -> Color {
+        let parts = colour.components ?? [0, 0, 0, 1]
+        guard parts.count >= 3 else { return Color(cgColor: colour) }
+        return Color(
+            red: parts[0] * 0.6 + other.0 * 0.4, green: parts[1] * 0.6 + other.1 * 0.4,
+            blue: parts[2] * 0.6 + other.2 * 0.4)
+    }
+
+    @ViewBuilder
     private func bigCover(_ song: Song) -> some View {
+        if effectsOn {
+            // The cover beats with the bass.
+            TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !player.isPlaying)) { timeline in
+                plainCover(song)
+                    .scaleEffect(1 + beat.step(player.analyzer, at: timeline.date)[0] * 0.05)
+            }
+        } else {
+            plainCover(song)
+        }
+    }
+
+    private func plainCover(_ song: Song) -> some View {
         CoverView(song: song)
             .aspectRatio(1, contentMode: .fit)
             .frame(maxWidth: 420)

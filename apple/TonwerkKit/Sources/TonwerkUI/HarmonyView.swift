@@ -34,6 +34,8 @@ private struct HarmonySessionView: View {
                 actions
                 if let score = session.score {
                     LogicTransport(player: session.player)
+                    SpectrumBars(analyzer: session.player.analyzer, bars: 64, peaks: true, active: session.player.isPlaying)
+                        .frame(height: 48)
                     PianoRoll(score: score, voices: session.voices, player: session.player)
                         .frame(height: 240)
                         .card(padding: 0)

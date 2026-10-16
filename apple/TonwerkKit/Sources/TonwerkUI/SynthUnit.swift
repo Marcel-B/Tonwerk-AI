@@ -1,4 +1,5 @@
 import AudioToolbox
+import CoreMIDI
 import AVFoundation
 import TonwerkDSP
 
@@ -56,6 +57,9 @@ final class TonwerkSynthUnit: AUAudioUnit {
 
     override var outputBusses: AUAudioUnitBusArray { busArray }
 
+    /// MIDI 1.0, so a host that sends event lists sends them in the protocol ``RenderState`` reads.
+    override var audioUnitMIDIProtocol: MIDIProtocolID { ._1_0 }
+
     override func allocateRenderResources() throws {
         try super.allocateRenderResources()
         tw_synth_prepare(state.synth, busArray[0].format.sampleRate)
@@ -98,12 +102,13 @@ private final class RenderState {
         timestamp: UnsafePointer<AudioTimeStamp>, frames: AUAudioFrameCount,
         into output: UnsafeMutablePointer<AudioBufferList>, events: UnsafePointer<AURenderEvent>?
     ) -> AUAudioUnitStatus {
-        guard frames <= Self.capacity else { return kAudioUnitErr_TooManyFramesToProcess }
         let buffers = UnsafeMutableAudioBufferListPointer(output)
-        let own = [left, right]
         for index in 0..<buffers.count {
             if buffers[index].mData == nil {
-                buffers[index].mData = UnsafeMutableRawPointer(own[min(index, 1)])
+                // Only the buffers of our own are limited; the iPhone's engine may ask for more frames than the
+                // capacity (a song at another sample rate, the screen locked), which a host's buffers then hold.
+                guard frames <= Self.capacity else { return kAudioUnitErr_TooManyFramesToProcess }
+                buffers[index].mData = UnsafeMutableRawPointer(index == 0 ? left : right)
             }
             buffers[index].mDataByteSize = frames * UInt32(MemoryLayout<Float>.size)
         }
@@ -136,9 +141,67 @@ private final class RenderState {
     }
 
     private func handle(_ event: UnsafePointer<AURenderEvent>) {
-        guard event.pointee.head.eventType == .MIDI else { return }
-        let midi = event.pointee.MIDI
-        tw_synth_midi(synth, midi.data.0, midi.data.1, midi.data.2)
+        switch event.pointee.head.eventType {
+        case .MIDI:
+            let midi = event.pointee.MIDI
+            tw_synth_midi(synth, midi.data.0, midi.data.1, midi.data.2)
+        case .midiEventList:
+            // Newer hosts send Universal MIDI Packets instead; the packets follow each other in the event's memory,
+            // so they are read where they lie, not from a copy of the struct, which holds only the first.
+            let raw = UnsafeRawPointer(event)
+            guard let listOffset = MemoryLayout<AUMIDIEventList>.offset(of: \.eventList),
+                  let packetOffset = MemoryLayout<MIDIEventList>.offset(of: \.packet),
+                  let wordsOffset = MemoryLayout<MIDIEventPacket>.offset(of: \.words)
+            else { return }
+            let list = (raw + listOffset).assumingMemoryBound(to: MIDIEventList.self)
+            var packet = (raw + listOffset + packetOffset).assumingMemoryBound(to: MIDIEventPacket.self)
+            for number in 0..<list.pointee.numPackets {
+                let words = (UnsafeRawPointer(packet) + wordsOffset).assumingMemoryBound(to: UInt32.self)
+                handle(words: words, count: Int(packet.pointee.wordCount))
+                if number + 1 < list.pointee.numPackets {
+                    packet = UnsafePointer(MIDIEventPacketNext(packet))
+                }
+            }
+        default:
+            break
+        }
+    }
+
+    /// Channel voice messages of MIDI 1.0 (type 2) and MIDI 2.0 (type 4, scaled down to seven bits); the rest is
+    /// skipped by its length.
+    private func handle(words: UnsafePointer<UInt32>, count: Int) {
+        var index = 0
+        while index < count {
+            let word = words[index]
+            let type = word >> 28
+            let length: Int
+            switch type {
+            case 0, 1, 2, 6, 7: length = 1
+            case 3, 4, 8, 9, 10: length = 2
+            case 11, 12: length = 3
+            default: length = 4
+            }
+            let status = UInt8((word >> 16) & 0xFF)
+            let first = UInt8((word >> 8) & 0x7F)
+            if type == 2 {
+                tw_synth_midi(synth, status, first, UInt8(word & 0x7F))
+            } else if type == 4, index + 1 < count {
+                let second = words[index + 1]
+                switch status >> 4 {
+                case 0x9:
+                    // A MIDI 2.0 note on may have velocity 0, which MIDI 1.0 reads as note off.
+                    tw_synth_midi(synth, status, first, max(1, UInt8(second >> 25)))
+                case 0x8, 0xA, 0xB:
+                    tw_synth_midi(synth, status, first, UInt8(second >> 25))
+                case 0xE:
+                    let bend = second >> 18
+                    tw_synth_midi(synth, status, UInt8(bend & 0x7F), UInt8((bend >> 7) & 0x7F))
+                default:
+                    break
+                }
+            }
+            index += length
+        }
     }
 }
 

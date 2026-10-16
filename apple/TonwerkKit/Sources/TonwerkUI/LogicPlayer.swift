@@ -50,7 +50,10 @@ final class LogicPlayer {
         didSet { recordingNode.volume = recordingVolume }
     }
 
+    /// What the page's analyzer hears: the synthesizers, samplers and the recording together.
+    let analyzer = SpectrumAnalyzer()
     private let engine = AVAudioEngine()
+    private var configurationObserver: NSObjectProtocol?
     private var sequencer: AVAudioSequencer?
     private var instruments: [String: Instrument] = [:]
     private var tracks: [Track] = []
@@ -66,6 +69,21 @@ final class LogicPlayer {
     init() {
         engine.attach(recordingNode)
         recordingNode.volume = recordingVolume
+        engine.mainMixerNode.feed(analyzer)
+        // The engine stops by itself when the output changes (headphones, the song player taking the session); a
+        // playing score goes on from where it was.
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resume() }
+        }
+    }
+
+    private func resume() {
+        guard isPlaying else { return }
+        let at = position
+        pause()
+        play(from: at)
     }
 
     // MARK: Loading
@@ -222,11 +240,15 @@ final class LogicPlayer {
     func play(from seconds: Double) {
         guard let sequencer, let score else { return }
         do {
+            // Every time, not only when the engine starts: the song player may have taken the session meanwhile.
+            #if os(iOS)
+            let session = AVAudioSession.sharedInstance()
+            if session.category != .playback {
+                try session.setCategory(.playback)
+            }
+            try session.setActive(true)
+            #endif
             if !engine.isRunning {
-                #if os(iOS)
-                try AVAudioSession.sharedInstance().setCategory(.playback)
-                try AVAudioSession.sharedInstance().setActive(true)
-                #endif
                 try engine.start()
             }
             sequencer.currentPositionInBeats = seconds * score.tempoBpm / 60

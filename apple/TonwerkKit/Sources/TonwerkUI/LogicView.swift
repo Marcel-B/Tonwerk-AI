@@ -109,6 +109,8 @@ private struct LogicSessionView: View {
                 }
                 if let score = session.score {
                     transport(score)
+                    SpectrumBars(analyzer: session.player.analyzer, bars: 64, peaks: true, active: session.player.isPlaying)
+                        .frame(height: 48)
                     PianoRoll(score: score, voices: session.voices, player: session.player)
                         .frame(height: 240)
                         .card(padding: 0)

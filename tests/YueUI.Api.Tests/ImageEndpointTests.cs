@@ -63,6 +63,37 @@ public sealed class ImageEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task A_description_is_painted_in_the_english_claude_made_of_it()
+    {
+        _app.AddSong(Run, "song1");
+        _app.Translator.Configured = true;
+        _app.Translator.Answer = "Someone stands in the forest, the morning sun shines through the leaves.";
+
+        Assert.True((await _client.GetFromJsonAsync<ImageInfo>("/api/images", TestApp.Json))!.Translates);
+        var response = await _client.PostAsJsonAsync($"/api/songs/{Run}/song1/images", new { prompt = "jemand steht im Wald, die Morgensonne strahlt durch die Blätter." });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var done = await WaitForImages("song1", all => all.Single().Finished);
+        Assert.Equal("jemand steht im Wald, die Morgensonne strahlt durch die Blätter.", done[0].Prompt);
+        Assert.Equal(_app.Translator.Answer, done[0].PaintedPrompt);
+        Assert.Equal(_app.Translator.Answer, Assert.Single(_app.Images.Jobs).Prompt);
+    }
+
+    [Fact]
+    public async Task Without_a_translation_the_description_is_painted_as_written()
+    {
+        _app.AddSong(Run, "song1");
+        _app.Translator.Configured = true;
+
+        await _client.PostAsJsonAsync($"/api/songs/{Run}/song1/images", new { prompt = "Neon city at night" });
+
+        var done = await WaitForImages("song1", all => all.Single().Finished);
+        Assert.Null(done[0].PaintedPrompt);
+        Assert.Equal("Neon city at night", Assert.Single(_app.Images.Jobs).Prompt);
+        Assert.Equal(["Neon city at night"], _app.Translator.Calls);
+    }
+
+    [Fact]
     public async Task Requests_it_cannot_paint_are_refused()
     {
         _app.AddSong(Run, "song1");

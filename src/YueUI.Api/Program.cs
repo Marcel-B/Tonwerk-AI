@@ -134,6 +134,7 @@ builder.Services.AddSingleton<SpeechLab>();
 builder.Services.AddHostedService(services => services.GetRequiredService<SpeechLab>());
 builder.Services.Configure<ImageOptions>(builder.Configuration.GetSection(ImageOptions.Section));
 builder.Services.AddSingleton<IImageEngine, MfluxEngine>();
+builder.Services.AddSingleton<IPromptTranslator, ClaudePromptTranslator>();
 builder.Services.AddSingleton<ImageMaker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<ImageMaker>());
 // ACE-Step 1.5 through acestep.cpp: songs of a second engine, one job at a time, into a library folder of their own.

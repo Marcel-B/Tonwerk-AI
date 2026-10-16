@@ -6399,7 +6399,8 @@
         "required": [
           "installed",
           "python",
-          "models"
+          "models",
+          "translates"
         ],
         "type": "object",
         "properties": {
@@ -6414,6 +6415,9 @@
             "items": {
               "$ref": "#/components/schemas/ImageModelInfo"
             }
+          },
+          "translates": {
+            "type": "boolean"
           }
         }
       },
@@ -6521,6 +6525,12 @@
           },
           "prompt": {
             "type": "string"
+          },
+          "paintedPrompt": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "seed": {
             "type": "integer",

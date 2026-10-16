@@ -20,6 +20,7 @@ namespace YueUI.Api.Images;
 public sealed class ImageMaker(
     SqliteDatabase database,
     IImageEngine engine,
+    IPromptTranslator translator,
     ModelMemory memory,
     WorkerHost host,
     Status.StatusHub hub,
@@ -201,6 +202,13 @@ public sealed class ImageMaker(
             var model = options.Value.ResolvedModels.FirstOrDefault(m => m.Id == image.ModelId)
                 ?? throw new ImageException($"The model {image.ModelId} is no longer offered.");
 
+            // Before the memory is claimed: Claude runs in the cloud, and a slow answer should not hold the slot.
+            if (image.PaintedPrompt is null && translator.Configured
+                && await translator.TranslateAsync(image.Prompt, cancel.Token) is { } english)
+            {
+                image = Update(image, i => i with { PaintedPrompt = english });
+            }
+
             await memory.ClaimAsync(LargeModel.Images, options.Value.WaitInterval, time, cancel.Token);
             // YuE2 keeps its model for ten idle minutes; the image model needs the memory now.
             await host.ShutdownWorkerAsync();
@@ -208,7 +216,7 @@ public sealed class ImageMaker(
             image = Update(image, i => i with { Stage = "loading" });
             var shown = 0.0;
             var result = await engine.PaintAsync(
-                new ImageJob(model, image.Prompt, image.Seed, Size, Size, output),
+                new ImageJob(model, image.PaintedPrompt ?? image.Prompt, image.Seed, Size, Size, output),
                 (stage, fraction) =>
                 {
                     if (stage != image.Stage || fraction - shown >= 0.1)

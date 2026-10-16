@@ -174,7 +174,7 @@ function close(): void {
           />
         </span>
         <Textarea v-model="prompt" rows="4" auto-resize fluid maxlength="2000" @input="edited" />
-        <small class="muted">{{ t('imagePromptHint') }}</small>
+        <small class="muted">{{ t(info?.translates ? 'imagePromptHintTranslated' : 'imagePromptHint') }}</small>
       </label>
       <label class="flex items-center gap-2">
         <Checkbox v-model="withTitle" binary />
@@ -226,7 +226,7 @@ function close(): void {
               <Tag :severity="image.stage === 'queued' ? 'secondary' : undefined">{{ stage(image) }}</Tag>
             </div>
           </div>
-          <span class="text-xs text-muted-color truncate" :title="image.prompt"
+          <span class="text-xs text-muted-color truncate" :title="image.paintedPrompt ?? image.prompt"
             >{{ image.modelLabel }} · {{ t('imageSeed', { seed: image.seed }) }}</span
           >
           <div class="flex items-center gap-1">

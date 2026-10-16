@@ -30,11 +30,11 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
             ]
         ),
+        // Tonwerk's synthesizers: the Tonwerk Synth plugin's plain C++ DSP behind a C interface (include/TonwerkDSP.h).
+        .target(name: "TonwerkDSP"),
         // The apps' screens and player, so the Xcode project only holds the app's entry point and a CI `swift build`
         // compiles nearly everything. Swift 5 mode: AVFoundation's and MediaPlayer's callbacks are not yet annotated
         // for strict concurrency.
-        // Tonwerk's synthesizers: the Tonwerk Synth plugin's plain C++ DSP behind a C interface (include/TonwerkDSP.h).
-        .target(name: "TonwerkDSP"),
         .target(
             name: "TonwerkUI",
             dependencies: ["TonwerkKit", "TonwerkDSP"],

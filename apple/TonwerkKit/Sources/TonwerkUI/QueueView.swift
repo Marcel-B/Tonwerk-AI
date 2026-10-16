@@ -8,7 +8,7 @@ struct QueueView: View {
 
     var body: some View {
         Group {
-            if model.inProgress.isEmpty && model.queue.isEmpty {
+            if model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty {
                 ContentUnavailableView(
                     "Nichts in Arbeit", systemImage: "hourglass",
                     description: Text("Songs, Songtexte und Transkriptionen erscheinen hier, sobald sie bestellt sind."))
@@ -22,9 +22,17 @@ struct QueueView: View {
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                             }
                         }
+                        if !model.voiceJobs.isEmpty {
+                            heading("Stimmen und Stems")
+                                .padding(.top, model.inProgress.isEmpty ? 0 : 8)
+                            ForEach(model.voiceJobs) { job in
+                                VoiceJobCard(job: job)
+                                    .transition(.opacity)
+                            }
+                        }
                         if !model.queue.isEmpty {
                             heading("Wartet")
-                                .padding(.top, model.inProgress.isEmpty ? 0 : 8)
+                                .padding(.top, model.inProgress.isEmpty && model.voiceJobs.isEmpty ? 0 : 8)
                             ForEach(Array(model.queue.enumerated()), id: \.element.id) { index, job in
                                 WaitingCard(job: job, first: index == 0, last: index == model.queue.count - 1)
                                     .transition(.opacity)
@@ -36,6 +44,7 @@ struct QueueView: View {
                     .frame(maxWidth: .infinity)
                     .animation(.easeInOut(duration: 0.25), value: model.inProgress.map(\.id))
                     .animation(.easeInOut(duration: 0.25), value: model.queue.map(\.id))
+                    .animation(.easeInOut(duration: 0.25), value: model.voiceJobs.map(\.id))
                 }
             }
         }
@@ -182,6 +191,33 @@ private struct StageTimeline: View {
                 .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 2)
                 .frame(width: 16, height: 16)
         }
+    }
+}
+
+/// A version, stem set or swap: they wait in a queue of their own on the server, one at a time.
+private struct VoiceJobCard: View {
+    @Environment(AppModel.self) private var model
+    let job: VoiceJob
+
+    var body: some View {
+        let names = model.title(of: job)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: job.symbol)
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            JobRow(title: names.title, detail: names.detail, stage: job.stage, fraction: job.fraction, message: nil) {
+                Button(role: .destructive) {
+                    Task { await model.cancel(job) }
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .help("Abbrechen")
+            }
+        }
+        .card(padding: 12)
     }
 }
 

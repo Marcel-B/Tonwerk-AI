@@ -42,17 +42,45 @@ public static class VideoEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status501NotImplemented);
         // Range requests: Safari plays a video only from a source that answers them.
-        api.MapGet("/videos/{id}/file", (string id, bool? download, SqliteVideoStore store) =>
+        // With small, the copy for a messenger, made on the first request (see VideoMaker.SmallAsync).
+        api.MapGet("/videos/{id}/file", async (
+            string id,
+            bool? download,
+            bool? small,
+            SqliteVideoStore store,
+            VideoMaker maker,
+            IHostApplicationLifetime lifetime,
+            ILogger<VideoMaker> logger,
+            CancellationToken cancellationToken) =>
         {
             if (store.Get(id) is not { Stage: "done" } video || !File.Exists(store.VideoPath(id)))
             {
                 return Results.NotFound();
             }
-            return Results.File(store.VideoPath(id), "video/mp4", download == true ? FileName(video) : null, enableRangeProcessing: true);
+            var path = store.VideoPath(id);
+            if (small == true)
+            {
+                try
+                {
+                    // Made to the end even when the phone gives up waiting, so asking again finds it ready.
+                    path = await maker.SmallAsync(video, lifetime.ApplicationStopping).WaitAsync(cancellationToken);
+                }
+                catch (VideoException exception)
+                {
+                    logger.LogWarning("Small copy of video {Id} failed: {Message}", id, exception.Message);
+                    return Results.Problem(exception.Message, statusCode: StatusCodes.Status500InternalServerError);
+                }
+                catch (IOException) when (store.Get(id) is null)
+                {
+                    return Results.NotFound(); // deleted meanwhile
+                }
+            }
+            return Results.File(path, "video/mp4", download == true ? FileName(video, small == true) : null, enableRangeProcessing: true);
         })
             .WithName("GetVideoFile")
             .ProducesFile("video/mp4")
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
         api.MapDelete("/videos/{id}", (string id, SqliteVideoStore store, VideoMaker maker) =>
         {
             if (store.Get(id) is not { } video)
@@ -68,9 +96,9 @@ public static class VideoEndpoints
         return api;
     }
 
-    /// <summary>"Neon Night-song2-youtube.mp4": the title, the song and where it is meant to go.</summary>
-    public static string FileName(VideoState video) =>
-        $"{LibraryEndpoints.FileName(video.Title, video.SongId.Split('/')[0])}-{video.SongId.Split('/')[^1]}-{(video.Format == VideoFormats.Portrait ? "vertical" : "youtube")}.mp4";
+    /// <summary>"Neon Night-song2-youtube.mp4": the title, the song and where it is meant to go; "-small" for a messenger.</summary>
+    public static string FileName(VideoState video, bool small = false) =>
+        $"{LibraryEndpoints.FileName(video.Title, video.SongId.Split('/')[0])}-{video.SongId.Split('/')[^1]}-{(video.Format == VideoFormats.Portrait ? "vertical" : "youtube")}{(small ? "-small" : "")}.mp4";
 
     private static async Task<IResult> AddAsync(
         string run,

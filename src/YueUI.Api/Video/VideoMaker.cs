@@ -27,6 +27,7 @@ public sealed class VideoMaker(
     private readonly Lock _gate = new();
     private string? _running;
     private CancellationTokenSource? _cancel;
+    private readonly SemaphoreSlim _shrinking = new(1, 1);
 
     /// <summary>A video is being rendered; a restart would start it over.</summary>
     public bool IsRendering
@@ -65,6 +66,30 @@ public sealed class VideoMaker(
         hub.LibraryChanged();
         // Finished ones too: an open dialog lays the stream's states over its list and would bring a done one back.
         hub.UpdateVideo(video with { Stage = "cancelled", UpdatedAt = time.GetUtcNow() });
+    }
+
+    /// <summary>
+    /// The small copy of a finished video (<see cref="IVideoRenderer.ShrinkAsync"/>), made on its first request, since
+    /// only the videos that are sent need one, and kept beside it. One at a time: a second request for the same video
+    /// waits and then finds it made.
+    /// </summary>
+    public async Task<string> SmallAsync(VideoState video, CancellationToken cancellationToken)
+    {
+        var source = store.VideoPath(video.Id);
+        var small = store.SmallPath(video.Id);
+        await _shrinking.WaitAsync(cancellationToken);
+        try
+        {
+            if (!File.Exists(small) || File.GetLastWriteTimeUtc(small) < File.GetLastWriteTimeUtc(source))
+            {
+                await renderer.ShrinkAsync(source, video.Format, small, cancellationToken);
+            }
+            return small;
+        }
+        finally
+        {
+            _shrinking.Release();
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

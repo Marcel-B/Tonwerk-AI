@@ -38,7 +38,13 @@ final class TonwerkSynthUnit: AUAudioUnit {
     static func loadInstrument(playing sound: SynthSound) async -> (AVAudioUnitMIDIInstrument, TonwerkSynthUnit)? {
         _ = registration
         lastMade = nil
-        guard let made = try? await AVAudioUnit.instantiate(with: component, options: .loadInProcess),
+        // iOS has no out-of-process option to rule out; a unit registered with `registerSubclass` is in-process there.
+        #if os(macOS)
+        let options: AudioComponentInstantiationOptions = .loadInProcess
+        #else
+        let options: AudioComponentInstantiationOptions = []
+        #endif
+        guard let made = try? await AVAudioUnit.instantiate(with: component, options: options),
             let node = made as? AVAudioUnitMIDIInstrument,
             let unit = node.auAudioUnit as? TonwerkSynthUnit ?? lastMade
         else { return nil }

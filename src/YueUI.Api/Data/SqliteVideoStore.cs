@@ -19,6 +19,9 @@ public sealed class SqliteVideoStore(SqliteDatabase database)
 
     public string VideoPath(string id) => Path.Combine(Folder(id), VideoFile);
 
+    /// <summary>The copy to send through a messenger, made on its first request and kept with the video.</summary>
+    public string SmallPath(string id) => Path.Combine(Folder(id), "small.mp4");
+
     /// <summary>A photo video's pictures cut to the song (<see cref="MontageBuilder"/>), made just before the video.</summary>
     public string MontagePath(string id) => Path.Combine(Folder(id), "montage.mp4");
 

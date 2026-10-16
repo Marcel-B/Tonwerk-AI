@@ -7,6 +7,18 @@ enum Page: Hashable {
     case library
     case review
     case queue
+    case logic
+    case instruments
+    case voices
+    case transcribe
+    case speech
+    case ace
+    case insights
+    case sketch
+    case harmony
+    case log
+    case storage
+    case templates
     case playlist(Int64)
 }
 
@@ -16,8 +28,26 @@ struct MainView: View {
     @State private var newName = ""
 
     var body: some View {
+        // On the Mac the player takes its own row under the window's content, so nothing ends behind it; on the
+        // iPhone and iPad the content scrolls under the bar's material, as Apple's own players do.
+        #if os(macOS)
+        VStack(spacing: 0) {
+            split
+            PlayerBar()
+        }
+        .modifier(Dialogs(naming: $naming, newName: $newName))
+        #else
+        split
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PlayerBar()
+            }
+            .modifier(Dialogs(naming: $naming, newName: $newName))
+        #endif
+    }
+
+    private var split: some View {
         @Bindable var model = model
-        NavigationSplitView {
+        return NavigationSplitView {
             List(selection: $model.page) {
                 Section {
                     Label("Erstellen", systemImage: "wand.and.stars").tag(Page.create)
@@ -26,8 +56,22 @@ struct MainView: View {
                         .badge(model.unrated.count)
                         .tag(Page.review)
                     Label("Warteschlange", systemImage: "hourglass")
-                        .badge(model.queue.count + model.inProgress.count)
+                        .badge(model.queueCount)
                         .tag(Page.queue)
+                }
+                Section("Werkzeuge") {
+                    Label("Logic", systemImage: "pianokeys").tag(Page.logic)
+                    Label("Instrumente", systemImage: "slider.vertical.3").tag(Page.instruments)
+                    Label("Stimmen", systemImage: "person.wave.2").tag(Page.voices)
+                    Label("Transkription", systemImage: "music.quarternote.3").tag(Page.transcribe)
+                    Label("Sprachlabor", systemImage: "bubble.left.and.text.bubble.right").tag(Page.speech)
+                    Label("ACE-Step", systemImage: "waveform.path").tag(Page.ace)
+                    Label("Auswertung", systemImage: "chart.bar").tag(Page.insights)
+                    Label("Ausarbeitung", systemImage: "pencil.and.scribble").tag(Page.sketch)
+                    Label("Begleitstimmen", systemImage: "person.3").tag(Page.harmony)
+                    Label("Protokoll", systemImage: "doc.text.magnifyingglass").tag(Page.log)
+                    Label("Speicher", systemImage: "internaldrive").tag(Page.storage)
+                    Label("Vorlagen", systemImage: "bookmark").tag(Page.templates)
                 }
                 Section("Playlists") {
                     ForEach(model.playlists, id: \.id) { playlist in
@@ -75,6 +119,30 @@ struct MainView: View {
                 SongList(title: "Zum Anhören", songs: model.unrated, empty: "Alle Songs sind bewertet.")
             case .queue:
                 QueueView()
+            case .logic:
+                LogicView()
+            case .instruments:
+                InstrumentsView()
+            case .voices:
+                VoicesView()
+            case .transcribe:
+                TranscriptionView()
+            case .speech:
+                SpeechView()
+            case .ace:
+                AceView()
+            case .insights:
+                InsightsView()
+            case .sketch:
+                SketchView()
+            case .harmony:
+                HarmonyView()
+            case .log:
+                LogView()
+            case .storage:
+                StorageView()
+            case .templates:
+                TemplatesView()
             case .playlist(let id):
                 if let playlist = model.playlists.first(where: { $0.id == id }) {
                     SongList(
@@ -85,16 +153,31 @@ struct MainView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            PlayerBar()
-        }
-        .exportSheet(for: $model.sharing)
-        .paintSheet(for: $model.painting)
-        .alert("Neue Playlist", isPresented: $naming) {
-            TextField("Name", text: $newName)
-            Button("Anlegen") { Task { await model.createPlaylist(named: newName) } }
-            Button("Abbrechen", role: .cancel) {}
-        }
+    }
+}
+
+/// The sheets and alerts the whole window shares.
+private struct Dialogs: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var naming: Bool
+    @Binding var newName: String
+
+    func body(content: Content) -> some View {
+        @Bindable var model = model
+        content
+            .exportSheet(for: $model.sharing)
+            .paintSheet(for: $model.painting)
+            .sheet(item: $model.singing) { song in
+                SingSheet(song: song)
+            }
+            .sheet(item: $model.filming) { song in
+                VideoSheet(song: song)
+            }
+            .alert("Neue Playlist", isPresented: $naming) {
+                TextField("Name", text: $newName)
+                Button("Anlegen") { Task { await model.createPlaylist(named: newName) } }
+                Button("Abbrechen", role: .cancel) {}
+            }
     }
 }
 

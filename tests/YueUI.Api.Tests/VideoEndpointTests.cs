@@ -54,6 +54,25 @@ public sealed class VideoEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task A_small_copy_for_a_messenger_is_made_on_the_first_request_and_kept()
+    {
+        _app.AddSong("20260101-120000-neon", "song2");
+        var client = _app.CreateClient();
+        await client.PostAsync("/api/songs/20260101-120000-neon/song2/videos", Form(VideoFormats.Landscape, VideoEffects.Bars, VideoMotions.None, showTitle: false));
+        var done = await WaitForVideo(client, "20260101-120000-neon/song2", v => v.Finished);
+
+        var small = await client.GetAsync($"/api/videos/{done.Id}/file?download=true&small=true");
+        var again = await client.GetAsync($"/api/videos/{done.Id}/file?small=true");
+
+        Assert.Equal(FakeVideoRenderer.SmallMp4, await small.Content.ReadAsByteArrayAsync());
+        Assert.Equal("Neon Night-song2-youtube-small.mp4", small.Content.Headers.ContentDisposition!.FileNameStar);
+        Assert.Equal(FakeVideoRenderer.SmallMp4, await again.Content.ReadAsByteArrayAsync());
+        Assert.Equal(1, _app.Videos.Shrunk);
+        // The video itself stays as it was rendered.
+        Assert.Equal(FakeVideoRenderer.Mp4, await client.GetByteArrayAsync($"/api/videos/{done.Id}/file"));
+    }
+
+    [Fact]
     public async Task A_plasma_ball_without_cover_comes_as_frames_of_the_whole_picture()
     {
         _app.AddSong("20260101-120000-neon", "song1");

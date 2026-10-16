@@ -229,6 +229,12 @@ struct SongList: View {
         }
         .disabled(!song.hasScore)
         Button {
+            model.openInLogic(song)
+        } label: {
+            Label("In Logic öffnen", systemImage: "pianokeys")
+        }
+        .disabled(!song.hasScore)
+        Button {
             model.sharing = song
         } label: {
             Label("Teilen …", systemImage: "square.and.arrow.up")
@@ -239,6 +245,24 @@ struct SongList: View {
         } label: {
             Label("Cover malen …", systemImage: "paintbrush.pointed")
         }
+        Button {
+            model.filming = song
+        } label: {
+            Label("Musikvideo …", systemImage: "film")
+        }
+        .disabled(!song.hasAudio)
+        Button {
+            model.singing = song
+        } label: {
+            Label("Mit Stimme singen …", systemImage: "person.wave.2")
+        }
+        .disabled(!song.hasAudio)
+        Button {
+            model.openStems(song)
+        } label: {
+            Label("Stems erzeugen …", systemImage: "square.3.layers.3d")
+        }
+        .disabled(!song.hasAudio)
         Menu {
             ForEach(model.playlists, id: \.id) { list in
                 Button {

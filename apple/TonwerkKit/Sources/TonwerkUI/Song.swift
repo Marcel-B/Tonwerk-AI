@@ -31,6 +31,8 @@ public struct Song: Identifiable, Hashable, Sendable {
     /// Heard tempo and key (`SongTraits`), once the analyzer had the song.
     public let tempo: Double?
     public let key: String?
+    /// What the song's folder takes on disk.
+    public let bytes: Int64
     /// The song sung again with other voices.
     public let versions: [Version]
     /// Set on the copy the player plays when it plays a version: the id stays the song's, as on the web page, so
@@ -60,7 +62,7 @@ public struct Song: Identifiable, Hashable, Sendable {
         createdAt: Date? = nil, seconds: Double? = nil, rating: Int? = nil, note: String? = nil,
         coverUpdatedAt: Date? = nil, hasAudio: Bool = true, hasScore: Bool = false, originalTitle: String? = nil,
         seed: Int64? = nil, quality: String? = nil, engine: String? = nil, tempo: Double? = nil, key: String? = nil,
-        versions: [Version] = [], version: Version? = nil
+        bytes: Int64 = 0, versions: [Version] = [], version: Version? = nil
     ) {
         id = "\(run)/\(name)"
         self.run = run
@@ -82,6 +84,7 @@ public struct Song: Identifiable, Hashable, Sendable {
         self.engine = engine
         self.tempo = tempo
         self.key = key
+        self.bytes = bytes
         self.versions = versions
         self.version = version
     }
@@ -94,7 +97,7 @@ public struct Song: Identifiable, Hashable, Sendable {
             run: run, name: name, title: title ?? self.title, number: number, style: style, lyrics: lyrics,
             createdAt: createdAt, seconds: seconds, rating: rating ?? self.rating, note: note ?? self.note,
             coverUpdatedAt: coverUpdatedAt, hasAudio: hasAudio, hasScore: hasScore, originalTitle: originalTitle,
-            seed: seed, quality: quality, engine: engine, tempo: tempo, key: key, versions: versions,
+            seed: seed, quality: quality, engine: engine, tempo: tempo, key: key, bytes: bytes, versions: versions,
             version: version ?? self.version)
     }
 
@@ -148,6 +151,7 @@ public struct Song: Identifiable, Hashable, Sendable {
                     engine: info.engine,
                     tempo: info.traits?.tempo,
                     key: info.traits?.key,
+                    bytes: info.bytes,
                     versions: info.versions.map {
                         Version(
                             id: $0.id, voice: $0.voiceLabel, semitones: Int($0.semiToneShift ?? 0),

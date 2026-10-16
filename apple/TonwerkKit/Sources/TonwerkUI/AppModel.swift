@@ -30,6 +30,69 @@ public final class AppModel {
     var page: Page? = .library
     /// The song the share dialog is open for, from a song's menu.
     var sharing: Song?
+    /// The Logic page's state, made when it is first opened.
+    var logic: LogicSession?
+    /// The synthesizers' named and per-track sounds, made on first use (``soundLibrary``).
+    @ObservationIgnored private var sounds: SoundLibrary?
+    /// The prompt templates, made on first use (``templateStore``).
+    @ObservationIgnored private var templateList: TemplateStore?
+    /// The instruments page's state, kept like the Logic page's.
+    var instrumentsPage: InstrumentsSession?
+    /// The voices page's state, kept like the Logic page's.
+    var voicesPage: VoicesSession?
+    /// The song the sing-with-a-voice dialog is open for, from a song's menu.
+    var singing: Song?
+    /// How the last version was asked for, offered again for the next.
+    var voiceSettings = VoiceSettings()
+    /// Versions, stem sets and swaps in the works or finished since, by id, from their events.
+    var liveVersions: [String: Components.Schemas.VersionState] = [:]
+    var liveStems: [String: Components.Schemas.StemSetState] = [:]
+    var liveSwaps: [String: Components.Schemas.SwapState] = [:]
+    /// The song the music video dialog is open for, from a song's menu.
+    var filming: Song?
+    /// The YuE2 worker's state and the large model besides it that holds the memory, for the queue's overview.
+    var worker: Components.Schemas.WorkerInfo?
+    var memoryHolder: Components.Schemas.LargeModel?
+    /// Music videos in the works or finished since, by id, from `video` events.
+    var liveVideos: [String: Components.Schemas.VideoState] = [:]
+    /// Transcriptions running, waiting or finished since, by id, from `transcription` events.
+    var liveTranscriptions: [String: Components.Schemas.TranscriptionState] = [:]
+    /// The transcription page's state, kept like the voices page's.
+    var transcriptionPage: TranscriptionSession?
+    /// Speech lab takes in the works or finished since, by id, from the snapshot and `speech` events.
+    var liveSpeech: [String: Components.Schemas.SpeechTake] = [:]
+    /// The speech lab's state, kept like the transcription page's.
+    var speechPage: SpeechSession?
+    /// ACE-Step's jobs in the works or finished since, by id, from the snapshot and `ace` events.
+    var liveAce: [String: Components.Schemas.AceJob] = [:]
+    /// The ACE-Step page's state, kept like the speech lab's.
+    var acePage: AceSession?
+    /// The ACE-Step page's form, here so "use everything" on an ACE-Step song fills it before the page opens.
+    var aceForm = AceForm()
+    /// The last report of what the rated songs were made with, for its page and the proven style blocks.
+    var insights: Components.Schemas.InsightReport?
+    /// The sketch page's state, kept like the ACE-Step page's.
+    var sketchPage: SketchSession?
+    /// The backing vocals page's state, so its melody and preview outlast a page change.
+    var harmonyPage: HarmonySession?
+    /// The log page's state, kept so its filter outlasts a page change.
+    var logPage: LogSession?
+    /// The storage page's state, kept like the log's.
+    var storagePage: StorageSession?
+
+    var soundLibrary: SoundLibrary {
+        if let sounds { return sounds }
+        let library = SoundLibrary(model: self)
+        sounds = library
+        return library
+    }
+
+    var templateStore: TemplateStore {
+        if let templateList { return templateList }
+        let store = TemplateStore(model: self)
+        templateList = store
+        return store
+    }
     /// The song the painting dialog is open for, from a song's menu.
     var painting: Song?
     /// Painted covers in the works or finished since, by id, from `image` events.
@@ -48,6 +111,7 @@ public final class AppModel {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         form = CreateForm.load(from: defaults)
+        aceForm = AceForm.load(from: defaults)
         if let saved = defaults.string(forKey: Self.serverKey), let url = URL(string: saved) {
             use(url)
         }
@@ -72,6 +136,27 @@ public final class AppModel {
         playlists = []
         queue = []
         working = [:]
+        liveVersions = [:]
+        liveStems = [:]
+        liveSwaps = [:]
+        liveVideos = [:]
+        liveTranscriptions = [:]
+        liveSpeech = [:]
+        speechPage = nil
+        liveAce = [:]
+        acePage = nil
+        insights = nil
+        sketchPage?.stop()
+        sketchPage = nil
+        harmonyPage?.stop()
+        harmonyPage = nil
+        transcriptionPage = nil
+        logPage = nil
+        storagePage = nil
+        templateList = nil
+        worker = nil
+        memoryHolder = nil
+        voicesPage = nil
         connection = .none
         defaults.removeObject(forKey: Self.serverKey)
     }
@@ -114,6 +199,8 @@ public final class AppModel {
         switch event {
         case .snapshot(let snapshot):
             queue = snapshot.queue ?? []
+            worker = snapshot.worker
+            memoryHolder = snapshot.memory?.holder
             if let draft = snapshot.lyrics {
                 drafts[draft.id] = draft
             }
@@ -121,8 +208,20 @@ public final class AppModel {
             for image in snapshot.images ?? [] {
                 images[image.id] = image
             }
+            liveVersions = Dictionary((snapshot.versions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveStems = Dictionary((snapshot.stems ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveSwaps = Dictionary((snapshot.swaps ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveVideos = Dictionary((snapshot.videos ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveTranscriptions = Dictionary(
+                (snapshot.transcriptions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveSpeech = Dictionary((snapshot.speech ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveAce = Dictionary((snapshot.ace ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
+        case .worker(let info):
+            worker = info
+        case .memory(let info):
+            memoryHolder = info.holder
         case .song(let state):
             working[state.id] = state
             if state.finished == true {
@@ -132,6 +231,34 @@ public final class AppModel {
             drafts[draft.id] = draft
         case .image(let image):
             images[image.id] = image
+        case .version(let version):
+            let before = liveVersions[version.id]?.stage
+            liveVersions[version.id] = version
+            // The library lists a song's versions with their stage; a new or finished one changes that.
+            if before == nil || (version.finished == true && before != version.stage) {
+                Task { await reloadLibrary() }
+            }
+        case .stems(let set):
+            liveStems[set.id] = set
+        case .swap(let swap):
+            liveSwaps[swap.id] = swap
+        case .video(let video):
+            liveVideos[video.id] = video
+        case .transcription(let state):
+            let before = liveTranscriptions[state.id]?.stage
+            liveTranscriptions[state.id] = state
+            if state.stage == "done" && before != "done" {
+                transcriptionPage?.finished()
+            }
+        case .speech(let take):
+            liveSpeech[take.id] = take
+        case .ace(let job):
+            let before = liveAce[job.id]?.stage
+            liveAce[job.id] = job
+            // The finished songs are a new run in the library.
+            if job.stage == "done" && before != "done" {
+                Task { await reloadLibrary() }
+            }
         case .library:
             Task { await reloadLibrary() }
         default:
@@ -175,6 +302,10 @@ public final class AppModel {
 
     func saveForm() {
         form.save(to: defaults)
+    }
+
+    func saveAceForm() {
+        aceForm.save(to: defaults)
     }
 
     public func song(_ id: String) -> Song? {

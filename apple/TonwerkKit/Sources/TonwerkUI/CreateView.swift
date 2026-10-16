@@ -14,6 +14,10 @@ struct CreateView: View {
         @Bindable var model = model
         Form {
             Section {
+                TemplatePicker()
+            }
+
+            Section {
                 TextField("Titel (optional)", text: $model.form.title)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Stil")
@@ -281,6 +285,10 @@ extension AppModel {
 
     /// A song's request laid over the form, its own score along switched off, then the form shown.
     func useInForm(_ song: Song) async {
+        if song.engine == "ace" {
+            await useAceSong(song)
+            return
+        }
         guard let tonwerk,
               let request = try? await tonwerk.api.getSongRequest(path: .init(run: song.run, song: song.name)).ok.body.json
         else { return }

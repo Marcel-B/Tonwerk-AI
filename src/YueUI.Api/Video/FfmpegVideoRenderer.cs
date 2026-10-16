@@ -291,6 +291,43 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger, ILo
         return string.Join(";", chains);
     }
 
+    /// <summary>
+    /// 720p at CRF 25, capped at 2.5 Mbit/s, so a four-minute song stays well under 100 MB even with a photo on every
+    /// beat, which is what a messenger takes without cutting it down itself; AAC at 128 kbit/s.
+    /// </summary>
+    public async Task ShrinkAsync(string source, string format, string output, CancellationToken cancellationToken)
+    {
+        var ffmpeg = AacEncoder.FindFfmpeg() ?? throw new VideoException("ffmpeg is not installed.");
+        var temp = output + ".part.mp4";
+        try
+        {
+            var result = await ToolProcess.RunAsync(ffmpeg, ShrinkArguments(source, format, temp), Timeout, cancellationToken);
+            if (result.ExitCode != 0 || !File.Exists(temp))
+            {
+                logger.LogWarning("Shrinking {Source} failed: {Reason}", source, string.Join(" | ", result.Tail));
+                throw new VideoException(ToolProcess.Reason(result, $"ffmpeg exited with {result.ExitCode}."));
+            }
+            File.Move(temp, output, overwrite: true);
+        }
+        catch (VoiceServiceException exception)
+        {
+            throw new VideoException(exception.Message);
+        }
+        finally
+        {
+            File.Delete(temp);
+        }
+    }
+
+    public static IReadOnlyList<string> ShrinkArguments(string source, string format, string output) =>
+    [
+        "-nostdin", "-loglevel", "error", "-y", "-i", source,
+        "-vf", format == VideoFormats.Portrait ? "scale=720:1280:flags=lanczos" : "scale=1280:720:flags=lanczos",
+        "-c:v", "libx264", "-preset", "faster", "-crf", "25", "-maxrate", "2500k", "-bufsize", "5000k",
+        "-profile:v", "high", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", output,
+    ];
+
     /// <summary>The FLAC's length from ffprobe, which lies next to ffmpeg; null when it cannot tell.</summary>
     private async Task<double?> ProbeAsync(string ffmpeg, string flac, CancellationToken cancellationToken)
     {

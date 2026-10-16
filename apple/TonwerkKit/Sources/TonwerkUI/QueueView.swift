@@ -6,38 +6,96 @@ import TonwerkKit
 struct QueueView: View {
     @Environment(AppModel.self) private var model
 
+    private var empty: Bool {
+        model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
+            && model.runningTranscriptions.isEmpty && model.speechJobs.isEmpty
+            && model.aceJobs.isEmpty
+    }
+
     var body: some View {
-        Group {
-            if model.inProgress.isEmpty && model.queue.isEmpty {
-                ContentUnavailableView(
-                    "Nichts in Arbeit", systemImage: "hourglass",
-                    description: Text("Songs, Songtexte und Transkriptionen erscheinen hier, sobald sie bestellt sind."))
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if !model.inProgress.isEmpty {
-                            heading("In Arbeit")
-                            ForEach(model.inProgress, id: \.id) { state in
-                                WorkingCard(state: state)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
-                            }
-                        }
-                        if !model.queue.isEmpty {
-                            heading("Wartet")
-                                .padding(.top, model.inProgress.isEmpty ? 0 : 8)
-                            ForEach(Array(model.queue.enumerated()), id: \.element.id) { index, job in
-                                WaitingCard(job: job, first: index == 0, last: index == model.queue.count - 1)
-                                    .transition(.opacity)
-                            }
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                heading("Speicher")
+                ModelOverview()
+                if empty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "hourglass")
+                            .font(.system(size: 34, weight: .light))
+                            .foregroundStyle(.tertiary)
+                        Text("Nichts in Arbeit")
+                            .font(.headline)
+                        Text("Songs, Songtexte, Stimmen und Videos erscheinen hier, sobald sie bestellt sind.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
                     }
-                    .padding()
-                    .frame(maxWidth: 760)
                     .frame(maxWidth: .infinity)
-                    .animation(.easeInOut(duration: 0.25), value: model.inProgress.map(\.id))
-                    .animation(.easeInOut(duration: 0.25), value: model.queue.map(\.id))
+                    .padding(.vertical, 40)
+                }
+                if !model.inProgress.isEmpty {
+                    heading("In Arbeit")
+                        .padding(.top, 8)
+                    ForEach(model.inProgress, id: \.id) { state in
+                        WorkingCard(state: state)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                if !model.voiceJobs.isEmpty {
+                    heading("Stimmen und Stems")
+                        .padding(.top, 8)
+                    ForEach(model.voiceJobs) { job in
+                        VoiceJobCard(job: job)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.videoJobs.isEmpty {
+                    heading("Videos")
+                        .padding(.top, 8)
+                    ForEach(model.videoJobs, id: \.id) { video in
+                        VideoJobCard(video: video)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.runningTranscriptions.isEmpty {
+                    heading("Transkription")
+                        .padding(.top, 8)
+                    ForEach(model.runningTranscriptions, id: \.id) { state in
+                        TranscriptionJobCard(state: state)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.speechJobs.isEmpty {
+                    heading("Sprachlabor")
+                        .padding(.top, 8)
+                    ForEach(model.speechJobs, id: \.id) { take in
+                        SpeechJobCard(take: take)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.aceJobs.isEmpty {
+                    heading("ACE-Step")
+                        .padding(.top, 8)
+                    ForEach(model.aceJobs, id: \.id) { job in
+                        AceJobCard(job: job)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.queue.isEmpty {
+                    heading("Wartet")
+                        .padding(.top, 8)
+                    ForEach(Array(model.queue.enumerated()), id: \.element.id) { index, job in
+                        WaitingCard(job: job, first: index == 0, last: index == model.queue.count - 1)
+                            .transition(.opacity)
+                    }
                 }
             }
+            .padding()
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+            .animation(.easeInOut(duration: 0.25), value: model.inProgress.map(\.id))
+            .animation(.easeInOut(duration: 0.25), value: model.queue.map(\.id))
+            .animation(.easeInOut(duration: 0.25), value: model.voiceJobs.map(\.id))
+            .animation(.easeInOut(duration: 0.25), value: model.videoJobs.map(\.id))
         }
         .navigationTitle("Warteschlange")
     }
@@ -182,6 +240,197 @@ private struct StageTimeline: View {
                 .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 2)
                 .frame(width: 16, height: 16)
         }
+    }
+}
+
+/// A version, stem set or swap: they wait in a queue of their own on the server, one at a time.
+private struct VoiceJobCard: View {
+    @Environment(AppModel.self) private var model
+    let job: VoiceJob
+
+    var body: some View {
+        let names = model.title(of: job)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: job.symbol)
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            JobRow(title: names.title, detail: names.detail, stage: job.stage, fraction: job.fraction, message: nil) {
+                Button(role: .destructive) {
+                    Task { await model.cancel(job) }
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .help("Abbrechen")
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// A music video ffmpeg renders on the Mac; it works beside the models, one video at a time.
+private struct VideoJobCard: View {
+    @Environment(AppModel.self) private var model
+    let video: Components.Schemas.VideoState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "film")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.song(video.songId)?.displayTitle ?? video.title).lineLimit(1)
+                        Text(AppModel.describe(video)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(AppModel.videoStage(video))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.deleteVideo(video) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                if video.stage == "rendering" {
+                    ProgressView(value: min(max(video.fraction ?? 0, 0), 1))
+                }
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// The transcription SheetSage2 is on, with its progress; the waiting ones are in the queue below.
+private struct TranscriptionJobCard: View {
+    @Environment(AppModel.self) private var model
+    let state: Components.Schemas.TranscriptionState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "music.quarternote.3")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(state.fileName).lineLimit(1)
+                        Text(TranscriptionSession.Melody.name(of: state.task))
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(AppModel.transcriptionStage(state.stage))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.cancelTranscription(state.id) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                TranscriptionProgress(state: state)
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// A take the speech lab speaks or cleans, or one waiting in its line; the lab keeps a line of its own.
+private struct SpeechJobCard: View {
+    @Environment(AppModel.self) private var model
+    let take: Components.Schemas.SpeechTake
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: take.source == nil ? "bubble.left.and.text.bubble.right" : "waveform.badge.minus")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(take.source ?? take.modelLabel).lineLimit(1)
+                        Text(take.source == nil ? take.text : take.modelLabel)
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(SpeechSession.stageName(take))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.deleteSpeechTake(take.id) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                if take.stage == "cleaning", let progress = take.progress {
+                    ProgressView(value: min(max(progress, 0), 1))
+                }
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// An ACE-Step job in the works, with its stage and a cancel.
+private struct AceJobCard: View {
+    @Environment(AppModel.self) private var model
+    let job: Components.Schemas.AceJob
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "waveform.path")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(job.title).lineLimit(1)
+                        Text(job.request.caption ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(AceSession.stageName(job))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.deleteAceJob(job.id) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                if let fraction = job.fraction, (job.stage ?? "queued") != "queued" {
+                    ProgressView(value: min(max(fraction, 0), 1))
+                }
+            }
+        }
+        .card(padding: 12)
     }
 }
 

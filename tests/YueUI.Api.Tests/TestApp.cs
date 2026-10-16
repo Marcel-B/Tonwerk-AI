@@ -84,6 +84,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeCloudLyrics CloudLyrics { get; } = new();
 
+    public FakeTranslator Translator { get; } = new();
+
     /// <summary>The Anthropic key the sketches see; null leaves them unconfigured.</summary>
     public string? SketchKey { get; set; } = "sketch-key";
 
@@ -210,6 +212,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
             services.AddSingleton<Video.IMontageBuilder>(Montage);
             services.Configure<Video.MontageOptions>(options => options.MediaRoot = MediaRoot);
             services.AddSingleton<Images.IImageEngine>(Images);
+            services.AddSingleton<Images.IPromptTranslator>(Translator);
             services.AddSingleton<AudioMidi.IAudioMidiEngine>(AudioMidi);
             services.AddSingleton<Ace.IAceEngine>(Ace);
             services.AddSingleton<Sketches.ISketchModel>(Sketches);
@@ -1164,6 +1167,26 @@ public sealed class FakeImages : Images.IImageEngine
         var gate = new TaskCompletionSource();
         gate.SetResult();
         return gate;
+    }
+}
+
+/// <summary>Claude translating a picture's description: off (no key) unless a test switches it on.</summary>
+public sealed class FakeTranslator : Images.IPromptTranslator
+{
+    public bool Configured { get; set; }
+
+    /// <summary>The answer; null stands for English input, a failure or no key alike.</summary>
+    public string? Answer { get; set; }
+
+    public List<string> Calls { get; } = [];
+
+    public Task<string?> TranslateAsync(string prompt, CancellationToken cancellationToken)
+    {
+        lock (Calls)
+        {
+            Calls.Add(prompt);
+        }
+        return Task.FromResult(Answer);
     }
 }
 

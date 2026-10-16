@@ -97,6 +97,12 @@ public sealed record ImageState
 
     public required string Prompt { get; init; }
 
+    /// <summary>
+    /// The English the model was given, where Claude translated <see cref="Prompt"/>; null while it waits for that, when
+    /// the prompt went as written, or for pictures from before.
+    /// </summary>
+    public string? PaintedPrompt { get; init; }
+
     /// <summary>The same prompt, model and seed paint the same picture again.</summary>
     public long Seed { get; init; }
 
@@ -130,7 +136,8 @@ public sealed record ImageRequest(string? Prompt, string? Model, long? Seed)
     public const int MaxPromptLength = 2000;
 }
 
-public sealed record ImageInfo(bool Installed, string Python, IReadOnlyList<ImageModelInfo> Models);
+/// <param name="Translates">Whether a description is translated into English before painting (a Claude key is there).</param>
+public sealed record ImageInfo(bool Installed, string Python, IReadOnlyList<ImageModelInfo> Models, bool Translates);
 
 /// <param name="TokenFound">For a gated model: whether a Hugging Face token is there to download it with.</param>
 public sealed record ImageModelInfo(

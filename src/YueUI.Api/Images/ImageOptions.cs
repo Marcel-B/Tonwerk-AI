@@ -34,6 +34,18 @@ public sealed class ImageOptions
     /// <summary>How often a waiting picture looks whether YuE2, the lyrics model, a voice or the speech lab left the memory.</summary>
     public TimeSpan WaitInterval { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// Whether a description goes through Claude into English first (<see cref="ClaudePromptTranslator"/>); it needs
+    /// the sketches' Anthropic key and is skipped without one.
+    /// </summary>
+    public bool Translate { get; set; } = true;
+
+    /// <summary>The Claude model that translates; a small one, since the task is short and plain.</summary>
+    public string TranslateModel { get; set; } = "claude-haiku-5-5";
+
+    /// <summary>A translation that takes longer is given up and the description painted as written.</summary>
+    public TimeSpan TranslateTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
     /// <summary>The models offered; replaces <see cref="ImageModel.Defaults"/> when set.</summary>
     public List<ImageModel>? Models { get; set; }
 

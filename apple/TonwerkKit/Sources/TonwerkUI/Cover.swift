@@ -362,7 +362,11 @@ struct PaintCoverView: View {
 
     private var describe: some View {
         Section {
-            TextField("Bildbeschreibung", text: $prompt, axis: .vertical)
+            // Without the hidden label, the Mac's grouped form put "Bildbeschreibung" beside the field once more and
+            // pushed the text to the right.
+            TextField("Bildbeschreibung", text: $prompt, prompt: Text("Was auf dem Bild zu sehen sein soll"), axis: .vertical)
+                .labelsHidden()
+                .multilineTextAlignment(.leading)
                 .lineLimit(4...10)
                 .onChange(of: prompt) { suggested = prompt == suggestion }
             Toggle("Titel ins Bild schreiben", isOn: $withTitle)
@@ -380,7 +384,9 @@ struct PaintCoverView: View {
                 }
             }
         } footer: {
-            Text("Am besten auf Englisch. Nur beschreiben, was zu sehen sein soll: „no text“ oder „no logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennt FLUX Klein nicht.")
+            Text(info?.translates == true
+                ? "Deutsch geht auch: Claude übersetzt die Beschreibung vor dem Malen ins Englische, das FLUX Klein am besten versteht. Nur beschreiben, was zu sehen sein soll: „kein Text“ oder „kein Logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennt FLUX Klein nicht."
+                : "Am besten auf Englisch. Nur beschreiben, was zu sehen sein soll: „no text“ oder „no logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennt FLUX Klein nicht.")
         }
     }
 
@@ -451,7 +457,15 @@ struct PaintCoverView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .help(image.prompt)
+                .help(image.paintedPrompt ?? image.prompt)
+            if let english = image.paintedPrompt {
+                // What Klein was given, so a picture that missed can be traced to the translation.
+                Text("Gemalt nach: \(english)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .textSelection(.enabled)
+            }
             HStack(spacing: 6) {
                 if image.stage == "done" {
                     Button {

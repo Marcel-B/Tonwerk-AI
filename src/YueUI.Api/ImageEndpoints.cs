@@ -15,12 +15,13 @@ public static class ImageEndpoints
 {
     public static RouteGroupBuilder MapImageEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/images", (IOptions<ImageOptions> options, IImageEngine engine) =>
+        api.MapGet("/images", (IOptions<ImageOptions> options, IImageEngine engine, IPromptTranslator translator) =>
             new ImageInfo(
                 engine.Installed,
                 options.Value.ResolvedPython,
                 [.. options.Value.ResolvedModels.Select(m => new ImageModelInfo(
-                    m.Id, m.Label, m.DownloadGb, m.MemoryGb, m.License, m.Commercial, m.Gated, engine.Downloaded(m), !m.Gated || engine.TokenFound))]))
+                    m.Id, m.Label, m.DownloadGb, m.MemoryGb, m.License, m.Commercial, m.Gated, engine.Downloaded(m), !m.Gated || engine.TokenFound))],
+                translator.Configured))
             .WithName("GetImageInfo")
             .Produces<ImageInfo>(StatusCodes.Status200OK);
 

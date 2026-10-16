@@ -786,6 +786,8 @@ export interface ImageState {
   modelId: string
   modelLabel: string
   prompt: string
+  /** The English Klein was given, where Claude translated the prompt. */
+  paintedPrompt: string | null
   seed: number
   stage: 'queued' | 'loading' | 'painting' | 'done' | 'failed' | 'cancelled'
   message: string | null
@@ -835,6 +837,8 @@ export interface ImageInfo {
   installed: boolean
   python: string
   models: ImageModelInfo[]
+  /** Whether Claude translates a description into English before painting. */
+  translates: boolean
 }
 
 /** ACE-Step's tasks: a new song, a new style over a library song, or a stretch of one made again. */

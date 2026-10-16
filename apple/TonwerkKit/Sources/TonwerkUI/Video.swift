@@ -925,7 +925,7 @@ extension AppModel {
     }
 
     /// What the video was made with, as the web page's list describes it.
-    static func describe(_ video: Components.Schemas.VideoState) -> String {
+    nonisolated static func describe(_ video: Components.Schemas.VideoState) -> String {
         var parts: [String] = []
         if let media = video.media { parts.append(String(localized: "Fotos aus „\(media)“")) }
         parts.append(VideoFormat(rawValue: video.format)?.name ?? video.format)
@@ -935,7 +935,7 @@ extension AppModel {
         return parts.joined(separator: " · ")
     }
 
-    static func videoStage(_ video: Components.Schemas.VideoState) -> String {
+    nonisolated static func videoStage(_ video: Components.Schemas.VideoState) -> String {
         switch video.stage ?? "queued" {
         case "rendering": "\(Int(((video.fraction ?? 0) * 100).rounded())) %"
         case "done": String(localized: "Fertig")

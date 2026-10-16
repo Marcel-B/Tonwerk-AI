@@ -16,24 +16,11 @@ final class TonwerkSynthUnit: AUAudioUnit {
             TonwerkSynthUnit.self, as: component, name: "Bvelop: Tonwerk", version: 1)
     }()
 
-    /// The unit made last on this thread; the synchronous `AVAudioUnitMIDIInstrument` initialiser may hand back a
-    /// bridge as `auAudioUnit` instead of this class.
+    /// The unit made last; the node may hand back a bridge as `auAudioUnit` instead of this class.
     nonisolated(unsafe) private static var lastMade: TonwerkSynthUnit?
 
-    /// A new instrument node with the synthesizer, playing `sound`.
-    @MainActor
-    static func instrument(playing sound: SynthSound) -> (AVAudioUnitMIDIInstrument, TonwerkSynthUnit)? {
-        _ = registration
-        lastMade = nil
-        let node = AVAudioUnitMIDIInstrument(audioComponentDescription: component)
-        guard let unit = node.auAudioUnit as? TonwerkSynthUnit ?? lastMade else { return nil }
-        lastMade = nil
-        unit.play(sound)
-        return (node, unit)
-    }
-
-    /// The same, made asynchronously as Apple asks for an `AUAudioUnit` subclass; for the instruments page's keyboard,
-    /// which must not make it inside a gesture.
+    /// A new instrument node with the synthesizer, playing `sound`; made asynchronously, as Apple asks for an
+    /// `AUAudioUnit` subclass, and in this process, the only one the unit is registered in.
     @MainActor
     static func loadInstrument(playing sound: SynthSound) async -> (AVAudioUnitMIDIInstrument, TonwerkSynthUnit)? {
         _ = registration

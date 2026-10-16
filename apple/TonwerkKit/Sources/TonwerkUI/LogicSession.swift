@@ -126,7 +126,7 @@ final class LogicSession {
             conversion = result
             convertedForm = asked
             if let score = result.score {
-                player.load(score, tracks: tracks, mixer: mixer)
+                await player.load(score, tracks: tracks, mixer: mixer)
             } else if let error = result.diagnostics.first(where: { $0.severity == "Error" }) {
                 problem = error.message
             }

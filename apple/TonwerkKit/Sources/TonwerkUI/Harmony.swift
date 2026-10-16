@@ -164,7 +164,7 @@ final class HarmonySession {
             conversion = result
             stale = settings != asked || self.source != source
             if let score = result.score {
-                player.load(score, tracks: tracks, mixer: LogicMixer())
+                await player.load(score, tracks: tracks, mixer: LogicMixer())
             } else if let error = result.diagnostics.first(where: { $0.severity == "Error" }) {
                 problem = error.message
             }

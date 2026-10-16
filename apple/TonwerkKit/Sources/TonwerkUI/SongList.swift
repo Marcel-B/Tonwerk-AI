@@ -12,6 +12,9 @@ struct SongList: View {
     @State private var query = ""
     @State private var scope = Song.SearchScope.titleStyle
     @State private var selected: Song.ID?
+    /// The song whose deletion waits for its confirmation.
+    @State private var deleting: Song?
+    @State private var deleteProblem: String?
     @AppStorage("librarySort") private var sort = LibrarySort.newest
     @AppStorage("ratingFilter") private var storedFilter = 0
     #if os(macOS)
@@ -37,6 +40,31 @@ struct SongList: View {
 
     var body: some View {
         withDetails(content)
+            .confirmationDialog(
+                deleting.map { "„\($0.displayTitle)“ löschen?" } ?? "",
+                isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                titleVisibility: .visible, presenting: deleting
+            ) { song in
+                Button("Löschen", role: .destructive) {
+                    Task {
+                        do {
+                            try await model.deleteSong(song)
+                        } catch {
+                            deleteProblem = error.localizedDescription
+                        }
+                    }
+                }
+            } message: { _ in
+                Text("Der Song wird mit seinen Versionen, Stems, Videos und seinem Cover vom Server gelöscht. Das lässt sich nicht rückgängig machen.")
+            }
+            .alert(
+                "Nicht gelöscht",
+                isPresented: Binding(get: { deleteProblem != nil }, set: { if !$0 { deleteProblem = nil } })
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteProblem ?? "")
+            }
     }
 
     @ViewBuilder
@@ -293,6 +321,12 @@ struct SongList: View {
                 Label("Aus der Playlist nehmen", systemImage: "minus.circle")
             }
         }
+        Divider()
+        Button(role: .destructive) {
+            deleting = song
+        } label: {
+            Label("Song löschen …", systemImage: "trash")
+        }
     }
 
     private func remove(_ offsets: IndexSet) {
@@ -389,6 +423,33 @@ struct RatingView: View {
             }
         }
         .accessibilityElement(children: .contain)
+    }
+}
+
+extension AppModel {
+    /// Deletes the song on the server, with its versions, stems, videos and cover, as the web library does; the
+    /// server refuses (409) while its worker is on the song.
+    func deleteSong(_ song: Song) async throws {
+        _ = try await call("DELETE", address("api/songs", song.run, song.name), accept: [200, 202, 204, 404])
+        await reloadLibrary()
+    }
+}
+
+/// The stars only to read, where a song is picked rather than heard (the Logic page's song list).
+struct RatingStars: View {
+    let rating: Int?
+    var font: Font = .caption2
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(1...5, id: \.self) { stars in
+                Image(systemName: stars <= (rating ?? 0) ? "star.fill" : "star")
+                    .foregroundStyle(stars <= (rating ?? 0) ? AnyShapeStyle(.yellow) : AnyShapeStyle(.tertiary))
+            }
+        }
+        .font(font)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rating.map { "\($0) Sterne" } ?? "Nicht bewertet")
     }
 }
 

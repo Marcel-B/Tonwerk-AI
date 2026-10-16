@@ -24,12 +24,16 @@ enum Page: Hashable {
 
 struct MainView: View {
     @Environment(AppModel.self) private var model
+    @Environment(Player.self) private var player
     @State private var naming = false
     @State private var newName = ""
+    @State private var playerHeight: CGFloat = 0
 
     var body: some View {
         // On the Mac the player takes its own row under the window's content, so nothing ends behind it; on the
-        // iPhone and iPad the content scrolls under the bar's material, as Apple's own players do.
+        // iPhone and iPad the content scrolls under the bar's material, as Apple's own players do. A safe area inset
+        // on the split view does not reach its columns on the iPad (each is a controller of its own), so the bar
+        // lies over the split and every column makes room for it itself (`playerSpace()`).
         #if os(macOS)
         VStack(spacing: 0) {
             split
@@ -38,8 +42,10 @@ struct MainView: View {
         .modifier(Dialogs(naming: $naming, newName: $newName))
         #else
         split
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .environment(\.playerInset, player.current == nil ? 0 : playerHeight)
+            .overlay(alignment: .bottom) {
                 PlayerBar()
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { playerHeight = $0 }
             }
             .modifier(Dialogs(naming: $naming, newName: $newName))
         #endif
@@ -90,19 +96,14 @@ struct MainView: View {
             }
             .navigationTitle("Tonwerk")
             #if os(macOS)
+            .modifier(SidebarFooter())
             .navigationSplitViewColumnWidth(min: 190, ideal: 220)
-            .safeAreaInset(edge: .bottom) {
-                ConnectionLabel()
-                    .font(.caption)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-            }
             #else
+            .playerSpace()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        SettingsView().navigationTitle("Einstellungen")
+                        SettingsView().navigationTitle("Einstellungen").playerSpace()
                     } label: {
                         Image(systemName: "gearshape")
                     }
@@ -110,6 +111,12 @@ struct MainView: View {
             }
             #endif
         } detail: {
+            detail.playerSpace()
+        }
+    }
+
+    @ViewBuilder private var detail: some View {
+        Group {
             switch model.page ?? .library {
             case .create:
                 CreateView()
@@ -153,6 +160,54 @@ struct MainView: View {
                 }
             }
         }
+    }
+}
+
+#if os(macOS)
+/// The connection's state under the Mac's sidebar, in a row of its own: as a safe area inset the sidebar's list
+/// scrolled its last row ("Neue Playlist") under the label.
+private struct SidebarFooter: ViewModifier {
+    func body(content: Content) -> some View {
+        VStack(spacing: 0) {
+            content
+            Divider()
+            ConnectionLabel()
+                .font(.caption)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+        }
+    }
+}
+#endif
+
+private struct PlayerInsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// How much of the window's bottom the player bar covers on the iPhone and iPad; nothing on the Mac.
+    var playerInset: CGFloat {
+        get { self[PlayerInsetKey.self] }
+        set { self[PlayerInsetKey.self] = newValue }
+    }
+}
+
+private struct PlayerSpace: ViewModifier {
+    @Environment(\.playerInset) private var inset
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: inset)
+        }
+    }
+}
+
+extension View {
+    /// Room at the bottom for the player bar lying over the content, so the last rows can scroll out from under it.
+    func playerSpace() -> some View {
+        modifier(PlayerSpace())
     }
 }
 

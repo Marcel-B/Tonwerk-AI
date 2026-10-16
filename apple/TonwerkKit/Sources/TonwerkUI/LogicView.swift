@@ -77,6 +77,8 @@ private struct LogicStart: View {
                             Text(song.displayTitle).lineLimit(1)
                             Text(song.style).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
+                        Spacer(minLength: 8)
+                        RatingStars(rating: model.song(song.id)?.rating ?? song.rating)
                     }
                     .contentShape(Rectangle())
                 }

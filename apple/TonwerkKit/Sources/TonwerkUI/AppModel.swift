@@ -34,6 +34,8 @@ public final class AppModel {
     var logic: LogicSession?
     /// The synthesizers' named and per-track sounds, made on first use (``soundLibrary``).
     @ObservationIgnored private var sounds: SoundLibrary?
+    /// The prompt templates, made on first use (``templateStore``).
+    @ObservationIgnored private var templateList: TemplateStore?
     /// The instruments page's state, kept like the Logic page's.
     var instrumentsPage: InstrumentsSession?
     /// The voices page's state, kept like the Logic page's.
@@ -59,12 +61,21 @@ public final class AppModel {
     var transcriptionPage: TranscriptionSession?
     /// The log page's state, kept so its filter outlasts a page change.
     var logPage: LogSession?
+    /// The storage page's state, kept like the log's.
+    var storagePage: StorageSession?
 
     var soundLibrary: SoundLibrary {
         if let sounds { return sounds }
         let library = SoundLibrary(model: self)
         sounds = library
         return library
+    }
+
+    var templateStore: TemplateStore {
+        if let templateList { return templateList }
+        let store = TemplateStore(model: self)
+        templateList = store
+        return store
     }
     /// The song the painting dialog is open for, from a song's menu.
     var painting: Song?
@@ -115,6 +126,8 @@ public final class AppModel {
         liveTranscriptions = [:]
         transcriptionPage = nil
         logPage = nil
+        storagePage = nil
+        templateList = nil
         worker = nil
         memoryHolder = nil
         voicesPage = nil

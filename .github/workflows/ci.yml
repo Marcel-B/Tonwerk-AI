@@ -115,7 +115,19 @@ jobs:
         working-directory: apple
         run: >-
           xcodebuild build -project Tonwerk.xcodeproj -scheme Tonwerk -destination 'generic/platform=macOS'
-          -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO -quiet
+          -derivedDataPath build -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO -quiet
+
+      # The Dock and Finder show the icon only if the asset catalog compiled it into the bundle and Info.plist names it.
+      - name: Check the Mac app's icon
+        working-directory: apple
+        run: |
+          app=$(find build/Build/Products -maxdepth 2 -name Tonwerk.app -type d | head -1)
+          echo "$app"
+          plutil -p "$app/Contents/Info.plist" | grep -E 'CFBundleIcon(Name|File)'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$app/Contents/Info.plist")" = AppIcon
+          ls -l "$app/Contents/Resources/"
+          test -s "$app/Contents/Resources/AppIcon.icns"
+          xcrun assetutil --info "$app/Contents/Resources/Assets.car" | grep -c '"Name" : "AppIcon"'
 
       - name: Build the app for iPhone
         working-directory: apple

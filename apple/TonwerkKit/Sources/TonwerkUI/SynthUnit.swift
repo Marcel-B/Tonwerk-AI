@@ -159,7 +159,7 @@ private final class RenderState {
                 let words = (UnsafeRawPointer(packet) + wordsOffset).assumingMemoryBound(to: UInt32.self)
                 handle(words: words, count: Int(packet.pointee.wordCount))
                 if number + 1 < list.pointee.numPackets {
-                    packet = MIDIEventPacketNext(packet)
+                    packet = UnsafePointer(MIDIEventPacketNext(packet))
                 }
             }
         default:

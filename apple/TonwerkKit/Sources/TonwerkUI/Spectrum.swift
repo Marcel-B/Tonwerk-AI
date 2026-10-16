@@ -180,13 +180,15 @@ enum SpectrumTap {
                     context.analyzer.feed(left: first, right: second.map { UnsafePointer($0) }, frames: count, sampleRate: context.sampleRate)
                 }
             })
-        var tap: MTAudioProcessingTap?
-        guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PostEffects, &tap) == noErr
+        var tap: Unmanaged<MTAudioProcessingTap>?
+        guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PostEffects, &tap) == noErr,
+              let tap
         else {
             Unmanaged<Context>.fromOpaque(info).release()
             return nil
         }
-        return tap
+        // Created, so owned by us; the audio mix keeps its own reference.
+        return tap.takeRetainedValue()
     }
 }
 

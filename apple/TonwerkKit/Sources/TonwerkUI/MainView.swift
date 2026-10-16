@@ -96,14 +96,8 @@ struct MainView: View {
             }
             .navigationTitle("Tonwerk")
             #if os(macOS)
+            .modifier(SidebarFooter())
             .navigationSplitViewColumnWidth(min: 190, ideal: 220)
-            .safeAreaInset(edge: .bottom) {
-                ConnectionLabel()
-                    .font(.caption)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-            }
             #else
             .playerSpace()
             .toolbar {
@@ -168,6 +162,25 @@ struct MainView: View {
         }
     }
 }
+
+#if os(macOS)
+/// The connection's state under the Mac's sidebar, in a row of its own: as a safe area inset the sidebar's list
+/// scrolled its last row ("Neue Playlist") under the label.
+private struct SidebarFooter: ViewModifier {
+    func body(content: Content) -> some View {
+        VStack(spacing: 0) {
+            content
+            Divider()
+            ConnectionLabel()
+                .font(.caption)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+        }
+    }
+}
+#endif
 
 private struct PlayerInsetKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0

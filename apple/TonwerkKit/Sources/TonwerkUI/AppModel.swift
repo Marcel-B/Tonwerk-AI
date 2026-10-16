@@ -48,6 +48,9 @@ public final class AppModel {
     var liveSwaps: [String: Components.Schemas.SwapState] = [:]
     /// The song the music video dialog is open for, from a song's menu.
     var filming: Song?
+    /// The YuE2 worker's state and the large model besides it that holds the memory, for the queue's overview.
+    var worker: Components.Schemas.WorkerInfo?
+    var memoryHolder: Components.Schemas.LargeModel?
     /// Music videos in the works or finished since, by id, from `video` events.
     var liveVideos: [String: Components.Schemas.VideoState] = [:]
 
@@ -103,6 +106,8 @@ public final class AppModel {
         liveStems = [:]
         liveSwaps = [:]
         liveVideos = [:]
+        worker = nil
+        memoryHolder = nil
         voicesPage = nil
         connection = .none
         defaults.removeObject(forKey: Self.serverKey)
@@ -146,6 +151,8 @@ public final class AppModel {
         switch event {
         case .snapshot(let snapshot):
             queue = snapshot.queue ?? []
+            worker = snapshot.worker
+            memoryHolder = snapshot.memory?.holder
             if let draft = snapshot.lyrics {
                 drafts[draft.id] = draft
             }
@@ -159,6 +166,10 @@ public final class AppModel {
             liveVideos = Dictionary((snapshot.videos ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
+        case .worker(let info):
+            worker = info
+        case .memory(let info):
+            memoryHolder = info.holder
         case .song(let state):
             working[state.id] = state
             if state.finished == true {

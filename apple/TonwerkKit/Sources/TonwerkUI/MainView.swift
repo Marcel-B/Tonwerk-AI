@@ -12,6 +12,8 @@ enum Page: Hashable {
     case voices
     case transcribe
     case speech
+    case ace
+    case insights
     case log
     case storage
     case templates
@@ -61,6 +63,8 @@ struct MainView: View {
                     Label("Stimmen", systemImage: "person.wave.2").tag(Page.voices)
                     Label("Transkription", systemImage: "music.quarternote.3").tag(Page.transcribe)
                     Label("Sprachlabor", systemImage: "bubble.left.and.text.bubble.right").tag(Page.speech)
+                    Label("ACE-Step", systemImage: "waveform.path").tag(Page.ace)
+                    Label("Auswertung", systemImage: "chart.bar").tag(Page.insights)
                     Label("Protokoll", systemImage: "doc.text.magnifyingglass").tag(Page.log)
                     Label("Speicher", systemImage: "internaldrive").tag(Page.storage)
                     Label("Vorlagen", systemImage: "bookmark").tag(Page.templates)
@@ -121,6 +125,10 @@ struct MainView: View {
                 TranscriptionView()
             case .speech:
                 SpeechView()
+            case .ace:
+                AceView()
+            case .insights:
+                InsightsView()
             case .log:
                 LogView()
             case .storage:

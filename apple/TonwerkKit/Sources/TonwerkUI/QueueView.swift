@@ -9,6 +9,7 @@ struct QueueView: View {
     private var empty: Bool {
         model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
             && model.runningTranscriptions.isEmpty && model.speechJobs.isEmpty
+            && model.aceJobs.isEmpty
     }
 
     var body: some View {
@@ -68,6 +69,14 @@ struct QueueView: View {
                         .padding(.top, 8)
                     ForEach(model.speechJobs, id: \.id) { take in
                         SpeechJobCard(take: take)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.aceJobs.isEmpty {
+                    heading("ACE-Step")
+                        .padding(.top, 8)
+                    ForEach(model.aceJobs, id: \.id) { job in
+                        AceJobCard(job: job)
                             .transition(.opacity)
                     }
                 }
@@ -377,6 +386,47 @@ private struct SpeechJobCard: View {
                 }
                 if take.stage == "cleaning", let progress = take.progress {
                     ProgressView(value: min(max(progress, 0), 1))
+                }
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// An ACE-Step job in the works, with its stage and a cancel.
+private struct AceJobCard: View {
+    @Environment(AppModel.self) private var model
+    let job: Components.Schemas.AceJob
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "waveform.path")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(job.title).lineLimit(1)
+                        Text(job.request.caption ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(AceSession.stageName(job))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.deleteAceJob(job.id) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                if let fraction = job.fraction, (job.stage ?? "queued") != "queued" {
+                    ProgressView(value: min(max(fraction, 0), 1))
                 }
             }
         }

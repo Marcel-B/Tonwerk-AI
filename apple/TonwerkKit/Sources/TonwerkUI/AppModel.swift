@@ -63,6 +63,14 @@ public final class AppModel {
     var liveSpeech: [String: Components.Schemas.SpeechTake] = [:]
     /// The speech lab's state, kept like the transcription page's.
     var speechPage: SpeechSession?
+    /// ACE-Step's jobs in the works or finished since, by id, from the snapshot and `ace` events.
+    var liveAce: [String: Components.Schemas.AceJob] = [:]
+    /// The ACE-Step page's state, kept like the speech lab's.
+    var acePage: AceSession?
+    /// The ACE-Step page's form, here so "use everything" on an ACE-Step song fills it before the page opens.
+    var aceForm = AceForm()
+    /// The last report of what the rated songs were made with, for its page and the proven style blocks.
+    var insights: Components.Schemas.InsightReport?
     /// The log page's state, kept so its filter outlasts a page change.
     var logPage: LogSession?
     /// The storage page's state, kept like the log's.
@@ -99,6 +107,7 @@ public final class AppModel {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         form = CreateForm.load(from: defaults)
+        aceForm = AceForm.load(from: defaults)
         if let saved = defaults.string(forKey: Self.serverKey), let url = URL(string: saved) {
             use(url)
         }
@@ -130,6 +139,9 @@ public final class AppModel {
         liveTranscriptions = [:]
         liveSpeech = [:]
         speechPage = nil
+        liveAce = [:]
+        acePage = nil
+        insights = nil
         transcriptionPage = nil
         logPage = nil
         storagePage = nil
@@ -195,6 +207,7 @@ public final class AppModel {
             liveTranscriptions = Dictionary(
                 (snapshot.transcriptions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             liveSpeech = Dictionary((snapshot.speech ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveAce = Dictionary((snapshot.ace ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
         case .worker(let info):
@@ -231,6 +244,13 @@ public final class AppModel {
             }
         case .speech(let take):
             liveSpeech[take.id] = take
+        case .ace(let job):
+            let before = liveAce[job.id]?.stage
+            liveAce[job.id] = job
+            // The finished songs are a new run in the library.
+            if job.stage == "done" && before != "done" {
+                Task { await reloadLibrary() }
+            }
         case .library:
             Task { await reloadLibrary() }
         default:
@@ -274,6 +294,10 @@ public final class AppModel {
 
     func saveForm() {
         form.save(to: defaults)
+    }
+
+    func saveAceForm() {
+        aceForm.save(to: defaults)
     }
 
     public func song(_ id: String) -> Song? {

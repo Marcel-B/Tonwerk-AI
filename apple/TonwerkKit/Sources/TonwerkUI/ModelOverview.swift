@@ -69,8 +69,7 @@ extension AppModel {
         case .video: videoJobs.filter { $0.stage != nil && $0.stage != "queued" }.count
         case .transcription: runningTranscriptions.count
         case .speech: speechJobs.filter { ($0.stage ?? "queued") != "queued" }.count
-        // The app has no page for ACE-Step yet; only the memory says it runs.
-        case .ace: memoryOwner == model ? 1 : 0
+        case .ace: aceJobs.filter { ($0.stage ?? "queued") != "queued" }.count
         }
     }
 
@@ -83,7 +82,7 @@ extension AppModel {
         case .video: videoJobs.filter { ($0.stage ?? "queued") == "queued" }.count
         case .transcription: waitingTranscriptions.count
         case .speech: speechJobs.filter { ($0.stage ?? "queued") == "queued" }.count
-        case .ace: 0
+        case .ace: aceJobs.filter { ($0.stage ?? "queued") == "queued" }.count
         }
     }
 
@@ -96,7 +95,7 @@ extension AppModel {
     /// The queue's badge: everything waiting or in the works.
     var queueCount: Int {
         queue.count + inProgress.count + voiceJobs.count + videoJobs.count + runningTranscriptions.count
-            + speechJobs.count
+            + speechJobs.count + aceJobs.count
     }
 
     /// The tiles to show: the three that always take turns, and the occasional ones while they have work.

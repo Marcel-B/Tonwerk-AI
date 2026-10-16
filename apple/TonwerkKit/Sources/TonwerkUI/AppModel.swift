@@ -53,6 +53,10 @@ public final class AppModel {
     var memoryHolder: Components.Schemas.LargeModel?
     /// Music videos in the works or finished since, by id, from `video` events.
     var liveVideos: [String: Components.Schemas.VideoState] = [:]
+    /// Transcriptions running, waiting or finished since, by id, from `transcription` events.
+    var liveTranscriptions: [String: Components.Schemas.TranscriptionState] = [:]
+    /// The transcription page's state, kept like the voices page's.
+    var transcriptionPage: TranscriptionSession?
 
     var soundLibrary: SoundLibrary {
         if let sounds { return sounds }
@@ -106,6 +110,8 @@ public final class AppModel {
         liveStems = [:]
         liveSwaps = [:]
         liveVideos = [:]
+        liveTranscriptions = [:]
+        transcriptionPage = nil
         worker = nil
         memoryHolder = nil
         voicesPage = nil
@@ -164,6 +170,8 @@ public final class AppModel {
             liveStems = Dictionary((snapshot.stems ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             liveSwaps = Dictionary((snapshot.swaps ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             liveVideos = Dictionary((snapshot.videos ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveTranscriptions = Dictionary(
+                (snapshot.transcriptions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
         case .worker(let info):
@@ -192,6 +200,12 @@ public final class AppModel {
             liveSwaps[swap.id] = swap
         case .video(let video):
             liveVideos[video.id] = video
+        case .transcription(let state):
+            let before = liveTranscriptions[state.id]?.stage
+            liveTranscriptions[state.id] = state
+            if state.stage == "done" && before != "done" {
+                transcriptionPage?.finished()
+            }
         case .library:
             Task { await reloadLibrary() }
         default:

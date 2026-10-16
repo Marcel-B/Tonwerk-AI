@@ -12,6 +12,7 @@ enum QueueModel: String, CaseIterable, Identifiable {
     case speech
     case ace
     case video
+    case transcription
 
     var id: String { rawValue }
 
@@ -24,6 +25,7 @@ enum QueueModel: String, CaseIterable, Identifiable {
         case .speech: String(localized: "Sprache")
         case .ace: "ACE-Step"
         case .video: String(localized: "Video")
+        case .transcription: String(localized: "Transkription")
         }
     }
 
@@ -36,6 +38,7 @@ enum QueueModel: String, CaseIterable, Identifiable {
         case .speech: "bubble.left.and.text.bubble.right"
         case .ace: "waveform.path"
         case .video: "film"
+        case .transcription: "music.quarternote.3"
         }
     }
 
@@ -64,6 +67,7 @@ extension AppModel {
         case .voice: voiceJobs.filter { $0.stage != nil && $0.stage != "queued" }.count
         case .image: images.values.filter { $0.stage == "loading" || $0.stage == "painting" }.count
         case .video: videoJobs.filter { $0.stage != nil && $0.stage != "queued" }.count
+        case .transcription: runningTranscriptions.count
         // The app has no pages for these yet; only the memory says they run.
         case .speech, .ace: memoryOwner == model ? 1 : 0
         }
@@ -76,13 +80,20 @@ extension AppModel {
         case .voice: voiceJobs.filter { ($0.stage ?? "queued") == "queued" }.count
         case .image: images.values.filter { $0.stage == "queued" }.count
         case .video: videoJobs.filter { ($0.stage ?? "queued") == "queued" }.count
+        case .transcription: waitingTranscriptions.count
         case .speech, .ace: 0
         }
     }
 
-    /// A video renders on the CPU beside the models, so it works even while another one holds the memory.
+    /// A video renders on the CPU beside the models, and SheetSage2 is small enough to run beside YuE2, so both work
+    /// even while another one holds the memory.
     func isWorking(_ model: QueueModel) -> Bool {
-        memoryOwner == model || (model == .video && running(.video) > 0)
+        memoryOwner == model || ((model == .video || model == .transcription) && running(model) > 0)
+    }
+
+    /// The queue's badge: everything waiting or in the works.
+    var queueCount: Int {
+        queue.count + inProgress.count + voiceJobs.count + videoJobs.count + runningTranscriptions.count
     }
 
     /// The tiles to show: the three that always take turns, and the occasional ones while they have work.

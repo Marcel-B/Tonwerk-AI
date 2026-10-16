@@ -10,6 +10,7 @@ enum Page: Hashable {
     case logic
     case instruments
     case voices
+    case transcribe
     case playlist(Int64)
 }
 
@@ -47,13 +48,14 @@ struct MainView: View {
                         .badge(model.unrated.count)
                         .tag(Page.review)
                     Label("Warteschlange", systemImage: "hourglass")
-                        .badge(model.queue.count + model.inProgress.count + model.voiceJobs.count + model.videoJobs.count)
+                        .badge(model.queueCount)
                         .tag(Page.queue)
                 }
                 Section("Werkzeuge") {
                     Label("Logic", systemImage: "pianokeys").tag(Page.logic)
                     Label("Instrumente", systemImage: "slider.vertical.3").tag(Page.instruments)
                     Label("Stimmen", systemImage: "person.wave.2").tag(Page.voices)
+                    Label("Transkription", systemImage: "music.quarternote.3").tag(Page.transcribe)
                 }
                 Section("Playlists") {
                     ForEach(model.playlists, id: \.id) { playlist in
@@ -107,6 +109,8 @@ struct MainView: View {
                 InstrumentsView()
             case .voices:
                 VoicesView()
+            case .transcribe:
+                TranscriptionView()
             case .playlist(let id):
                 if let playlist = model.playlists.first(where: { $0.id == id }) {
                     SongList(

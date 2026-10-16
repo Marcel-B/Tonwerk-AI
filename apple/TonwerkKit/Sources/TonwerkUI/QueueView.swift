@@ -8,7 +8,7 @@ struct QueueView: View {
 
     private var empty: Bool {
         model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
-            && model.runningTranscriptions.isEmpty
+            && model.runningTranscriptions.isEmpty && model.speechJobs.isEmpty
     }
 
     var body: some View {
@@ -60,6 +60,14 @@ struct QueueView: View {
                         .padding(.top, 8)
                     ForEach(model.runningTranscriptions, id: \.id) { state in
                         TranscriptionJobCard(state: state)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.speechJobs.isEmpty {
+                    heading("Sprachlabor")
+                        .padding(.top, 8)
+                    ForEach(model.speechJobs, id: \.id) { take in
+                        SpeechJobCard(take: take)
                             .transition(.opacity)
                     }
                 }
@@ -328,6 +336,48 @@ private struct TranscriptionJobCard: View {
                     .help("Abbrechen")
                 }
                 TranscriptionProgress(state: state)
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// A take the speech lab speaks or cleans, or one waiting in its line; the lab keeps a line of its own.
+private struct SpeechJobCard: View {
+    @Environment(AppModel.self) private var model
+    let take: Components.Schemas.SpeechTake
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: take.source == nil ? "bubble.left.and.text.bubble.right" : "waveform.badge.minus")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(take.source ?? take.modelLabel).lineLimit(1)
+                        Text(take.source == nil ? take.text : take.modelLabel)
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(SpeechSession.stageName(take))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.deleteSpeechTake(take.id) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                if take.stage == "cleaning", let progress = take.progress {
+                    ProgressView(value: min(max(progress, 0), 1))
+                }
             }
         }
         .card(padding: 12)

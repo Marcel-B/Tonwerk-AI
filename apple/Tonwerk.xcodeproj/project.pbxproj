@@ -171,6 +171,7 @@
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Tonwerk spielt Spuren auf Bluetooth-MIDI-Instrumenten.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Tonwerk nimmt im Sprachlabor eine Stimme auf, die die Sprachmodelle nachsprechen.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
@@ -263,6 +264,7 @@
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Tonwerk spielt Spuren auf Bluetooth-MIDI-Instrumenten.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Tonwerk nimmt im Sprachlabor eine Stimme auf, die die Sprachmodelle nachsprechen.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (

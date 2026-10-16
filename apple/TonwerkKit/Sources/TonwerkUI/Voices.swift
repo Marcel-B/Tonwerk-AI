@@ -447,7 +447,7 @@ final class VoicesSession {
     }
 
     /// StemMyWav's file names, as people call them; an unknown one as it is.
-    static func stemName(_ name: String) -> String {
+    nonisolated static func stemName(_ name: String) -> String {
         switch name.lowercased() {
         case "vocals": String(localized: "Gesang")
         case "vocals_dry": String(localized: "Gesang (trocken)")

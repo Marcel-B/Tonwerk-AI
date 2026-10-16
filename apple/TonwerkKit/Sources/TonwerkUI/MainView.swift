@@ -47,7 +47,7 @@ struct MainView: View {
                         .badge(model.unrated.count)
                         .tag(Page.review)
                     Label("Warteschlange", systemImage: "hourglass")
-                        .badge(model.queue.count + model.inProgress.count + model.voiceJobs.count)
+                        .badge(model.queue.count + model.inProgress.count + model.voiceJobs.count + model.videoJobs.count)
                         .tag(Page.queue)
                 }
                 Section("Werkzeuge") {
@@ -133,6 +133,9 @@ private struct Dialogs: ViewModifier {
             .paintSheet(for: $model.painting)
             .sheet(item: $model.singing) { song in
                 SingSheet(song: song)
+            }
+            .sheet(item: $model.filming) { song in
+                VideoSheet(song: song)
             }
             .alert("Neue Playlist", isPresented: $naming) {
                 TextField("Name", text: $newName)

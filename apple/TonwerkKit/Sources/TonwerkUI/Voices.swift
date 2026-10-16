@@ -648,14 +648,14 @@ extension AppModel {
         voicesPage?.stemSong = song.id
     }
 
-    private func address(_ path: String, _ components: String...) throws -> URL {
+    func address(_ path: String, _ components: String...) throws -> URL {
         guard let server else { throw ServerError(String(localized: "Kein Server verbunden.")) }
         return components.reduce(server.appending(path: path)) { $0.appending(component: $1) }
     }
 
     /// One call by hand, decoding with the generated types; the voices' answers vary by which service is configured
     /// (501, 502), and what matters is the problem's words.
-    private func call(
+    func call(
         _ method: String, _ url: URL, json: [String: Any]? = nil, accept: Set<Int> = [200]
     ) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: url)
@@ -684,7 +684,7 @@ extension AppModel {
         }
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
+    func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
         try JSONDecoder.tonwerk().decode(type, from: data)
     }
 

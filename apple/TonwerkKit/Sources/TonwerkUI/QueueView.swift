@@ -8,7 +8,7 @@ struct QueueView: View {
 
     var body: some View {
         Group {
-            if model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty {
+            if model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty {
                 ContentUnavailableView(
                     "Nichts in Arbeit", systemImage: "hourglass",
                     description: Text("Songs, Songtexte und Transkriptionen erscheinen hier, sobald sie bestellt sind."))
@@ -30,9 +30,17 @@ struct QueueView: View {
                                     .transition(.opacity)
                             }
                         }
+                        if !model.videoJobs.isEmpty {
+                            heading("Videos")
+                                .padding(.top, model.inProgress.isEmpty && model.voiceJobs.isEmpty ? 0 : 8)
+                            ForEach(model.videoJobs, id: \.id) { video in
+                                VideoJobCard(video: video)
+                                    .transition(.opacity)
+                            }
+                        }
                         if !model.queue.isEmpty {
                             heading("Wartet")
-                                .padding(.top, model.inProgress.isEmpty && model.voiceJobs.isEmpty ? 0 : 8)
+                                .padding(.top, model.inProgress.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty ? 0 : 8)
                             ForEach(Array(model.queue.enumerated()), id: \.element.id) { index, job in
                                 WaitingCard(job: job, first: index == 0, last: index == model.queue.count - 1)
                                     .transition(.opacity)
@@ -45,6 +53,7 @@ struct QueueView: View {
                     .animation(.easeInOut(duration: 0.25), value: model.inProgress.map(\.id))
                     .animation(.easeInOut(duration: 0.25), value: model.queue.map(\.id))
                     .animation(.easeInOut(duration: 0.25), value: model.voiceJobs.map(\.id))
+                    .animation(.easeInOut(duration: 0.25), value: model.videoJobs.map(\.id))
                 }
             }
         }
@@ -215,6 +224,47 @@ private struct VoiceJobCard: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Abbrechen")
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// A music video ffmpeg renders on the Mac; it works beside the models, one video at a time.
+private struct VideoJobCard: View {
+    @Environment(AppModel.self) private var model
+    let video: Components.Schemas.VideoState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "film")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.song(video.songId)?.displayTitle ?? video.title).lineLimit(1)
+                        Text(AppModel.describe(video)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(AppModel.videoStage(video))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.deleteVideo(video) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                if video.stage == "rendering" {
+                    ProgressView(value: min(max(video.fraction ?? 0, 0), 1))
+                }
             }
         }
         .card(padding: 12)

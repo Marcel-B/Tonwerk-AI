@@ -46,6 +46,10 @@ public final class AppModel {
     var liveVersions: [String: Components.Schemas.VersionState] = [:]
     var liveStems: [String: Components.Schemas.StemSetState] = [:]
     var liveSwaps: [String: Components.Schemas.SwapState] = [:]
+    /// The song the music video dialog is open for, from a song's menu.
+    var filming: Song?
+    /// Music videos in the works or finished since, by id, from `video` events.
+    var liveVideos: [String: Components.Schemas.VideoState] = [:]
 
     var soundLibrary: SoundLibrary {
         if let sounds { return sounds }
@@ -98,6 +102,7 @@ public final class AppModel {
         liveVersions = [:]
         liveStems = [:]
         liveSwaps = [:]
+        liveVideos = [:]
         voicesPage = nil
         connection = .none
         defaults.removeObject(forKey: Self.serverKey)
@@ -151,6 +156,7 @@ public final class AppModel {
             liveVersions = Dictionary((snapshot.versions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             liveStems = Dictionary((snapshot.stems ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             liveSwaps = Dictionary((snapshot.swaps ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveVideos = Dictionary((snapshot.videos ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
         case .song(let state):
@@ -173,6 +179,8 @@ public final class AppModel {
             liveStems[set.id] = set
         case .swap(let swap):
             liveSwaps[swap.id] = swap
+        case .video(let video):
+            liveVideos[video.id] = video
         case .library:
             Task { await reloadLibrary() }
         default:

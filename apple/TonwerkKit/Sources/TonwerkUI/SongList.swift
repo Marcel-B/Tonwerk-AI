@@ -246,6 +246,12 @@ struct SongList: View {
             Label("Cover malen …", systemImage: "paintbrush.pointed")
         }
         Button {
+            model.filming = song
+        } label: {
+            Label("Musikvideo …", systemImage: "film")
+        }
+        .disabled(!song.hasAudio)
+        Button {
             model.singing = song
         } label: {
             Label("Mit Stimme singen …", systemImage: "person.wave.2")

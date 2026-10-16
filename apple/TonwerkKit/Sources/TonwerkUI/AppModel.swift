@@ -57,6 +57,8 @@ public final class AppModel {
     var liveTranscriptions: [String: Components.Schemas.TranscriptionState] = [:]
     /// The transcription page's state, kept like the voices page's.
     var transcriptionPage: TranscriptionSession?
+    /// The log page's state, kept so its filter outlasts a page change.
+    var logPage: LogSession?
 
     var soundLibrary: SoundLibrary {
         if let sounds { return sounds }
@@ -112,6 +114,7 @@ public final class AppModel {
         liveVideos = [:]
         liveTranscriptions = [:]
         transcriptionPage = nil
+        logPage = nil
         worker = nil
         memoryHolder = nil
         voicesPage = nil

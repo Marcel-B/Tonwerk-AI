@@ -11,6 +11,7 @@ enum Page: Hashable {
     case instruments
     case voices
     case transcribe
+    case log
     case playlist(Int64)
 }
 
@@ -56,6 +57,7 @@ struct MainView: View {
                     Label("Instrumente", systemImage: "slider.vertical.3").tag(Page.instruments)
                     Label("Stimmen", systemImage: "person.wave.2").tag(Page.voices)
                     Label("Transkription", systemImage: "music.quarternote.3").tag(Page.transcribe)
+                    Label("Protokoll", systemImage: "doc.text.magnifyingglass").tag(Page.log)
                 }
                 Section("Playlists") {
                     ForEach(model.playlists, id: \.id) { playlist in
@@ -111,6 +113,8 @@ struct MainView: View {
                 VoicesView()
             case .transcribe:
                 TranscriptionView()
+            case .log:
+                LogView()
             case .playlist(let id):
                 if let playlist = model.playlists.first(where: { $0.id == id }) {
                     SongList(

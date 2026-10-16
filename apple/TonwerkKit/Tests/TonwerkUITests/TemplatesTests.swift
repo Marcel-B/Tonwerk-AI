@@ -43,15 +43,15 @@ final class TemplatesTests: XCTestCase {
         let saved = try template("""
             {"id":1,"name":"Nur Stil","createdAt":"","updatedAt":"","settings":{"style":"rock","seed":42,"quality":"best"}}
             """)
-        XCTAssertEqual(saved.settings.parts, [.style])
+        XCTAssertEqual(saved.settings.parts, [.style, .parameters], "a quality, even an unknown one, is a parameter")
         var form = CreateForm()
         form.seed = "7"
         form.useAdvanced = false
         let filled = saved.settings.apply(to: form)
         XCTAssertEqual(filled.style, "rock")
         XCTAssertEqual(filled.seed, "7", "a number is not the web form's seed text")
-        XCTAssertFalse(filled.full)
-        XCTAssertFalse(filled.useAdvanced)
+        XCTAssertFalse(filled.full, "an unknown quality is skipped")
+        XCTAssertEqual(filled.batch, form.batch, "what the template does not hold stays")
     }
 
     func testAScoreInTheFormKeepsItsPlanning() throws {

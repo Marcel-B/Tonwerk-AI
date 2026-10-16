@@ -119,6 +119,11 @@ private struct LogicSessionView: View {
                     ProgressView("Wandelt um …").frame(maxWidth: .infinity).padding(40)
                 }
                 options
+                vocals
+                if let song = session.song, song.hasAudio,
+                   session.stemsConfigured || !session.vocalStems.isEmpty || session.separatingStems {
+                    stemsCard(song)
+                }
                 exportCard
                 warnings
             }
@@ -286,6 +291,101 @@ private struct LogicSessionView: View {
             Stepper("Einzähler: \(session.form.countIn) Takte", value: $session.form.countIn, in: 0...4)
         }
         .card()
+    }
+
+    private var vocals: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CardHeading("Gesang", systemImage: "music.mic")
+            Text("Begleitstimmen").font(.subheadline.weight(.semibold))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), alignment: .leading)], alignment: .leading, spacing: 8) {
+                ForEach(HarmonySettings.parts, id: \.self) { part in
+                    Toggle(HarmonySettings.name(part), isOn: Binding(
+                        get: { session.form.harmonyParts.contains(part) },
+                        set: { on in
+                            if on {
+                                session.form.harmonyParts.append(part)
+                            } else {
+                                session.form.harmonyParts.removeAll { $0 == part }
+                            }
+                        }))
+                    #if os(macOS)
+                    .toggleStyle(.checkbox)
+                    #endif
+                }
+            }
+            if !session.form.harmonyParts.isEmpty {
+                Picker("Tonart", selection: $session.form.harmonyKey) {
+                    Text("Automatisch").tag(String?.none)
+                    ForEach(HarmonySettings.keys, id: \.self) { key in
+                        Text(key).tag(Optional(key))
+                    }
+                }
+                Toggle("Nur im Refrain (Abschnitt „chorus“)", isOn: $session.form.harmonyChorusOnly)
+            }
+            Toggle("Gesang verdoppeln (eigene Spur)", isOn: $session.form.doubleVocal)
+            if session.form.doubleVocal {
+                Picker("Oktave", selection: $session.form.doubleOctave) {
+                    ForEach(LogicForm.doubleOctaves, id: \.self) { octave in
+                        Text(octave > 0 ? "+\(octave)" : "\(octave)").tag(octave)
+                    }
+                }
+            }
+        }
+        .card()
+    }
+
+    private func stemsCard(_ song: Song) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CardHeading("Stems", systemImage: "square.3.layers.3d")
+            if !session.vocalStems.isEmpty {
+                Picker("Stems im Logic-Projekt", selection: Binding(
+                    get: { session.stemSetId }, set: { session.stemSetId = $0 })) {
+                    Text("Ohne Stems").tag(String?.none)
+                    ForEach(session.vocalStems, id: \.id) { set in
+                        Text(Self.stemLabel(set)).tag(Optional(set.id))
+                    }
+                }
+                Text("Gesang und trockener Gesang kommen als eigene Audiospuren ins Projekt.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if session.separatingStems {
+                Text("Die Stems dieses Songs werden gerade getrennt.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("Für diesen Song gibt es noch keine Stems mit Gesang.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if session.stemsConfigured {
+                Button {
+                    model.openStems(song)
+                } label: {
+                    Label("Stems erzeugen", systemImage: "waveform.path")
+                }
+                .buttonStyle(.bordered)
+            }
+            if session.midiInstalled {
+                Text("Aus den Stems als MIDI").font(.subheadline.weight(.semibold))
+                if session.stems(with: "bass") == nil && session.stems(with: "drums") == nil {
+                    Text("Bass und Schlagzeug als MIDI gibt es nur mit Stems eines Modells, das sie trennt (z. B. BS-RoFormer-SW, htdemucs oder htdemucs-6s).")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    if session.stems(with: "bass") != nil {
+                        Toggle("Bass aus dem Bass-Stem statt aus den Akkorden", isOn: $session.form.bassFromStems)
+                    }
+                    if session.stems(with: "drums") != nil {
+                        Toggle("Schlagzeug aus dem Drum-Stem (Kick, Snare, Hi-Hat)", isOn: $session.form.drumsFromStems)
+                    }
+                    Text("Ersetzt den erzeugten Bass bzw. das Schlagzeug in Vorschau, MIDI und Logic-Projekt. Beim ersten Mal dauert es ein paar Sekunden pro Stem. Das Schlagzeug ist eine Skizze des Grundbeats, keine genaue Abschrift.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .card()
+        .onChange(of: session.stemSetId) { exportFile = nil }
+    }
+
+    static func stemLabel(_ set: Components.Schemas.StemSetState) -> String {
+        guard let created = set.createdAt else { return set.model }
+        return String(localized: "\(set.model) vom \(created.formatted(date: .abbreviated, time: .shortened))")
     }
 
     static func name(_ pattern: String) -> String {

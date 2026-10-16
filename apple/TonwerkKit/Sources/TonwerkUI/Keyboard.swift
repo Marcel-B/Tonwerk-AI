@@ -3,13 +3,20 @@ import SwiftUI
 
 /// The synthesizer the instruments page's keyboard plays, on an engine of its own (`keyboardVoice.ts`). A key sounds
 /// as long as it is held: the voices know note on and off, so nothing has to be scheduled long and cut.
+///
+/// Loading the unit and starting the engine never happen inside the key's gesture: done there, the Mac app hung on
+/// the first key (the key stayed lit, the sidebar stopped switching pages while scrolling still went on), as if
+/// SwiftUI's gesture handling had been left half done. They run in a task of their own; keys pressed meanwhile are
+/// kept in `held` and sound once the synthesizer is ready, if they are still down.
 @MainActor
+@Observable
 final class KeyboardPlayer {
-    private let engine = AVAudioEngine()
-    private var node: AVAudioUnitMIDIInstrument?
-    private var unit: TonwerkSynthUnit?
-    private var sound = SynthSound()
-    private var held: Set<Int> = []
+    @ObservationIgnored private let engine = AVAudioEngine()
+    @ObservationIgnored private var node: AVAudioUnitMIDIInstrument?
+    @ObservationIgnored private var unit: TonwerkSynthUnit?
+    @ObservationIgnored private var sound = SynthSound()
+    @ObservationIgnored private var held: Set<Int> = []
+    @ObservationIgnored private var starting: Task<Void, Never>?
     private(set) var problem: String?
 
     func play(_ sound: SynthSound) {
@@ -18,23 +25,30 @@ final class KeyboardPlayer {
     }
 
     func noteOn(_ key: Int, velocity: Int = 100) {
-        guard start() else { return }
         held.insert(key)
+        guard ready else {
+            start()
+            return
+        }
         send([0x90, UInt8(key), UInt8(velocity)])
     }
 
     func noteOff(_ key: Int) {
-        guard held.remove(key) != nil else { return }
+        guard held.remove(key) != nil, ready else { return }
         send([0x80, UInt8(key), 0])
     }
 
     /// Every key let go, as when the keyboard is switched to another instrument.
     func release() {
-        for key in held {
-            send([0x80, UInt8(key), 0])
+        if ready {
+            for key in held {
+                send([0x80, UInt8(key), 0])
+            }
         }
         held = []
     }
+
+    private var ready: Bool { unit != nil && engine.isRunning }
 
     private func send(_ bytes: [UInt8]) {
         guard let unit, let node else { return }
@@ -47,19 +61,34 @@ final class KeyboardPlayer {
         }
     }
 
-    /// The engine starts with the first key, not with the page, so the page costs nothing until it is played.
-    private func start() -> Bool {
+    /// The engine starts with the first key, not with the page, so the page costs nothing until it is played. The
+    /// engine also stops by itself when the output device changes; the next key starts it again.
+    private func start() {
+        guard starting == nil else { return }
+        starting = Task { [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            await self.prepare()
+            self.starting = nil
+            guard self.ready else { return }
+            for key in self.held {
+                self.send([0x90, UInt8(key), 100])
+            }
+        }
+    }
+
+    private func prepare() async {
         if node == nil {
-            guard case let (node, unit)? = TonwerkSynthUnit.instrument(playing: sound) else {
+            guard case let (node, unit)? = await TonwerkSynthUnit.loadInstrument(playing: sound) else {
                 problem = String(localized: "Der Synthesizer ließ sich nicht laden.")
-                return false
+                return
             }
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: nil)
             self.node = node
             self.unit = unit
         }
-        guard !engine.isRunning else { return true }
+        guard !engine.isRunning else { return }
         do {
             #if os(iOS)
             try AVAudioSession.sharedInstance().setCategory(.playback)
@@ -67,10 +96,8 @@ final class KeyboardPlayer {
             #endif
             try engine.start()
             problem = nil
-            return true
         } catch {
             problem = error.localizedDescription
-            return false
         }
     }
 }
@@ -139,7 +166,9 @@ private struct PianoKey: View {
     let black: Bool
     let noteOn: (Int) -> Void
     let noteOff: (Int) -> Void
-    @State private var down = false
+    /// Reset by SwiftUI when the drag ends and also when it is cancelled, which `onEnded` never hears of; the note
+    /// follows it in `onChange`, so a key cannot stay down.
+    @GestureState private var down = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: 4)
@@ -151,20 +180,16 @@ private struct PianoKey: View {
                 }
             }
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard !down else { return }
-                        down = true
-                        noteOn(note)
-                    }
-                    .onEnded { _ in
-                        down = false
-                        noteOff(note)
-                    })
+            .gesture(DragGesture(minimumDistance: 0).updating($down) { _, down, _ in down = true })
+            .onChange(of: down) { _, down in
+                if down {
+                    noteOn(note)
+                } else {
+                    noteOff(note)
+                }
+            }
             .onDisappear {
                 if down {
-                    down = false
                     noteOff(note)
                 }
             }

@@ -404,6 +404,38 @@ public final class AppModel {
         }
     }
 
+    /// The finished songs the queue still knows, in the order they were made, as the web queue page's "Als Playlist":
+    /// YuE2's ready songs and ACE-Step's finished runs, only those the library lists.
+    public var readySongIds: [String] {
+        let listed = Set(songs.map(\.id))
+        var ids = working.values
+            .filter { $0.stage == "ready" && listed.contains($0.id) }
+            .sorted { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }
+            .map(\.id)
+        let aceRuns = liveAce.values
+            .filter { $0.stage == "done" && $0.run != nil }
+            .sorted { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }
+        for job in aceRuns {
+            ids += songs.filter { $0.run == job.run }.map(\.id)
+                .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        }
+        var seen = Set<String>()
+        return ids.filter { seen.insert($0).inserted }
+    }
+
+    /// A new playlist of the queue's finished songs, opened at once, to hear and rate them in one go.
+    public func playlistOfReadySongs() async {
+        guard let tonwerk else { return }
+        let ids = readySongIds
+        guard !ids.isEmpty else { return }
+        let name = String(localized: "Fertig am \(Date().formatted(date: .numeric, time: .shortened))")
+        guard let created = try? await tonwerk.api.createPlaylist(body: .json(.init(name: name))).created.body.json
+        else { return }
+        playlists.append(created)
+        await setSongs(ids, of: created)
+        page = .playlist(created.id)
+    }
+
     public enum ConnectError: LocalizedError {
         case address
 

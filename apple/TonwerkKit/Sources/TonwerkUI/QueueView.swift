@@ -17,6 +17,15 @@ struct QueueView: View {
             VStack(alignment: .leading, spacing: 12) {
                 heading("Speicher")
                 ModelOverview()
+                if !model.readySongIds.isEmpty {
+                    Button {
+                        Task { await model.playlistOfReadySongs() }
+                    } label: {
+                        Label("Fertige Songs als Playlist (\(model.readySongIds.count))", systemImage: "music.note.list")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Die fertigen Songs der Warteschlange als neue Playlist, zum Anhören und Bewerten")
+                }
                 if empty {
                     VStack(spacing: 8) {
                         Image(systemName: "hourglass")

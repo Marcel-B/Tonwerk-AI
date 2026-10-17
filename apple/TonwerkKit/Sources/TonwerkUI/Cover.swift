@@ -35,6 +35,34 @@ enum CoverPhoto {
     }
 }
 
+extension CoverPhoto {
+    /// A photo for a lyrics draft, as `photo.ts` sends it: whole, its longer side at most `maxSide`, turned as its EXIF
+    /// says, a JPEG; a phone's original is several MB and often HEIC, which the language model cannot read.
+    static func scaledJPEG(from data: Data, maxSide: Int = 1024) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0
+        else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: min(maxSide, max(width, height)),
+        ]
+        guard let scaled = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)
+        else { return nil }
+        CGImageDestinationAddImage(destination, scaled, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? output as Data : nil
+    }
+
+    static func image(_ data: Data) -> CGImage? {
+        CGImageSourceCreateWithData(data as CFData, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }
+    }
+}
+
 enum CoverPrompt {
     /// A description from the song's title and style, as `images.ts` `suggestPrompt` writes it. English, since Klein
     /// reads it through Qwen3; only what should be seen, since distilled Klein has no negative prompt and draws what a

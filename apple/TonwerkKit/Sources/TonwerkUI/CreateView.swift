@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import TonwerkKit
 
@@ -9,6 +10,12 @@ struct CreateView: View {
     @State private var sent: String?
     @State private var error: String?
     @State private var replacing = false
+    /// The photo a draft tells of, scaled down; kept with the page, not the stored form.
+    @State private var photo: Data?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var pickingPhoto = false
+    @State private var importingPhoto = false
+    @State private var photoProblem: String?
 
     var body: some View {
         @Bindable var model = model
@@ -83,6 +90,22 @@ struct CreateView: View {
         .onChange(of: model.form) { model.saveForm() }
         .onChange(of: draftState?.finished) { take(draftState) }
         .task { models = await model.lyricsModels() }
+        .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) {
+            guard let item = photoItem else { return }
+            photoItem = nil
+            Task { await usePhoto { try await item.loadTransferable(type: Data.self) } }
+        }
+        .fileImporter(isPresented: $importingPhoto, allowedContentTypes: [.image]) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                await usePhoto {
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    return try Data(contentsOf: url)
+                }
+            }
+        }
         .confirmationDialog("Den Songtext durch einen neuen Entwurf ersetzen?", isPresented: $replacing) {
             Button("Ersetzen", role: .destructive) { startDraft() }
         }
@@ -152,6 +175,7 @@ struct CreateView: View {
         @Bindable var model = model
         TextField("Stichworte für einen Entwurf", text: $model.form.idea, axis: .vertical)
             .lineLimit(1...4)
+        photoRow
         Picker("Sprache", selection: $model.form.german) {
             Text("Deutsch").tag(true)
             Text("Englisch").tag(false)
@@ -160,7 +184,7 @@ struct CreateView: View {
             Picker("Modell", selection: $model.form.lyricsModel) {
                 Text("Standard (\(models.models.first { $0.id == models._default }?.name ?? models._default))").tag("")
                 ForEach(models.models, id: \.id) { choice in
-                    Text(choice.cloud == true ? "\(choice.name) ☁︎" : choice.name).tag(choice.id)
+                    Text(Self.label(choice)).tag(choice.id)
                 }
             }
         }
@@ -179,12 +203,72 @@ struct CreateView: View {
                         replacing = true
                     }
                 }
-                .disabled(model.form.idea.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(model.form.idea.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil)
             }
         }
         if let message = draftState?.message, draftState?.finished == true, draftState?.lyrics == nil {
             Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
         }
+    }
+
+    private static func label(_ choice: Components.Schemas.LyricsModel) -> String {
+        var name = choice.cloud == true ? "\(choice.name) ☁︎" : choice.name
+        if choice.vision == true {
+            name += String(localized: " · sieht Fotos")
+        }
+        return name
+    }
+
+    /// The chosen model, or the default, cannot see: LM Studio says so through its capabilities.
+    private var blindModel: Bool {
+        guard let models else { return false }
+        let id = model.form.lyricsModel.isEmpty ? models._default : model.form.lyricsModel
+        return models.models.first { $0.id == id }?.vision == false
+    }
+
+    @ViewBuilder
+    private var photoRow: some View {
+        if let photo, let image = CoverPhoto.image(photo) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Der Entwurf erzählt von diesem Foto; Stichwörter lenken, was er daraus nimmt.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if blindModel {
+                        Text("Dieses Sprachmodell kann keine Fotos lesen – wähl eines, das „sieht Fotos“ zeigt.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                    Button("Foto entfernen", systemImage: "xmark.circle", role: .destructive) { self.photo = nil }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                }
+            }
+        } else {
+            Menu {
+                Button("Aus Fotos …", systemImage: "photo.on.rectangle") { pickingPhoto = true }
+                Button("Aus Datei …", systemImage: "folder") { importingPhoto = true }
+            } label: {
+                Label("Foto als Vorlage", systemImage: "photo")
+            }
+        }
+        if let photoProblem {
+            Label(photoProblem, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+        }
+    }
+
+    private func usePhoto(_ load: () async throws -> Data?) async {
+        photoProblem = nil
+        guard let data = try? await load(), let scaled = CoverPhoto.scaledJPEG(from: data) else {
+            photoProblem = String(localized: "Das Foto ließ sich nicht lesen.")
+            return
+        }
+        photo = scaled
     }
 
     private var draftStage: String {
@@ -199,7 +283,7 @@ struct CreateView: View {
         error = nil
         Task {
             do {
-                model.form.draftId = try await model.draftLyrics(for: model.form)
+                model.form.draftId = try await model.draftLyrics(for: model.form, photo: photo)
             } catch {
                 self.error = error.localizedDescription
             }
@@ -259,13 +343,14 @@ extension AppModel {
     }
 
     /// Starts a draft and answers its id; the text arrives as `lyrics` events.
-    func draftLyrics(for form: CreateForm) async throws -> String {
+    func draftLyrics(for form: CreateForm, photo: Data? = nil) async throws -> String {
         guard let tonwerk else { throw ServerError(String(localized: "Kein Server verbunden.")) }
         let request = Components.Schemas.LyricsRequest(
             keywords: form.idea,
             style: form.style,
             language: form.german ? .german : .english,
-            model: form.lyricsModel.isEmpty ? nil : form.lyricsModel)
+            model: form.lyricsModel.isEmpty ? nil : form.lyricsModel,
+            image: photo.map { "data:image/jpeg;base64,\($0.base64EncodedString())" })
         switch try await tonwerk.api.writeLyrics(body: .json(request)) {
         case .accepted(let accepted):
             let state = try accepted.body.json

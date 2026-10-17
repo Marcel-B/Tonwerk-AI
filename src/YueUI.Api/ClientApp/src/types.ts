@@ -994,6 +994,8 @@ export interface SketchResult {
   abc?: string
   lyrics?: string
   request?: SongRequest
+  /** What ACE-Step's page can take of the plan: lyrics, style, tempo, key, metre and length, no melody. */
+  ace?: AceSongRequest
   warnings?: SketchWarning[]
   bars?: number
   seconds?: number

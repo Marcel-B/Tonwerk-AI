@@ -38,4 +38,24 @@ final class SketchTests: XCTestCase {
         XCTAssertNil(SketchSession.summary(bars: nil, seconds: 3))
         XCTAssertEqual(SketchSession.stageName("writing"), "Claude schreibt …")
     }
+
+    func testThePlanGoesToTheAcePageWithWhatAceStepReads() throws {
+        let data = Data(#"""
+            {"job":{"id":"a","title":"Regen","stage":"done","finished":true},
+             "ace":{"title":"Regen","caption":"German, pop","lyrics":"[Verse]\nEs regnet\n","instrumental":false,
+               "language":"de","duration":30,"bpm":92,"key":"D minor","timeSignature":4,"task":"text2music"}}
+            """#.utf8)
+        let detail = try JSONDecoder.tonwerk().decode(SketchDetail.self, from: data)
+        let form = AceForm(request: try XCTUnwrap(detail.ace))
+        XCTAssertEqual(form.caption, "German, pop")
+        XCTAssertEqual(form.lyrics, "[Verse]\nEs regnet\n")
+        XCTAssertEqual(form.language, "de")
+        XCTAssertEqual(form.bpm, 92)
+        XCTAssertEqual(form.key, "D minor")
+        XCTAssertEqual(form.timeSignature, 4)
+        XCTAssertEqual(form.duration, 30)
+        XCTAssertEqual(form.task, .text2music)
+        XCTAssertTrue(form.enrichCaption)
+        XCTAssertEqual(form.batch, 1)
+    }
 }

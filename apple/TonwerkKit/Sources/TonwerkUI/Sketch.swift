@@ -8,6 +8,8 @@ struct SketchDetail: Decodable {
     let job: Components.Schemas.SketchJob
     let abc: String?
     let request: Components.Schemas.SongRequest?
+    /// What ACE-Step can take of the plan: lyrics, style, tempo, key, metre and length, no melody.
+    let ace: Components.Schemas.AceSongRequest?
     let warnings: [Components.Schemas.SketchWarning]?
     let bars: Int?
     let seconds: Double?
@@ -139,6 +141,14 @@ final class SketchSession {
         model.form.take(request)
         model.saveForm()
         model.page = .create
+    }
+
+    /// The plan on the ACE-Step page, as far as ACE-Step reads it: it takes no score, so melody and chords stay here.
+    func useAce(_ detail: SketchDetail) {
+        guard let request = detail.ace else { return }
+        model.aceForm = AceForm(request: request)
+        model.saveAceForm()
+        model.openAce()
     }
 
     nonisolated static func stageName(_ stage: String) -> String {

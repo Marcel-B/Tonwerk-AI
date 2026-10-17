@@ -8090,6 +8090,7 @@
           "abc",
           "lyrics",
           "request",
+          "ace",
           "warnings",
           "bars",
           "seconds"
@@ -8107,6 +8108,9 @@
           },
           "request": {
             "$ref": "#/components/schemas/SongRequest"
+          },
+          "ace": {
+            "$ref": "#/components/schemas/AceSongRequest"
           },
           "warnings": {
             "type": "array",

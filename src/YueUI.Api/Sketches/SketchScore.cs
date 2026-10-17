@@ -4,6 +4,8 @@ using System.Text.RegularExpressions;
 using YueToLogic.Core.Abc;
 using YueToLogic.Core.Harmony;
 using YueToLogic.Core.Model;
+using YueUI.Api.Ace;
+using YueUI.Api.Timing;
 
 namespace YueUI.Api.Sketches;
 
@@ -85,7 +87,46 @@ public static partial class SketchScore
             FullSteps: null,
             AbcSampling: null,
             SemanticSampling: null);
-        return new SketchResult(job, abc, lyrics, request, warnings, plan.Sections.Sum(s => s.Bars.Count), seconds);
+        return new SketchResult(
+            job, abc, lyrics, request, AceRequest(plan, lyrics, seconds), warnings, plan.Sections.Sum(s => s.Bars.Count),
+            seconds);
+    }
+
+    /// <summary>
+    /// What of the plan ACE-Step can take: it reads no score, so melody and chords stay behind, but the lyrics with
+    /// their section tags, the style as caption, tempo, key, metre and length are what its LM otherwise picks itself.
+    /// Everything else is left to the page's defaults.
+    /// </summary>
+    public static AceSongRequest AceRequest(SketchPlan plan, string lyrics, double seconds)
+    {
+        var (key, _, minor) = Key(plan.Key, []);
+        var beats = Math.Clamp(plan.BeatsPerBar, 1, 12);
+        return new AceSongRequest(
+            Title: plan.Title.Trim(),
+            Caption: plan.Style.Trim(),
+            Lyrics: lyrics,
+            Instrumental: false,
+            Language: LyricsTimer.Language(plan.Style, lyrics),
+            Duration: Math.Clamp(Math.Ceiling(seconds), 10, 600),
+            Bpm: (int)Tempo(plan),
+            Key: AceKey(key, minor),
+            TimeSignature: AceSongRequest.TimeSignatures.Contains(beats) ? beats : null,
+            Task: "text2music");
+    }
+
+    /// <summary>"F#m" → "F# minor", spelled with the roots ACE-Step's key list has (no Cb, D#, G#, A#).</summary>
+    private static string AceKey(string key, bool minor)
+    {
+        var root = minor ? key[..^1] : key;
+        root = root switch
+        {
+            "Cb" => "B",
+            "D#" => "Eb",
+            "G#" => "Ab",
+            "A#" => "Bb",
+            _ => root,
+        };
+        return root + (minor ? " minor" : " major");
     }
 
     /// <summary>

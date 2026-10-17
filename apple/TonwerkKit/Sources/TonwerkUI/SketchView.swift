@@ -207,6 +207,15 @@ private struct SketchSessionView: View {
                         Label("Als YuE-Song ins Formular", systemImage: "sparkles")
                     }
                     .buttonStyle(.borderedProminent)
+                    if detail.ace != nil {
+                        Button {
+                            session.useAce(detail)
+                        } label: {
+                            Label("Als ACE-Song", systemImage: "sparkles")
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Text, Stil, Tempo, Tonart, Takt und Länge auf die ACE-Step-Seite; Melodie und Akkorde liest ACE-Step nicht.")
+                    }
                     Button {
                         Task { await save(detail, midi: true) }
                     } label: {

@@ -672,6 +672,7 @@ const messages = {
     sketchWarning_tooLong: 'Mit {detail} s länger als zehn Minuten, YuE2 bricht ab',
     sketchSections: 'Ablauf',
     sketchUseSong: 'Als YuE-Song ins Formular',
+    sketchUseAce: 'Als ACE-Song',
     sketchMidi: 'MIDI-Entwurf',
     sketchScore: 'Partitur (.abc)',
     sketchLogic: 'Auf der Seite Logic',
@@ -679,6 +680,8 @@ const messages = {
     sketchDelete: 'Löschen',
     sketchDeleteConfirm: '„{title}“ löschen? Der Plan ist dann weg.',
     sketchApplied: '„{title}“ steht im Formular: Text, Stil und Partitur mit Planung „Voll“.',
+    sketchAceApplied:
+      '„{title}“ steht auf der ACE-Step-Seite: Text, Stil, Tempo, Tonart, Takt und Länge. Melodie und Akkorde liest ACE-Step nicht.',
     sketchTokens: '{input} Tokens hinein, {output} heraus',
     sketchUntitled: 'Ausarbeitung',
     insights: 'Was gut ankommt',
@@ -1795,6 +1798,7 @@ const messages = {
     sketchWarning_tooLong: 'At {detail} s longer than ten minutes, YuE2 stops',
     sketchSections: 'Form',
     sketchUseSong: 'Into the form as a YuE song',
+    sketchUseAce: 'As an ACE song',
     sketchMidi: 'MIDI draft',
     sketchScore: 'Score (.abc)',
     sketchLogic: 'On the Logic page',
@@ -1802,6 +1806,8 @@ const messages = {
     sketchDelete: 'Delete',
     sketchDeleteConfirm: 'Delete “{title}”? Its plan will be gone.',
     sketchApplied: '“{title}” is in the form: lyrics, style and score with planning “full”.',
+    sketchAceApplied:
+      '“{title}” is on the ACE-Step page: lyrics, style, tempo, key, metre and length. ACE-Step reads no melody or chords.',
     sketchTokens: '{input} tokens in, {output} out',
     sketchUntitled: 'Sketch',
     insights: 'What works',

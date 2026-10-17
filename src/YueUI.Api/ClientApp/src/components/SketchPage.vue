@@ -5,7 +5,8 @@ import Select from 'primevue/select'
 import { useConfirm } from 'primevue/useconfirm'
 import { ApiError, deleteSketch, getSketch, getSketches, getSketchInfo, planSketch, sketchFileUrl } from '../api'
 import { formatDuration, locale, t, type MessageKey } from '../i18n'
-import { openMidiOn } from '../view'
+import { aceForm, fromAceRequest } from '../ace'
+import { navigate, openMidiOn } from '../view'
 import type { SketchInfo, SketchResult, SketchStage, SketchSummary, SketchWarning, SongRequest } from '../types'
 
 /**
@@ -172,6 +173,15 @@ function useSong(result: SketchResult): void {
   }
 }
 
+/** What ACE-Step can take of the plan (lyrics, style, tempo, key, metre, length) on its page; the melody stays here. */
+function useAce(result: SketchResult): void {
+  if (result.ace) {
+    aceForm.value = fromAceRequest(result.ace)
+    navigate('ace')
+    emit('notice', t('sketchAceApplied', { title: result.ace.title || t('sketchUntitled') }))
+  }
+}
+
 function toLogic(result: SketchResult): void {
   if (result.abc) {
     const name = `${result.job.title || 'score'}.abc`
@@ -296,6 +306,14 @@ function chordLine(chords: string[]): string {
       <template v-if="selected.job.plan && selected.request">
         <div class="flex flex-wrap gap-2">
           <Button icon="pi pi-sparkles" :label="t('sketchUseSong')" @click="useSong(selected)" />
+          <Button
+            v-if="selected.ace"
+            icon="pi pi-sparkles"
+            :label="t('sketchUseAce')"
+            severity="secondary"
+            outlined
+            @click="useAce(selected)"
+          />
           <a :href="sketchFileUrl(selected.job.id, 'midi')" download class="no-underline">
             <Button icon="pi pi-download" :label="t('sketchMidi')" severity="secondary" outlined tabindex="-1" />
           </a>

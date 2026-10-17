@@ -106,12 +106,14 @@ public sealed record SketchSummary(
 
 /// <summary>A finished sketch with everything made from its plan.</summary>
 /// <param name="Request">The song as the create form takes it, score and planning included.</param>
+/// <param name="Ace">What of it ACE-Step's page can take: lyrics, style, tempo, key, metre and length, no melody.</param>
 /// <param name="Warnings">What the code had to repair or doubts (a bar too long, a line with more syllables than notes).</param>
 public sealed record SketchResult(
     SketchJob Job,
     string Abc,
     string Lyrics,
     Library.SongRequest Request,
+    Ace.AceSongRequest Ace,
     IReadOnlyList<SketchWarning> Warnings,
     int Bars,
     double Seconds);

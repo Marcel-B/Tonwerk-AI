@@ -60,6 +60,42 @@ public sealed class SketchScoreTests
     }
 
     [Fact]
+    public void Ace_step_gets_lyrics_style_tempo_key_metre_and_length()
+    {
+        var result = SketchScore.Result(new SketchJob { Id = "a", Plan = SketchSamples.Plan() });
+
+        var ace = result.Ace;
+        Assert.Equal("Before the Silence", ace.Title);
+        Assert.Equal(SketchSamples.Plan().Style, ace.Caption);
+        Assert.Equal(result.Lyrics, ace.Lyrics);
+        Assert.Equal("en", ace.Language);
+        Assert.Equal(96, ace.Bpm);
+        Assert.Equal("D minor", ace.Key);
+        Assert.Equal(4, ace.TimeSignature);
+        // 17.5 seconds, rounded up and raised to ACE-Step's shortest.
+        Assert.Equal(18, ace.Duration);
+        Assert.Equal("text2music", ace.Task);
+        Assert.Null(ace.Seed);
+    }
+
+    [Theory]
+    [InlineData("G#m", 3, "Ab minor", 3)]
+    [InlineData("Cb", 5, "B major", null)]
+    [InlineData("F#", 6, "F# major", 6)]
+    [InlineData("nonsense", 4, "C major", 4)]
+    public void Ace_step_keys_use_its_spelling_and_odd_metres_are_left_to_it(
+        string key, int beats, string expected, int? metre)
+    {
+        var plan = SketchSamples.Plan() with { Key = key, BeatsPerBar = beats };
+
+        var ace = SketchScore.AceRequest(plan, "", 5);
+
+        Assert.Equal(expected, ace.Key);
+        Assert.Equal(metre, ace.TimeSignature);
+        Assert.Equal(10, ace.Duration);
+    }
+
+    [Fact]
     public void Bars_that_do_not_add_up_are_repaired_and_reported()
     {
         var plan = SketchSamples.Plan() with

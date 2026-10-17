@@ -10,7 +10,10 @@ import TonwerkDSP
 final class TonwerkSynthUnit: AUAudioUnit {
     static let component = AudioComponentDescription(
         componentType: kAudioUnitType_MusicDevice, componentSubType: fourCharacterCode("Twap"),
-        componentManufacturer: fourCharacterCode("Bvlp"), componentFlags: 0, componentFlagsMask: 0)
+        componentManufacturer: fourCharacterCode("Bvlp"),
+        // The Mac app is sandboxed, and a sandboxed process finds no component that is not marked safe for it: without
+        // the flag the keyboard said "Der Synthesizer ließ sich nicht laden." and the Logic page fell back to the sampler.
+        componentFlags: AudioComponentFlags.sandboxSafe.rawValue, componentFlagsMask: 0)
 
     private static let registration: Void = {
         AUAudioUnit.registerSubclass(
@@ -23,7 +26,7 @@ final class TonwerkSynthUnit: AUAudioUnit {
     /// A new instrument node with the synthesizer, playing `sound`; made asynchronously, as Apple asks for an
     /// `AUAudioUnit` subclass, and in this process, the only one the unit is registered in.
     @MainActor
-    static func loadInstrument(playing sound: SynthSound) async -> (AVAudioUnitMIDIInstrument, TonwerkSynthUnit)? {
+    static func loadInstrument(playing sound: SynthSound) async throws -> (AVAudioUnitMIDIInstrument, TonwerkSynthUnit) {
         _ = registration
         lastMade = nil
         // iOS has no out-of-process option to rule out; a unit registered with `registerSubclass` is in-process there.
@@ -32,13 +35,23 @@ final class TonwerkSynthUnit: AUAudioUnit {
         #else
         let options: AudioComponentInstantiationOptions = []
         #endif
-        guard let made = try? await AVAudioUnit.instantiate(with: component, options: options),
-            let node = made as? AVAudioUnitMIDIInstrument,
+        let made = try await AVAudioUnit.instantiate(with: component, options: options)
+        guard let node = made as? AVAudioUnitMIDIInstrument,
             let unit = node.auAudioUnit as? TonwerkSynthUnit ?? lastMade
-        else { return nil }
+        else { throw LoadError.unexpectedUnit(String(describing: type(of: made.auAudioUnit))) }
         lastMade = nil
         unit.play(sound)
         return (node, unit)
+    }
+
+    enum LoadError: LocalizedError {
+        case unexpectedUnit(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .unexpectedUnit(let name): "Statt des Synthesizers kam \(name)."
+            }
+        }
     }
 
     private let state: RenderState

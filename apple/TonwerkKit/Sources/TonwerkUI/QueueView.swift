@@ -7,7 +7,7 @@ struct QueueView: View {
     @Environment(AppModel.self) private var model
 
     private var empty: Bool {
-        model.inProgress.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
+        model.inProgress.isEmpty && model.finishedSongs.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
             && model.runningTranscriptions.isEmpty && model.speechJobs.isEmpty
             && model.aceJobs.isEmpty
     }
@@ -17,14 +17,26 @@ struct QueueView: View {
             VStack(alignment: .leading, spacing: 12) {
                 heading("Speicher")
                 ModelOverview()
-                if !model.readySongIds.isEmpty {
-                    Button {
-                        Task { await model.playlistOfReadySongs() }
-                    } label: {
-                        Label("Fertige Songs als Playlist (\(model.readySongIds.count))", systemImage: "music.note.list")
+                if !model.finishedSongs.isEmpty || !model.readySongIds.isEmpty {
+                    HStack(spacing: 8) {
+                        if !model.finishedSongs.isEmpty {
+                            Button {
+                                withAnimation { model.hideFinished() }
+                            } label: {
+                                Label("Erledigte ausblenden", systemImage: "eye.slash")
+                            }
+                            .help("Fertige, fehlgeschlagene und abgebrochene Songs von dieser Seite nehmen; die Bibliothek behält sie")
+                        }
+                        if !model.readySongIds.isEmpty {
+                            Button {
+                                Task { await model.playlistOfReadySongs() }
+                            } label: {
+                                Label("Als Playlist (\(model.readySongIds.count))", systemImage: "music.note.list")
+                            }
+                            .help("Die fertigen Songs der Warteschlange als neue Playlist, zum Anhören und Bewerten")
+                        }
                     }
                     .buttonStyle(.bordered)
-                    .help("Die fertigen Songs der Warteschlange als neue Playlist, zum Anhören und Bewerten")
                 }
                 if empty {
                     VStack(spacing: 8) {
@@ -47,6 +59,14 @@ struct QueueView: View {
                     ForEach(model.inProgress, id: \.id) { state in
                         WorkingCard(state: state)
                             .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                if !model.finishedSongs.isEmpty {
+                    heading("Erledigt")
+                        .padding(.top, 8)
+                    ForEach(model.finishedSongs, id: \.id) { state in
+                        FinishedCard(state: state)
+                            .transition(.opacity)
                     }
                 }
                 if !model.voiceJobs.isEmpty {
@@ -97,11 +117,14 @@ struct QueueView: View {
                             .transition(.opacity)
                     }
                 }
+                WorkerLog()
+                    .padding(.top, 8)
             }
             .padding()
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
             .animation(.easeInOut(duration: 0.25), value: model.inProgress.map(\.id))
+            .animation(.easeInOut(duration: 0.25), value: model.finishedSongs.map(\.id))
             .animation(.easeInOut(duration: 0.25), value: model.queue.map(\.id))
             .animation(.easeInOut(duration: 0.25), value: model.voiceJobs.map(\.id))
             .animation(.easeInOut(duration: 0.25), value: model.videoJobs.map(\.id))
@@ -188,6 +211,144 @@ private struct WorkingCard: View {
             parts.append("Seed \(seed)")
         }
         return parts.isEmpty ? Stages.name(stage) : parts.joined(separator: " · ")
+    }
+}
+
+/// A song the worker is done with, folded to one line as on the web page: its end, how long it took in all and the
+/// worker's last word; the steps open on request.
+private struct FinishedCard: View {
+    @Environment(AppModel.self) private var model
+    let state: Components.Schemas.SongState
+    @State private var showSteps = false
+
+    private var title: String {
+        state.title.flatMap { $0.isEmpty ? nil : $0 } ?? state.run
+    }
+
+    private var listed: Song? { model.songs.first { $0.id == state.id } }
+
+    /// From the first stage's start to the last's, which is the song's end.
+    private var total: Double? {
+        guard let stages = state.stages, let first = stages.first, let last = stages.last, stages.count > 1 else {
+            return nil
+        }
+        return last.startedAt.timeIntervalSince(first.startedAt)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                if let index = state.index {
+                    Text("Song \(index)")
+                        .foregroundStyle(.secondary)
+                }
+                if let voice = state.voice?.voiceLabel {
+                    Label(voice, systemImage: "person")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                if let song = listed, state.stage == "ready" {
+                    Button {
+                        let ready = model.readySongIds.compactMap { id in model.songs.first { $0.id == id } }
+                        model.player.play(song, in: ready.isEmpty ? [song] : ready)
+                    } label: {
+                        Image(systemName: "play.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abspielen")
+                }
+            }
+            HStack(spacing: 10) {
+                Text(Stages.name(state.stage ?? "ready"))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(state.stage == "failed" ? Color.red : Color.primary)
+                if let total {
+                    Text("insgesamt \(Song.clock(total))")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                if !(state.stages ?? []).isEmpty {
+                    Button(showSteps ? "Schritte ausblenden" : "Schritte") {
+                        withAnimation { showSteps.toggle() }
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.subheadline)
+                }
+            }
+            if let note = state.message ?? state.detail, !note.isEmpty {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+            if showSteps {
+                StageTimeline(steps: Stages.steps(of: state, now: .now), fraction: 1)
+            }
+        }
+        .card()
+    }
+}
+
+/// The worker's log under the queue, closed by default: its stderr can bring several lines a second.
+private struct WorkerLog: View {
+    @Environment(AppModel.self) private var model
+    @State private var open = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $open) {
+            if model.workerLog.isEmpty {
+                Text("Noch keine Einträge.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(model.workerLog.enumerated()), id: \.offset) { index, entry in
+                                line(entry)
+                                    .id(index)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 320)
+                    // Opens at its end and stays there while lines come in, as on the web page.
+                    .onAppear { proxy.scrollTo(model.workerLog.count - 1, anchor: .bottom) }
+                    .onChange(of: model.workerLog.count) { _, count in
+                        proxy.scrollTo(count - 1, anchor: .bottom)
+                    }
+                }
+            }
+        } label: {
+            Text("Protokoll")
+                .font(.headline)
+        }
+    }
+
+    private func line(_ entry: Components.Schemas.LogEntry) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(entry.time.formatted(date: .omitted, time: .standard))
+                .foregroundStyle(.secondary)
+            Text(entry.message)
+                .foregroundStyle(color(entry.level))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .font(.caption.monospaced())
+        .textSelection(.enabled)
+    }
+
+    private func color(_ level: String) -> Color {
+        switch level {
+        case "error": .red
+        case "warning", "warn": .orange
+        default: .primary
+        }
     }
 }
 

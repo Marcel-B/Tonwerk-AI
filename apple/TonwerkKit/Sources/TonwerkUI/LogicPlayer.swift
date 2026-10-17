@@ -164,7 +164,7 @@ final class LogicPlayer {
 
     /// The synthesizer for a pitched track, the sampler for drums or if the synthesizer cannot be made.
     private func makeInstrument(for track: Track) async -> Instrument {
-        if let sound = track.sound, case let (node, unit)? = await TonwerkSynthUnit.loadInstrument(playing: sound) {
+        if let sound = track.sound, case let (node, unit)? = try? await TonwerkSynthUnit.loadInstrument(playing: sound) {
             return .synth(node, unit)
         }
         let sampler = AVAudioUnitSampler()

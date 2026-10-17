@@ -24,9 +24,11 @@ private struct LogicStart: View {
     @Environment(AppModel.self) private var model
     @State private var importing = false
     @State private var problem: String?
+    @State private var query = ""
 
     var body: some View {
         let songs = model.songs.filter(\.hasScore)
+        let shown = songs.filter { $0.matches(query) }
         VStack(spacing: 0) {
             HStack {
                 Text("MIDI-Datei oder score.abc")
@@ -41,8 +43,38 @@ private struct LogicStart: View {
                     .foregroundStyle(.red)
                     .padding(.horizontal)
             }
+            if !songs.isEmpty {
+                // The library's search (title, style), in the page rather than the toolbar, which the library's own
+                // `searchable` may hold.
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Titel oder Stil", text: $query)
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
+                    if !query.isEmpty {
+                        Button {
+                            query = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Suche leeren")
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
             Divider()
-            songList(songs)
+            if !songs.isEmpty && shown.isEmpty {
+                ContentUnavailableView.search(text: query)
+            } else {
+                songList(shown)
+            }
         }
         .fileImporter(
             isPresented: $importing,

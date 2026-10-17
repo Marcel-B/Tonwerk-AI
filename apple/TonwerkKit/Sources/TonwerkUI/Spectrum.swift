@@ -91,7 +91,8 @@ final class SpectrumAnalyzer: @unchecked Sendable {
     private func compute(now: UInt64) {
         let fresh = ring.withLockUnchecked { ring -> Bool in
             // Nothing played for a moment (paused): the analyser hears silence, and the bars fall as in the browser.
-            guard now - ring.fed < 250_000_000 else { return false }
+            // The audio thread may have fed after `now` was taken, so `fed` can lie ahead of it.
+            guard now <= ring.fed || now - ring.fed < 250_000_000 else { return false }
             let next = ring.next
             input.withUnsafeMutableBufferPointer { input in
                 ring.samples.withUnsafeBufferPointer { samples in

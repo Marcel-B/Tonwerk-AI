@@ -169,6 +169,7 @@ private struct PianoKey: View {
     /// Reset by SwiftUI when the drag ends and also when it is cancelled, which `onEnded` never hears of; the note
     /// follows it in `onChange`, so a key cannot stay down.
     @GestureState private var down = false
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         RoundedRectangle(cornerRadius: 4)
@@ -176,7 +177,7 @@ private struct PianoKey: View {
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.4)))
             .overlay(alignment: .bottom) {
                 if !black, note % 12 == 0 {
-                    Text("C\(note / 12 - 1)").font(.caption2).foregroundStyle(.secondary).padding(.bottom, 4)
+                    Text("C\(note / 12 - 1)").font(.caption2).foregroundStyle(Color.black.opacity(0.5)).padding(.bottom, 4)
                 }
             }
             .contentShape(Rectangle())
@@ -198,6 +199,12 @@ private struct PianoKey: View {
 
     private var fill: Color {
         if down { return Theme.accent }
-        return black ? Color.primary.opacity(0.85) : Color.white
+        // Fixed greys rather than `primary`, which turns white in dark mode and made the black keys white too. In the
+        // dark the white keys dim a little so they do not glare, and stay far lighter than the black ones.
+        let dark = scheme == .dark
+        if black {
+            return Color(white: dark ? 0.06 : 0.13)
+        }
+        return Color(white: dark ? 0.8 : 1)
     }
 }

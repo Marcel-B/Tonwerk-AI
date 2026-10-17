@@ -79,8 +79,13 @@ final class KeyboardPlayer {
 
     private func prepare() async {
         if node == nil {
-            guard case let (node, unit)? = await TonwerkSynthUnit.loadInstrument(playing: sound) else {
-                problem = String(localized: "Der Synthesizer ließ sich nicht laden.")
+            let node: AVAudioUnitMIDIInstrument
+            let unit: TonwerkSynthUnit
+            do {
+                (node, unit) = try await TonwerkSynthUnit.loadInstrument(playing: sound)
+            } catch {
+                // With the reason, since a bare "could not load" left nothing to go on.
+                problem = String(localized: "Der Synthesizer ließ sich nicht laden: \(error.localizedDescription)")
                 return
             }
             engine.attach(node)
@@ -155,6 +160,9 @@ struct TestKeyboard: View {
                     PianoKey(note: note, black: true, noteOn: noteOn, noteOff: noteOff)
                         .frame(width: width * 0.6, height: geometry.size.height * 0.6)
                         .offset(x: width * CGFloat(white + 1) - width * 0.3)
+                        // Above the white keys in every case: on the Mac the white keys' edges showed through,
+                        // splitting each black key in two.
+                        .zIndex(1)
                 }
             }
         }
@@ -174,7 +182,7 @@ private struct PianoKey: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 4)
             .fill(fill)
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.4)))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.black.opacity(black ? 0.6 : 0.25)))
             .overlay(alignment: .bottom) {
                 if !black, note % 12 == 0 {
                     Text("C\(note / 12 - 1)").font(.caption2).foregroundStyle(Color.black.opacity(0.5)).padding(.bottom, 4)

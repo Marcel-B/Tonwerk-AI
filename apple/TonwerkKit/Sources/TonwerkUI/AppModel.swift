@@ -266,11 +266,13 @@ public final class AppModel {
         }
     }
 
-    /// Songs the worker is on and not done with, newest first.
+    /// Songs the worker is on and not done with, in the order they were asked for: by run, then by song, as the web
+    /// page's queue does. Not by `updatedAt`, which every progress event moves, so songs of one batch would keep
+    /// swapping places while they compose side by side.
     public var inProgress: [Components.Schemas.SongState] {
         working.values
             .filter { $0.finished != true }
-            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+            .sorted { ($0.run, $0.index ?? 0) < ($1.run, $1.index ?? 0) }
     }
 
     // MARK: Library

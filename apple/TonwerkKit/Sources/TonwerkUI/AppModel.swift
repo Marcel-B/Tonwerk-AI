@@ -25,6 +25,12 @@ public final class AppModel {
     public private(set) var queue: [Components.Schemas.QueuedJob] = []
     /// Songs and renders the worker has, by id; finished ones leave once the library has them.
     public private(set) var working: [String: Components.Schemas.SongState] = [:]
+    /// Finished songs the queue page no longer shows ("Erledigte ausblenden"), kept for this run of the app only, as the
+    /// web page keeps them per tab.
+    public private(set) var hiddenFinished: Set<String> = []
+    /// The worker's log, the snapshot's and every `log` event since, at most ``logCapacity`` lines like the web page.
+    public private(set) var workerLog: [Components.Schemas.LogEntry] = []
+    private let logCapacity = 300
     public private(set) var libraryError: String?
     /// The page in the sidebar; here rather than in the view, so "use in the form" can switch to the form.
     var page: Page? = .library
@@ -136,6 +142,8 @@ public final class AppModel {
         playlists = []
         queue = []
         working = [:]
+        hiddenFinished = []
+        workerLog = []
         liveVersions = [:]
         liveStems = [:]
         liveSwaps = [:]
@@ -205,6 +213,7 @@ public final class AppModel {
                 drafts[draft.id] = draft
             }
             working = Dictionary(snapshot.songs.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            workerLog = Array(snapshot.log.suffix(logCapacity))
             for image in snapshot.images ?? [] {
                 images[image.id] = image
             }
@@ -224,6 +233,10 @@ public final class AppModel {
             memoryHolder = info.holder
         case .song(let state):
             working[state.id] = state
+            // A song rendered again after being hidden is news again.
+            if state.finished != true {
+                hiddenFinished.remove(state.id)
+            }
             if state.finished == true {
                 Task { await reloadLibrary() }
             }
@@ -261,6 +274,11 @@ public final class AppModel {
             }
         case .library:
             Task { await reloadLibrary() }
+        case .log(let entry):
+            workerLog.append(entry)
+            if workerLog.count > logCapacity {
+                workerLog.removeFirst(workerLog.count - logCapacity)
+            }
         default:
             break
         }
@@ -273,6 +291,18 @@ public final class AppModel {
         working.values
             .filter { $0.finished != true }
             .sorted { ($0.run, $0.index ?? 0) < ($1.run, $1.index ?? 0) }
+    }
+
+    /// Songs the worker is done with (ready, failed, cancelled) and the queue page still shows, in the same order.
+    public var finishedSongs: [Components.Schemas.SongState] {
+        working.values
+            .filter { $0.finished == true && !hiddenFinished.contains($0.id) }
+            .sorted { ($0.run, $0.index ?? 0) < ($1.run, $1.index ?? 0) }
+    }
+
+    /// Takes the finished songs off the queue page; they stay in the library.
+    public func hideFinished() {
+        hiddenFinished.formUnion(working.values.filter { $0.finished == true }.map(\.id))
     }
 
     // MARK: Library
@@ -409,7 +439,7 @@ public final class AppModel {
     public var readySongIds: [String] {
         let listed = Set(songs.map(\.id))
         var ids = working.values
-            .filter { $0.stage == "ready" && listed.contains($0.id) }
+            .filter { $0.stage == "ready" && listed.contains($0.id) && !hiddenFinished.contains($0.id) }
             .sorted { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }
             .map(\.id)
         let aceRuns = liveAce.values

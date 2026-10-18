@@ -1,0 +1,25 @@
+{
+ "worker": {
+  "status": "stopped",
+  "busy": false,
+  "studioRunning": false,
+  "lastError": null,
+  "extensions": null
+ },
+ "songs": [],
+ "log": [],
+ "transcriptions": [],
+ "lyrics": null,
+ "versions": [],
+ "queue": [],
+ "bundleWindowSeconds": 1200,
+ "stems": [],
+ "speech": [],
+ "swaps": [],
+ "videos": [],
+ "images": [],
+ "memory": {
+  "holder": null
+ },
+ "ace": []
+}

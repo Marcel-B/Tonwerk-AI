@@ -1,0 +1,131 @@
+[
+ {
+  "id": "20261018-201500-Neon-Night",
+  "title": "Neon Night",
+  "createdAt": "2026-10-18T20:15:00+00:00",
+  "style": "dark synthwave, retro 80s, analog synth, driving beat, male vocal",
+  "lyrics": "[verse]\nCity lights are humming low\nChrome reflections, nowhere to go\n\n[chorus]\nNeon night, hold me tight\nWe are running out of light",
+  "songs": [
+   {
+    "id": "20261018-201500-Neon-Night/song1",
+    "index": 1,
+    "seed": 42,
+    "quality": "full",
+    "seconds": 21.0,
+    "hasAudio": true,
+    "hasScore": true,
+    "canRender": false,
+    "bytes": 245000,
+    "rating": 5,
+    "versions": [],
+    "coverUpdatedAt": null,
+    "note": null,
+    "videoFormats": [],
+    "engine": null,
+    "traits": {
+     "tempo": 100.0,
+     "key": "Am",
+     "from": "librosa",
+     "clarity": null,
+     "clarityFrom": null
+    }
+   },
+   {
+    "id": "20261018-201500-Neon-Night/song2",
+    "index": 2,
+    "seed": 43,
+    "quality": "full",
+    "seconds": 21.0,
+    "hasAudio": true,
+    "hasScore": true,
+    "canRender": false,
+    "bytes": 245000,
+    "rating": null,
+    "versions": [],
+    "coverUpdatedAt": null,
+    "note": null,
+    "videoFormats": [],
+    "engine": null,
+    "traits": {
+     "tempo": 100.0,
+     "key": "Am",
+     "from": "librosa",
+     "clarity": null,
+     "clarityFrom": null
+    }
+   }
+  ],
+  "originalTitle": "Neon Night",
+  "bytes": 490000
+ },
+ {
+  "id": "20261017-093000-Sonnenfeld",
+  "title": "Sonnenfeld",
+  "createdAt": "2026-10-17T09:30:00+00:00",
+  "style": "German indie pop, acoustic guitar, warm, uplifting, female vocal",
+  "lyrics": "[verse]\nMorgens liegt der Tau noch auf dem Feld\nUnd die Sonne malt ein neues Bild der Welt\n\n[chorus]\nSonnenfeld, wir laufen los\nDer Himmel ist so weit und groß",
+  "songs": [
+   {
+    "id": "20261017-093000-Sonnenfeld/song1",
+    "index": 1,
+    "seed": 7,
+    "quality": "full",
+    "seconds": 20.2,
+    "hasAudio": true,
+    "hasScore": true,
+    "canRender": false,
+    "bytes": 245000,
+    "rating": 4,
+    "versions": [],
+    "coverUpdatedAt": null,
+    "note": null,
+    "videoFormats": [],
+    "engine": null,
+    "traits": {
+     "tempo": 120.0,
+     "key": "C",
+     "from": "librosa",
+     "clarity": null,
+     "clarityFrom": null
+    }
+   }
+  ],
+  "originalTitle": "Sonnenfeld",
+  "bytes": 245000
+ },
+ {
+  "id": "20261016-221000-Glasregen",
+  "title": "Glasregen",
+  "createdAt": "2026-10-16T22:10:00+00:00",
+  "style": "ambient, ethereal pads, slow, dreamy, instrumental",
+  "lyrics": "",
+  "songs": [
+   {
+    "id": "20261016-221000-Glasregen/song1",
+    "index": 1,
+    "seed": 1234,
+    "quality": "draft",
+    "seconds": 21.0,
+    "hasAudio": true,
+    "hasScore": true,
+    "canRender": false,
+    "bytes": 245000,
+    "rating": 3,
+    "versions": [],
+    "coverUpdatedAt": null,
+    "note": null,
+    "videoFormats": [],
+    "engine": null,
+    "traits": {
+     "tempo": 72.0,
+     "key": "Dm",
+     "from": "librosa",
+     "clarity": null,
+     "clarityFrom": null
+    }
+   }
+  ],
+  "originalTitle": "Glasregen",
+  "bytes": 245000
+ }
+]

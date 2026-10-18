@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import MediaPlayer
 import Observation
+import TonwerkKit
 
 #if canImport(UIKit)
 import UIKit
@@ -133,7 +134,8 @@ public final class Player {
         guard let song = current, let server else { return }
         elapsed = 0
         duration = song.seconds ?? 0
-        let item = AVPlayerItem(url: song.streamURL(on: server))
+        // The demo server answers through URLSession, which AVPlayer bypasses: its songs play from the bundle.
+        let item = AVPlayerItem(url: DemoServer.playable(song.streamURL(on: server)))
         player.replaceCurrentItem(with: item)
         listen(to: item)
         activateSession()

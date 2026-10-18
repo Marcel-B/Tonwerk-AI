@@ -1,0 +1,113 @@
+# Builds Tonwerk-AI for iPhone and iPad, signs it for the App Store and uploads it to TestFlight. Started by hand
+# (Actions → TestFlight → Run workflow), like the Synth repository's workflow for the plugin app. Needs the repository
+# secrets (the same values as in Marcel-B/Synth)
+#   APPLE_TEAM_ID   the team id of the developer account
+#   ASC_KEY_ID      the App Store Connect API key's id (the ten characters in AuthKey_<id>.p8)
+#   ASC_ISSUER_ID   the issuer id above the key list in App Store Connect
+#   ASC_KEY_P8      the contents of AuthKey_<id>.p8
+# With the key's Admin role Xcode makes the distribution certificate and profile itself (cloud-managed signing); only
+# the app's entry in App Store Connect (bundle id de.bvelop.tonwerk.ai) has to exist. The Mac build signs ad hoc and
+# stays local, so only iOS goes up.
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (leer: MARKETING_VERSION aus dem Projekt)"
+        required: false
+        type: string
+
+jobs:
+  upload:
+    name: iPhone-App zu TestFlight
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apple
+    steps:
+      - uses: actions/checkout@v5
+      # App Store Connect takes only apps built with the iOS 26 SDK or later (ITMS-90725); the runner's default Xcode
+      # may be older, so the newest Xcode 26 or later it carries is chosen.
+      - name: Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)
+          version=$(basename "$xcode" .app); version=${version#Xcode_}
+          (( ${version%%.*} >= 26 )) || { echo "::error::no Xcode 26 on the runner"; ls -d /Applications/Xcode*; exit 1; }
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+      - name: Check the secrets
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=0
+          for name in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            [[ -n "${!name}" ]] || { echo "::error::secret $name is missing"; missing=1; }
+          done
+          exit $missing
+      - name: Version and build number
+        run: |
+          version="${{ inputs.version }}"
+          if [[ -z "$version" ]]; then
+            version=$(grep -m1 -oE 'MARKETING_VERSION = [^;]+' Tonwerk.xcodeproj/project.pbxproj | cut -d' ' -f3)
+          fi
+          # TestFlight takes each upload only with a new build number. Builds archived by hand in Xcode use small
+          # numbers (CURRENT_PROJECT_VERSION), so the workflow's start far above them and grow with every run.
+          build=$((1000 + ${{ github.run_number }}))
+          echo "TONWERK_VERSION=$version" >> "$GITHUB_ENV"
+          echo "TONWERK_BUILD_NUMBER=$build" >> "$GITHUB_ENV"
+          echo "Tonwerk-AI $version ($build)"
+      - name: API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$key"
+          chmod 600 "$key"
+          echo "ASC_KEY_PATH=$key" >> "$GITHUB_ENV"
+      - name: Archive
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcodebuild archive -project Tonwerk.xcodeproj -scheme Tonwerk -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Tonwerk-AI.xcarchive" \
+            -skipPackagePluginValidation -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$TONWERK_VERSION" CURRENT_PROJECT_VERSION="$TONWERK_BUILD_NUMBER" \
+            > "$RUNNER_TEMP/archive.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/archive.log" | sort -u | head -50; tail -100 "$RUNNER_TEMP/archive.log"; exit 1; }
+          grep -E "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
+      - name: Upload to TestFlight
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          options="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$options" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key><string>app-store-connect</string>
+              <key>destination</key><string>upload</string>
+              <key>teamID</key><string>$APPLE_TEAM_ID</string>
+              <key>signingStyle</key><string>automatic</string>
+              <key>manageAppVersionAndBuildNumber</key><false/>
+              <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Tonwerk-AI.xcarchive" -exportOptionsPlist "$options" \
+            -exportPath "$RUNNER_TEMP/export" -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+      - name: Remove the key
+        if: always()
+        working-directory: .
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"

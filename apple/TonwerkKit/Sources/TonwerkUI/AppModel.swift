@@ -116,6 +116,7 @@ public final class AppModel {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        DemoServer.register()
         form = CreateForm.load(from: defaults)
         aceForm = AceForm.load(from: defaults)
         if let saved = defaults.string(forKey: Self.serverKey), let url = URL(string: saved) {
@@ -131,6 +132,14 @@ public final class AppModel {
         defaults.set(url.absoluteString, forKey: Self.serverKey)
         use(url)
     }
+
+    /// The server built into the app, with three songs, for trying it without one (and for App Review).
+    public func connectDemo() {
+        defaults.set(DemoServer.url.absoluteString, forKey: Self.serverKey)
+        use(DemoServer.url)
+    }
+
+    public var isDemo: Bool { DemoServer.isDemo(server) }
 
     public func disconnect() {
         live?.cancel()

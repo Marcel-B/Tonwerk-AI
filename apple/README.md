@@ -46,6 +46,13 @@ Verschlüsselung (`ITSAppUsesNonExemptEncryption = NO`, nur HTTPS) und das Priva
 sind gesetzt, App Store Connect fragt danach nicht mehr. Der Mac-Build signiert ad hoc und geht so nicht über TestFlight;
 er bleibt ein lokaler Build.
 
+## Demo ohne Server
+
+Auf dem Startbildschirm führt „Ohne Server ausprobieren“ in eine eingebaute Beispielbibliothek (drei kurze, eigens
+synthetisierte Songs, Playlists, Sterne, Partitur). Neue Songs, Stimmen und die Werkzeuge brauchen den eigenen Server
+und sagen das. So kann Apples Prüfung die App testen; in den Review-Notizen darauf hinweisen. Zurück geht es in den
+Einstellungen mit „Eigenen Server verbinden“.
+
 ## Aufbau
 
 - `Tonwerk/` – nur der Einstieg der App.

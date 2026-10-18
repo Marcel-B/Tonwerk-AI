@@ -28,7 +28,9 @@ let package = Package(
                 "TonwerkAPI",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
-            ]
+            ],
+            // The demo server's library, playlists, score and three songs synthesized for it (DemoServer.swift).
+            resources: [.copy("Demo")]
         ),
         // Tonwerk's synthesizers: the Tonwerk Synth plugin's plain C++ DSP behind a C interface (include/TonwerkDSP.h).
         .target(name: "TonwerkDSP"),

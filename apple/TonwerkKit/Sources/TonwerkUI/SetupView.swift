@@ -44,6 +44,16 @@ struct SetupView: View {
             Text("Ohne Tailscale auf diesem Gerät ist der Server nicht erreichbar.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+            Divider().frame(maxWidth: 420)
+            VStack(spacing: 6) {
+                Button("Ohne Server ausprobieren") { model.connectDemo() }
+                    .buttonStyle(.bordered)
+                Text("Eine Beispielbibliothek mit drei Songs. Neue Songs erzeugt erst dein eigener Tonwerk-Server.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 420)
+            }
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -71,9 +81,14 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Server") {
-                LabeledContent("Adresse", value: model.server?.absoluteString ?? "–")
-                LabeledContent("Verbindung") { ConnectionLabel() }
-                Button("Anderen Server verwenden", role: .destructive) { model.disconnect() }
+                if model.isDemo {
+                    LabeledContent("Adresse", value: String(localized: "Demo ohne Server"))
+                    Button("Eigenen Server verbinden") { model.disconnect() }
+                } else {
+                    LabeledContent("Adresse", value: model.server?.absoluteString ?? "–")
+                    LabeledContent("Verbindung") { ConnectionLabel() }
+                    Button("Anderen Server verwenden", role: .destructive) { model.disconnect() }
+                }
             }
             Section {
                 LabeledContent("Version", value: Bundle.main.version)

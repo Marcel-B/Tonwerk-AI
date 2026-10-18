@@ -22,7 +22,7 @@ final class MidiOutputs {
     private var client = MIDIClientRef()
 
     init() {
-        let status = MIDIClientCreateWithBlock("Tonwerk" as CFString, &client) { [weak self] notification in
+        let status = MIDIClientCreateWithBlock("Tonwerk-AI" as CFString, &client) { [weak self] notification in
             guard notification.pointee.messageID == .msgSetupChanged else { return }
             Task { @MainActor in self?.refresh() }
         }

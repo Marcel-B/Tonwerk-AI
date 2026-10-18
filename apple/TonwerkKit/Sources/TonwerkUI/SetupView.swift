@@ -12,7 +12,7 @@ struct SetupView: View {
             Image(systemName: "waveform")
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
-            Text("Tonwerk")
+            Text("Tonwerk-AI")
                 .font(.largeTitle.bold())
             Text("Die Adresse deines Tonwerk-Servers, wie du sie im Browser öffnest.")
                 .multilineTextAlignment(.center)

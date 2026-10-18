@@ -94,7 +94,7 @@ struct MainView: View {
                     .buttonStyle(.borderless)
                 }
             }
-            .navigationTitle("Tonwerk")
+            .navigationTitle("Tonwerk-AI")
             #if os(macOS)
             .modifier(SidebarFooter())
             .navigationSplitViewColumnWidth(min: 190, ideal: 220)

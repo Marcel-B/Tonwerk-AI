@@ -14,7 +14,7 @@
 		1F3C5A7E9B2D4F6081A3C5E7 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		645EC79F22BEC5EFE970061D /* Tonwerk.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tonwerk.entitlements; sourceTree = "<group>"; };
 		CAF9B6B99962BF5C22648242 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		D2A57DC1D883FD21FB995169 /* Tonwerk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tonwerk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2A57DC1D883FD21FB995169 /* Tonwerk-AI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Tonwerk-AI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -59,7 +59,7 @@
 		86024CAD1E83101D97359D73 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D2A57DC1D883FD21FB995169 /* Tonwerk.app */,
+				D2A57DC1D883FD21FB995169 /* Tonwerk-AI.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,7 +87,7 @@
 				E07036B5367EDC4E164C8BB4 /* TonwerkUI */,
 			);
 			productName = Tonwerk;
-			productReference = D2A57DC1D883FD21FB995169 /* Tonwerk.app */;
+			productReference = D2A57DC1D883FD21FB995169 /* Tonwerk-AI.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -165,7 +165,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Support/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Tonwerk;
+				INFOPLIST_KEY_CFBundleDisplayName = "Tonwerk-AI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -189,7 +189,7 @@
 				);
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = de.bvelop.tonwerk.ai;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Tonwerk-AI";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
@@ -259,7 +259,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Support/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Tonwerk;
+				INFOPLIST_KEY_CFBundleDisplayName = "Tonwerk-AI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -283,7 +283,7 @@
 				);
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = de.bvelop.tonwerk.ai;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Tonwerk-AI";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;

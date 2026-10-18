@@ -121,7 +121,7 @@ jobs:
       - name: Check the Mac app's icon
         working-directory: apple
         run: |
-          app=$(find build/Build/Products -maxdepth 2 -name Tonwerk.app -type d | head -1)
+          app=$(find build/Build/Products -maxdepth 2 -name Tonwerk-AI.app -type d | head -1)
           echo "$app"
           plutil -p "$app/Contents/Info.plist" | grep -E 'CFBundleIcon(Name|File)'
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$app/Contents/Info.plist")" = AppIcon

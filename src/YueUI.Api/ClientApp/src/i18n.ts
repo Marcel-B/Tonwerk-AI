@@ -12,7 +12,7 @@ const messages = {
     workerReady: 'Worker bereit',
     workerBusy: 'Rechnet',
     disconnected: 'Verbindung zum Server unterbrochen – verbinde neu …',
-    updateAvailable: 'Eine neue Version von Tonwerk ist da.',
+    updateAvailable: 'Eine neue Version von Tonwerk-AI ist da.',
     reload: 'Neu laden',
     studioRunning:
       'YuE Studio ist geöffnet und hat einen eigenen Worker. Beide gleichzeitig rechnen zu lassen kann den Speicher sprengen – am besten die App beenden.',
@@ -155,7 +155,7 @@ const messages = {
     draftStepsHint: 'Solver-Schritte der Klangsynthese eines Entwurfs, 1–32 (Standard 8).',
     fullStepsHint: 'Solver-Schritte der Klangsynthese bei voller Qualität, 1–64 (Standard 32).',
     stepsMore:
-      'Mehr Schritte ergeben einen saubereren Klang, die Synthese dauert entsprechend länger. Melodie und Text ändern sich nicht, nur die Klangqualität.\n\nEntwurf:\n• 4: schnellste Hörprobe\n• 8: Standard\n• 16: besserer Entwurf, etwa doppelt so lange Synthese\n• 32: entspricht „Voll“ mit „Nur GPU“\n\nVoll:\n• 32: Standard des Modells\n• 48: anderthalbfache Synthesezeit; ob man den Unterschied hört, ist nicht belegt\n• 16: spart die Hälfte der Synthesezeit\n\n„Voll rendern“ in der Bibliothek nutzt immer 32.\n\nOriginal: draft_steps, 1–32, Standard 8; full_steps (Tonwerk-Erweiterung, setzt YuE2s ode_steps), 1–64, Standard 32.',
+      'Mehr Schritte ergeben einen saubereren Klang, die Synthese dauert entsprechend länger. Melodie und Text ändern sich nicht, nur die Klangqualität.\n\nEntwurf:\n• 4: schnellste Hörprobe\n• 8: Standard\n• 16: besserer Entwurf, etwa doppelt so lange Synthese\n• 32: entspricht „Voll“ mit „Nur GPU“\n\nVoll:\n• 32: Standard des Modells\n• 48: anderthalbfache Synthesezeit; ob man den Unterschied hört, ist nicht belegt\n• 16: spart die Hälfte der Synthesezeit\n\n„Voll rendern“ in der Bibliothek nutzt immer 32.\n\nOriginal: draft_steps, 1–32, Standard 8; full_steps (Tonwerk-AI-Erweiterung, setzt YuE2s ode_steps), 1–64, Standard 32.',
     engines: 'Rechenwerke',
     enginesAuto: 'Automatisch',
     enginesGpu: 'Nur GPU',
@@ -181,7 +181,7 @@ const messages = {
     maxLengthHint:
       'Obergrenze für die Songlänge; der Song endet sonst von selbst, wenn der Text gesungen ist. Über 6:00 ist Neuland für das Modell.',
     maxLengthMore:
-      'Wie lang ein Song wird, ergibt sich aus Text und Stil. Erreicht er die Grenze, wird er dort abgeschnitten. Eine kurze Grenze spart Zeit, wenn nur der Anfang interessiert, z. B. 1:00 zum Ausprobieren eines Stils.\n\nStandard des Modells sind 6:00 (9000 Tokens, 25 pro Sekunde). Bis 10:00 geht es über die YueUI-Erweiterung des Workers; mehr passt nicht in den Kontext des Modells, den sich Prompt, Partitur und Song teilen (24576 Tokens). Über 6:00 ist ungetestet: Das Modell muss dafür einen längeren Text auch wirklich ausfüllen, und die Neural Engine übernimmt Songs über etwa 8 Minuten nicht mehr, sie laufen dann auf der GPU.\n\nOriginal: max_tokens, 200–15000 (25 pro Sekunde), Standard 9000; ohne die Tonwerk-Erweiterung höchstens 9000. Die Untergrenze 200 ist YuE2s min_tokens.',
+      'Wie lang ein Song wird, ergibt sich aus Text und Stil. Erreicht er die Grenze, wird er dort abgeschnitten. Eine kurze Grenze spart Zeit, wenn nur der Anfang interessiert, z. B. 1:00 zum Ausprobieren eines Stils.\n\nStandard des Modells sind 6:00 (9000 Tokens, 25 pro Sekunde). Bis 10:00 geht es über die YueUI-Erweiterung des Workers; mehr passt nicht in den Kontext des Modells, den sich Prompt, Partitur und Song teilen (24576 Tokens). Über 6:00 ist ungetestet: Das Modell muss dafür einen längeren Text auch wirklich ausfüllen, und die Neural Engine übernimmt Songs über etwa 8 Minuten nicht mehr, sie laufen dann auf der GPU.\n\nOriginal: max_tokens, 200–15000 (25 pro Sekunde), Standard 9000; ohne die Tonwerk-AI-Erweiterung höchstens 9000. Die Untergrenze 200 ist YuE2s min_tokens.',
     abc: 'Eigene Partitur (ABC)',
     abcUse: 'Partitur verwenden',
     abcUnused: 'Ausgeschaltet: Die Partitur bleibt stehen, wird aber nicht mitgeschickt; YuE2 plant den Song selbst.',
@@ -567,11 +567,11 @@ const messages = {
     menuLab: 'Sprachlabor',
     menuLogs: 'Protokoll',
     menuStorage: 'Speicher',
-    storageIntro: 'Was Tonwerk auf dem Mac belegt, neu gemessen bei jedem Öffnen. Gelöschtes ist endgültig weg.',
+    storageIntro: 'Was Tonwerk-AI auf dem Mac belegt, neu gemessen bei jedem Öffnen. Gelöschtes ist endgültig weg.',
     storageRefresh: 'Neu messen',
     storageMac: 'Mac',
     storageVolumeFree: '{free} von {total} frei',
-    storageVolumeTonwerk: 'Tonwerk {size}',
+    storageVolumeTonwerk: 'Tonwerk-AI {size}',
     storageCleanup: 'Aufräumen',
     storageCleanupStream: 'Streaming-Kopien',
     storageCleanupStreamHint: 'Der Player macht sie beim nächsten Abspielen neu.',
@@ -640,7 +640,7 @@ const messages = {
     menuSketch: 'Ausarbeitung',
     sketch: 'Ausarbeitung',
     sketchIntro:
-      'Eine schriftliche Ausarbeitung (Form, Tempo, Akkorde, Text, Melodieideen) wird von Claude zu einer vollständigen Partitur: jede Zeile mit Melodie, jeder Takt mit Akkorden. Daraus macht Tonwerk einen MIDI-Entwurf und einen YuE-Song.',
+      'Eine schriftliche Ausarbeitung (Form, Tempo, Akkorde, Text, Melodieideen) wird von Claude zu einer vollständigen Partitur: jede Zeile mit Melodie, jeder Takt mit Akkorden. Daraus macht Tonwerk-AI einen MIDI-Entwurf und einen YuE-Song.',
     sketchCloud:
       'Die Ausarbeitung geht dazu an Anthropic; das kostet je Plan einige Cent bis rund einen Euro (mit Fable gut das Doppelte) und dauert ein paar Minuten.',
     sketchNoKey:
@@ -945,7 +945,7 @@ const messages = {
     'labNote_moss-tts': '48 kHz, Pausen als [pause 1.5s] im Text.',
     voices: 'Stimmen',
     voicesIntro:
-      'Referenzstimmen, mit denen ein Song neu gesungen werden kann („Mit Stimme singen“ bei den Songs). Tonwerk hat die Sammlung von ChangeMyVoice übernommen.',
+      'Referenzstimmen, mit denen ein Song neu gesungen werden kann („Mit Stimme singen“ bei den Songs). Tonwerk-AI hat die Sammlung von ChangeMyVoice übernommen.',
     voicesEmpty: 'Noch keine Stimme. Lade unten eine Aufnahme hoch.',
     voicesError: 'Die Stimmen konnten nicht geladen werden: {message}',
     versionsInWork: 'In Arbeit',
@@ -1142,7 +1142,7 @@ const messages = {
     workerReady: 'Worker ready',
     workerBusy: 'Working',
     disconnected: 'Lost the connection to the server – reconnecting …',
-    updateAvailable: 'A new version of Tonwerk is available.',
+    updateAvailable: 'A new version of Tonwerk-AI is available.',
     reload: 'Reload',
     studioRunning:
       'YuE Studio is open and has a worker of its own. Letting both generate at once can run out of memory – better quit the app.',
@@ -1285,7 +1285,7 @@ const messages = {
     draftStepsHint: 'Solver steps of a draft’s sound synthesis, 1–32 (default 8).',
     fullStepsHint: 'Solver steps of the sound synthesis at full quality, 1–64 (default 32).',
     stepsMore:
-      'More steps give a cleaner sound and take proportionally longer to synthesize. Melody and lyrics stay the same, only the sound quality changes.\n\nDraft:\n• 4: quickest preview\n• 8: default\n• 16: a better draft, about twice the synthesis time\n• 32: the same as “Full” with “GPU only”\n\nFull:\n• 32: the model’s default\n• 48: one and a half times the synthesis time; whether the difference is audible is not documented\n• 16: saves half the synthesis time\n\n“Render full” in the library always uses 32.\n\nOriginal: draft_steps, 1–32, default 8; full_steps (Tonwerk extension, sets YuE2’s ode_steps), 1–64, default 32.',
+      'More steps give a cleaner sound and take proportionally longer to synthesize. Melody and lyrics stay the same, only the sound quality changes.\n\nDraft:\n• 4: quickest preview\n• 8: default\n• 16: a better draft, about twice the synthesis time\n• 32: the same as “Full” with “GPU only”\n\nFull:\n• 32: the model’s default\n• 48: one and a half times the synthesis time; whether the difference is audible is not documented\n• 16: saves half the synthesis time\n\n“Render full” in the library always uses 32.\n\nOriginal: draft_steps, 1–32, default 8; full_steps (Tonwerk-AI extension, sets YuE2’s ode_steps), 1–64, default 32.',
     engines: 'Engines',
     enginesAuto: 'Automatic',
     enginesGpu: 'GPU only',
@@ -1311,7 +1311,7 @@ const messages = {
     maxLengthHint:
       'Upper limit for the song length; otherwise the song ends by itself once the lyrics are sung. Beyond 6:00 is new ground for the model.',
     maxLengthMore:
-      'How long a song gets follows from its lyrics and style. If it reaches the limit, it is cut off there. A short limit saves time when only the beginning matters, e.g. 1:00 to try out a style.\n\nThe model’s default is 6:00 (9000 tokens, 25 per second). Up to 10:00 works through YueUI’s worker extension; more does not fit the model’s context, which prompt, score and song share (24576 tokens). Beyond 6:00 is untested: the model has to actually fill it with longer lyrics, and the Neural Engine no longer takes songs over about 8 minutes, so they run on the GPU.\n\nOriginal: max_tokens, 200–15000 (25 per second), default 9000; at most 9000 without the Tonwerk extension. The lower limit 200 is YuE2’s min_tokens.',
+      'How long a song gets follows from its lyrics and style. If it reaches the limit, it is cut off there. A short limit saves time when only the beginning matters, e.g. 1:00 to try out a style.\n\nThe model’s default is 6:00 (9000 tokens, 25 per second). Up to 10:00 works through YueUI’s worker extension; more does not fit the model’s context, which prompt, score and song share (24576 tokens). Beyond 6:00 is untested: the model has to actually fill it with longer lyrics, and the Neural Engine no longer takes songs over about 8 minutes, so they run on the GPU.\n\nOriginal: max_tokens, 200–15000 (25 per second), default 9000; at most 9000 without the Tonwerk-AI extension. The lower limit 200 is YuE2’s min_tokens.',
     abc: 'Your own score (ABC)',
     abcUse: 'Use the score',
     abcUnused: 'Switched off: the score stays here but is not sent; YuE2 plans the song itself.',
@@ -1694,11 +1694,11 @@ const messages = {
     menuLab: 'Speech lab',
     menuLogs: 'Log',
     menuStorage: 'Storage',
-    storageIntro: 'What Tonwerk takes on the Mac, measured anew each time the page opens. Deleting is final.',
+    storageIntro: 'What Tonwerk-AI takes on the Mac, measured anew each time the page opens. Deleting is final.',
     storageRefresh: 'Measure again',
     storageMac: 'Mac',
     storageVolumeFree: '{free} of {total} free',
-    storageVolumeTonwerk: 'Tonwerk {size}',
+    storageVolumeTonwerk: 'Tonwerk-AI {size}',
     storageCleanup: 'Clean up',
     storageCleanupStream: 'Streaming copies',
     storageCleanupStreamHint: 'The player makes them again on the next play.',
@@ -1767,7 +1767,7 @@ const messages = {
     menuSketch: 'Sketch',
     sketch: 'Song sketch',
     sketchIntro:
-      'Claude turns a written song sketch (form, tempo, chords, lyrics, ideas for the melody) into a complete score: a melody for every line, chords for every bar. Tonwerk makes a MIDI draft and a YuE song from it.',
+      'Claude turns a written song sketch (form, tempo, chords, lyrics, ideas for the melody) into a complete score: a melody for every line, chords for every bar. Tonwerk-AI makes a MIDI draft and a YuE song from it.',
     sketchCloud:
       'The sketch goes to Anthropic for this; a plan costs from a few cents to about a dollar (well over twice that with Fable) and takes a few minutes.',
     sketchNoKey: 'No Anthropic API key is set yet. Put it in {path} (one line) or in ANTHROPIC_API_KEY.',
@@ -2069,7 +2069,7 @@ const messages = {
     'labNote_moss-tts': '48 kHz, pauses as [pause 1.5s] in the text.',
     voices: 'Voices',
     voicesIntro:
-      'Reference voices a song can be sung again with (“Sing with a voice” on the songs page). Tonwerk took over the collection of ChangeMyVoice.',
+      'Reference voices a song can be sung again with (“Sing with a voice” on the songs page). Tonwerk-AI took over the collection of ChangeMyVoice.',
     voicesEmpty: 'No voice yet. Upload a recording below.',
     voicesError: 'The voices could not be loaded: {message}',
     versionsInWork: 'In the works',

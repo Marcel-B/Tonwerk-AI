@@ -114,7 +114,7 @@ self.addEventListener('push', (event) => {
     message = { body: event.data ? event.data.text() : '' }
   }
   event.waitUntil(
-    self.registration.showNotification(message.title || 'Tonwerk', {
+    self.registration.showNotification(message.title || 'Tonwerk-AI', {
       body: message.body || '',
       tag: message.tag,
       icon: 'icon-192.png',

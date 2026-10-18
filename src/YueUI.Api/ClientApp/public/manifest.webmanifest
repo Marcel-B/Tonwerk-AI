@@ -1,7 +1,7 @@
 {
   "id": "/ui/",
-  "name": "Tonwerk",
-  "short_name": "Tonwerk",
+  "name": "Tonwerk-AI",
+  "short_name": "Tonwerk-AI",
   "description": "Songs, Stimmen und Partituren mit YuE2 und Co.",
   "start_url": "/ui/",
   "scope": "/ui/",

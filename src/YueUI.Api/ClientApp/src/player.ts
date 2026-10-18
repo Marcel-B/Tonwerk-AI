@@ -503,7 +503,7 @@ function showOnLockScreen(track: Track): void {
     return
   }
   const describe = (artwork: MediaImage[]) =>
-    new MediaMetadata({ title: track.title, artist: track.detail, album: 'Tonwerk', artwork })
+    new MediaMetadata({ title: track.title, artist: track.detail, album: 'Tonwerk-AI', artwork })
   const drawn = drawnArtwork.get(track.songId)
   navigator.mediaSession.metadata = describe(
     track.cover

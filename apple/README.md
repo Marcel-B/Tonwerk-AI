@@ -37,7 +37,11 @@ einmal mit dem Team signiert hat, sonst unter developer.apple.com → Identifier
    internen Tester eintragen und die App über die TestFlight-App aufs iPhone holen. Interne Builds brauchen keine
    Beta-Prüfung und laufen 90 Tage.
 
-Jeder weitere Upload braucht eine höhere Build-Nummer (`CURRENT_PROJECT_VERSION`, in Xcode *Build* unter General).
+Ohne Mac geht es über GitHub: *Actions → TestFlight → Run workflow* archiviert und lädt hoch
+(`.github/workflows/testflight.yml`, nur iPhone/iPad). Dafür braucht das Repo dieselben vier Secrets wie Marcel-B/Synth:
+`APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`. Die Build-Nummer ist dort 1000 plus die Laufnummer.
+
+Jeder weitere Upload von Hand braucht eine höhere Build-Nummer (`CURRENT_PROJECT_VERSION`, in Xcode *Build* unter General).
 Verschlüsselung (`ITSAppUsesNonExemptEncryption = NO`, nur HTTPS) und das Privacy-Manifest (`Tonwerk/PrivacyInfo.xcprivacy`)
 sind gesetzt, App Store Connect fragt danach nicht mehr. Der Mac-Build signiert ad hoc und geht so nicht über TestFlight;
 er bleibt ein lokaler Build.

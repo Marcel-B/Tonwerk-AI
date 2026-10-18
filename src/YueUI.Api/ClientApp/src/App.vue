@@ -643,7 +643,7 @@ async function useAsNewSong(songId: string): Promise<void> {
       :pt="{ button: { 'aria-label': t('menu') } }"
     >
       <template #start>
-        <span class="brand whitespace-nowrap">Tonwerk</span>
+        <span class="brand whitespace-nowrap">Tonwerk-AI</span>
       </template>
       <template #item="{ item, props, hasSubmenu, root }">
         <a v-bind="props.action" :class="['flex items-center gap-2', { 'text-primary font-semibold': item.active }]">

@@ -1,10 +1,10 @@
-# Tonwerk
+# Tonwerk-AI
 
 Eine Web-Oberfläche für [YuE Studio](https://github.com/multimodal-art-projection/YuE), die sich vom Handy oder Laptop aus bedienen lässt, zum Beispiel über Tailscale. Songs erzeugen, den Fortschritt live verfolgen, Entwürfe in voller Qualität rendern, anhören und herunterladen.
 
 Tonwerk bringt kein eigenes Modell mit. Es startet den Worker von YuE Studio (`src/tools/yue2_worker.py`) mit der Python-Umgebung, die die App installiert hat, und spricht ihn über sein JSON-Zeilen-Protokoll auf stdin/stdout an. Die Songs landen deshalb im selben Ordner wie die der App (`~/Music/YuE Studio`), und beide sehen dieselbe Bibliothek.
 
-Tonwerk hieß früher YuE UI. Repository, Projektnamen (`YueUI.Api`), der LaunchAgent `de.bvelop.yueui`, der Datenordner `~/Library/Application Support/YuE UI` und `yueui.db` tragen weiter den alten Namen, damit Deploy, Auto-Deploy und die vorhandenen Daten weiterlaufen.
+Tonwerk-AI hieß früher Tonwerk und davor YuE UI; „Tonwerk“ allein ist die App mit den Plugins (Repository Synth). Im Text unten steht oft noch Tonwerk. Repository, Projektnamen (`YueUI.Api`), der LaunchAgent `de.bvelop.yueui`, der Datenordner `~/Library/Application Support/YuE UI` und `yueui.db` tragen weiter den alten Namen, damit Deploy, Auto-Deploy und die vorhandenen Daten weiterlaufen.
 
 Davor sitzt eine kleine Erweiterung aus diesem Repository (`src/YueUI.Api/Worker/yueui_worker.py`). Sie lädt den Worker als Python-Modul und ergänzt das `generate`-Kommando um Parameter, die YuE Studio selbst nicht anbietet: Sampling für Partitur und Song (temperature, top_p, top_k, repetition_penalty, penalty_window), die Schrittzahl bei voller Qualität und Songs bis 10 Minuten statt 6. Sie greift dafür an einigen Stellen in den Worker ein und prüft beim Start, ob die noch so aussehen wie erwartet. Hat ein Update von YuE Studio den Worker verändert, läuft er unverändert weiter. Die Oberfläche weist dann darauf hin, dass diese Parameter keine Wirkung haben, der Grund steht im Protokoll. `cfg_scale` fehlt bewusst: Der Worker komponiert Songs in Batches, und die Batch-Decoder von YuE2 können keine CFG.
 

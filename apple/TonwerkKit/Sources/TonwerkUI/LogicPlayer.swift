@@ -355,7 +355,7 @@ enum MidiPanic {
     static func send(_ bytes: [UInt8], to endpoints: Set<MIDIEndpointRef>) {
         if port == 0 {
             MIDIClientCreateWithBlock("Tonwerk Panic" as CFString, &client, nil)
-            MIDIOutputPortCreate(client, "Tonwerk" as CFString, &port)
+            MIDIOutputPortCreate(client, "Tonwerk-AI" as CFString, &port)
         }
         guard port != 0, !bytes.isEmpty else { return }
         var packets = MIDIPacketList()

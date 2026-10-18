@@ -89,7 +89,7 @@ test('the storage page shows the parts and cleans up what can be made again', as
   await expect(page.getByText('Deine Werke')).toBeVisible()
   await expect(page.getByText('Abgebrochenes mit Resten')).toBeVisible()
   await expect(page.getByText('Songs mit einem Stern')).toBeVisible()
-  await expect(page.getByText(/Tonwerk 69\sGB · 1\.650\sGB von 2\.000\sGB frei/)).toBeVisible()
+  await expect(page.getByText(/Tonwerk-AI 69\sGB · 1\.650\sGB von 2\.000\sGB frei/)).toBeVisible()
   await expect(page.getByText('auf SSD').first()).toBeVisible()
   await page.screenshot({
     path: process.env.STORAGE_SHOTS ? `${process.env.STORAGE_SHOTS}/uebersicht-handy.png` : undefined,

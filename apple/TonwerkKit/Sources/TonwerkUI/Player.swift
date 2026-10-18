@@ -228,7 +228,7 @@ public final class Player {
         }
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: song.displayTitle,
-            MPMediaItemPropertyArtist: "Tonwerk",
+            MPMediaItemPropertyArtist: "Tonwerk-AI",
             MPNowPlayingInfoPropertyElapsedPlaybackTime: elapsed,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,

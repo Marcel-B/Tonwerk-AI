@@ -94,8 +94,8 @@ public static class PushTexts
         : ("Backup failed", error);
 
     public static (string Title, string Body) Test(string language) => IsGerman(language)
-        ? ("Tonwerk", "Benachrichtigungen funktionieren.")
-        : ("Tonwerk", "Notifications work.");
+        ? ("Tonwerk-AI", "Benachrichtigungen funktionieren.")
+        : ("Tonwerk-AI", "Notifications work.");
 
     private static bool IsGerman(string language) => language.StartsWith("de", StringComparison.OrdinalIgnoreCase);
 

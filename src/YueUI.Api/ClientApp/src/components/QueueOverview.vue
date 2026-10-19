@@ -47,6 +47,7 @@ const models: { model: Model; icon: string; label: MessageKey }[] = [
   { model: 'speech', icon: 'pi pi-comments', label: 'modelSpeech' },
   { model: 'image', icon: 'pi pi-palette', label: 'modelImage' },
   { model: 'ace', icon: 'pi pi-wave-pulse', label: 'modelAce' },
+  { model: 'singing', icon: 'pi pi-volume-up', label: 'modelSinging' },
   { model: 'transcription', icon: 'pi pi-microphone', label: 'modelTranscription' },
   { model: 'video', icon: 'pi pi-video', label: 'modelVideo' },
 ]
@@ -65,6 +66,9 @@ const shown = computed(() =>
       case 'transcription':
       case 'video':
         return running(m.model) + waiting(m.model) > 0
+      case 'singing':
+        // Its takes are only on the native app's page; the web shows it while it holds the memory.
+        return holder.value === 'singing'
       default:
         return true
     }
@@ -91,6 +95,8 @@ function running(model: Model): number {
       return props.transcriptions.filter((tr) => !tr.finished).length
     case 'video':
       return props.videos.filter((v) => !v.finished && v.stage !== 'queued').length
+    case 'singing':
+      return holder.value === 'singing' ? 1 : 0
   }
 }
 

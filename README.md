@@ -27,10 +27,10 @@ Auf einem Mac, auf dem außer macOS nichts installiert ist, richtet ein Skript a
 ```sh
 xcode-select --install                 # Command Line Tools (git, clang), einmal
 git clone https://github.com/Marcel-B/YuE-UI.git ~/repos/YueUI
-~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper oder --all für mehr
+~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper, --singing oder --all für mehr
 ```
 
-Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell.
+Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell, mit `--singing` SoulX-Singer für die Seite **Singen**.
 
 Die Schritte entsprechen denen des Installers der App und landen in denselben Ordnern (`~/Library/Application Support/YuE Studio`, Songs in `~/Music/YuE Studio`). Tonwerk braucht deshalb keine andere Konfiguration, und eine später installierte App findet die Modelle. Öffnet man die App, installiert sie ihre eigene Kopie über den Checkout; das funktioniert, nur die Git-Historie ist dann weg. Umgekehrt lässt das Skript eine Installation der App unangetastet, solange es nicht mit `--engine-from-source` läuft.
 
@@ -347,6 +347,27 @@ deploy/install-speech.sh --test   # danach jedes Modell einen Testsatz sprechen 
 
 Umgebung und Modelle liegen unter `~/Library/Application Support/YuE UI/speech/` (`env/`, `models/`), Aufnahmen und Ergebnisse daneben in `speech/voices/` und `speech/takes/`. Das Skript nimmt `uv`, wenn es installiert ist, sonst ein Python ab 3.10 (das von macOS ist 3.9, dann `brew install python@3.12`). Für die Aufnahmen braucht der Server `ffmpeg`.
 
+## Singen mit SoulX-Singer
+
+Noten und Text rein, Gesang raus: Die Seite **Singen** (nur in der App, unter **Werkzeuge**) lässt eine Melodie von [SoulX-Singer](https://github.com/Soul-AILab/SoulX-Singer) (Apache 2.0) mit Worten singen, ohne Begleitung.
+
+- **Melodie:** eine MIDI-Datei, eine `score.abc` oder ein Song der Bibliothek mit Partitur. Aus einer MIDI-Datei nimmt der Server die Spur, die nach Gesang heißt (`Vocal`, `Lead`, `Melodie`, `Gesang` …), sonst die mit Liedtext-Ereignissen, sonst die mit den meisten Noten; Schlagzeug (Kanal 10) und die Begleitstimmen (`Harmony …`) nie. Aus einer Partitur die Gesangsstimme. Gleichzeitige Noten werden zu einer Linie.
+- **Worte:** eine Silbe je Note, der Reihe nach; ein Wort bekommt so viele Noten, wie es nach dem Wörterbuch Silben hat. Marken wie `[Verse]` werden übersprungen, Bindestriche legen die Silben selbst fest (`to-mor-row`), ein allein stehendes `-` hält das vorige Wort über die nächste Note (Melisma). Hat die MIDI-Datei Liedtext-Ereignisse, singt sie diese; ein Bibliothekssong ohne eigene Worte seinen Songtext. Übrige Noten bleiben still, übrige Wörter fallen weg; das Ergebnis sagt, wie viele.
+- **Stimme:** SoulX-Singers zwei Beispielstimmen (Englisch, Mandarin). Eigene Stimmen brauchen eine Aufnahme mit Noten und Phonemen, das kommt später; bis dahin lässt sich das Ergebnis über **Mit anderer Stimme singen** umfärben.
+- **Tonhöhe:** wie geschrieben, um bis zu zwei Oktaven verschoben oder automatisch in die Lage der Stimme.
+
+Die Aussprache kommt aus dem englischen Wörterbuch (CMUdict über g2p_en). Deutsche Texte werden gesungen, aber mit englischer Aussprache; Umlaute werden umschrieben. Pausen über 0,2 s werden zu Stille, kürzere verlängern die Note davor, wie SoulX-Singers eigene MIDI-Übernahme es macht.
+
+Ein Ergebnis wartet wie die Sprachtests, bis YuE2 und die anderen großen Modelle den Speicher freigeben (das Modell braucht mit PyTorch auf Metal einige GB), und so lange warten diese. Die **Warteschlange** zeigt es unter **Singen** und mit einer Kachel **Gesang**; eine Benachrichtigung meldet fertige. Ergebnisse sind WAV (24 kHz mono) in `singing/` neben der Datenbank.
+
+**Einrichtung.** Einmal auf dem Mac im Repository, nach `deploy/install.sh` (oder über das Einrichtungsskript mit `--singing`, dann pflegen Updates es mit):
+
+```sh
+deploy/install-singing.sh   # SoulX-Singer (Commit fest im Skript), PyTorch und Pakete, Gewichte (etwa 2,8 GB), CMUdict
+```
+
+Alles liegt unter `~/Library/Application Support/YuE UI/singing/` (`env/`, `src/`, `models/`, `nltk_data/`). Im Linux-Container mit zufälligen Gewichten auf der CPU getestet, nicht auf dem Mac und nicht mit den echten Gewichten.
+
 ## Datensicherung in die Nextcloud
 
 Tonwerk sichert sich jede Nacht um 3 Uhr selbst in eine Nextcloud (über WebDAV, also auch in jeden anderen WebDAV-Speicher), nach dem Vorbild von module-o-mat. Hochgeladen werden:
@@ -491,6 +512,11 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `Speech:Python` (`Speech__Python`) | `<Root>/env/bin/python` | Python mit mlx-audio |
 | `Speech:ModelCache` (`Speech__ModelCache`) | `<Root>/models` | Hugging-Face-Cache der Sprachmodelle (`HF_HOME`) |
 | `Speech:Timeout` (`Speech__Timeout`) | `01:00:00` | so lange darf ein Ergebnis samt erstem Download dauern |
+| `Singing:Root` (`Singing__Root`) | `~/Library/Application Support/YuE UI/singing` | Ordner von SoulX-Singer (`env/`, `src/`, `models/`, `nltk_data/`); `Python`, `Source`, `Model`, `NltkData` einzeln |
+| `Singing:Device` (`Singing__Device`) | leer | PyTorch-Gerät; leer nimmt Metal (`mps`), wo es das gibt |
+| `Singing:Steps` / `Singing:Cfg` | `32` / `3` | Schritte und Guidance je Abschnitt |
+| `Singing:Timeout` (`Singing__Timeout`) | `00:30:00` | so lange darf ein Ergebnis samt Laden dauern |
+| `Singing:Voices` | die zwei Beispielstimmen | Stimmen: je `id`, `label`, `audio`, `metadata` (relativ zum Checkout), `language` |
 | `AudioMidi:Python` (`AudioMidi__Python`) | `~/Library/Application Support/YuE UI/midi/env/bin/python` | Python mit Basic Pitch für Audio zu MIDI |
 | `Montage:MediaRoot` (`Montage__MediaRoot`) | `~/Pictures/Tonwerk` | Ordner, dessen Unterordner der Videodialog als Fotos & Videos anbietet |
 | `Montage:Python` (`Montage__Python`) | `~/Library/Application Support/YuE UI/montage/env/bin/python` | Python mit librosa, Pillow und open_clip für Fotovideos |
@@ -528,11 +554,11 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | Methode | Pfad | |
 |---|---|---|
 | `GET` | `/api/status` | Worker-Zustand, Songs in Arbeit, Protokoll |
-| `GET` | `/api/busy` | `{ busy, reasons }`: ob ein Neustart laufende Arbeit abbräche (`songs`, `transcription`, `lyrics`, `voices`, `speech`); für `deploy/update.sh` |
-| `GET` | `/api/logs` | Gesammeltes Protokoll, neueste Zeilen zuerst: `source` (kommagetrennt: `server`, `worker`, `queue`, `lyrics`, `voices`, `speech`, `video`, `export`, `logic`, `backup`, `push`, `update`), `level` (Mindeststufe `debug`/`info`/`warning`/`error`), `q` (Text), `before` (Zeit der letzten Zeile, für die nächste Seite), `limit` (Standard 200) → `{ entries, more }` |
+| `GET` | `/api/busy` | `{ busy, reasons }`: ob ein Neustart laufende Arbeit abbräche (`songs`, `transcription`, `lyrics`, `voices`, `speech`, `singing`); für `deploy/update.sh` |
+| `GET` | `/api/logs` | Gesammeltes Protokoll, neueste Zeilen zuerst: `source` (kommagetrennt: `server`, `worker`, `queue`, `lyrics`, `voices`, `speech`, `singing`, `video`, `export`, `logic`, `backup`, `push`, `update`), `level` (Mindeststufe `debug`/`info`/`warning`/`error`), `q` (Text), `before` (Zeit der letzten Zeile, für die nächste Seite), `limit` (Standard 200) → `{ entries, more }` |
 | `GET` | `/metrics` | Messwerte im Textformat von Prometheus (`404`, wenn `Monitoring:Metrics` aus ist) |
 | `GET` | `/api/logs/report` | Bericht als Text für einen Chat: Version, Engines, Zustand, Warnungen und Fehler der letzten `hours` Stunden (Standard 24) mit Kontext |
-| `GET` | `/api/events` | dasselbe live als Server-Sent Events (`snapshot`, `song`, `worker`, `log`, `library`, `transcription`, `lyrics`, `version`, `speech`, `queue`, `ping`) |
+| `GET` | `/api/events` | dasselbe live als Server-Sent Events (`snapshot`, `song`, `worker`, `log`, `library`, `transcription`, `lyrics`, `version`, `speech`, `singing`, `queue`, `ping`) |
 | `POST` | `/api/generate` | neuer Lauf: `{ style, lyrics, title?, batch?: 1–10, quality?: "draft"\|"full", cot?, seed?, instrumental?, engines?, draftSteps?, maxTokens?: 200–15000, abc?, fullSteps?: 1–64, abcSampling?, semanticSampling?, voice?, lora?, loraStrength?: 0–3 }`; `lora` ist der Name einer LoRA aus `/api/loras` (`400`, wenn es sie nicht gibt), `voice` ist `{ voiceId, semiToneShift?, strength?, diffusionSteps?, keepReverb? }` wie bei den Fassungen und singt jeden fertigen Song danach mit dieser Stimme (`400` für eine unbekannte Stimme, `501` ohne Einrichtung); `abc` braucht `cot` "full" oder "melody", Sampling ist `{ temperature?, topP?, topK?, repetitionPenalty?, penaltyWindow? }`, über 9000 Tokens, `fullSteps` und Sampling nur mit der Worker-Erweiterung; antwortet `202`, ohne Inhalt, wenn der Lauf an den Worker ging, sonst mit dem wartenden Auftrag `{ id, kind, title, createdAt, songId, batch, quality, revision, voiceLabel }` |
 | `GET` | `/api/loras` | `{ folder, loras }`: die LoRAs im Ordner mit `name`, `sizeBytes`, `modifiedAt`, `triggerWord`, `steps`, `songs`, `minutes` |
 | `POST` | `/api/loras` | LoRA hochladen (Formular: `file` als `.safetensors` bis 1 GB, `name` optional); `201` mit der LoRA |
@@ -610,6 +636,9 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `POST` | `/api/speech/takes` | `{ text, voiceId?, models }`: ein Ergebnis je Modell, antwortet `202` mit ihnen; der Fortschritt kommt als `speech`-Event (`queued`, `loading`, `speaking`, dann `done` oder `failed` mit `message`); `501` ohne mlx-audio |
 | `GET` | `/api/speech/takes/{id}/audio` | fertiges Ergebnis als WAV (`?download=true` als Download) |
 | `DELETE` | `/api/speech/takes/{id}` | Ergebnis abbrechen oder löschen |
+| `GET` | `/api/singing` | Singen: `{ installed, modelDownloaded, python, source, model, nltkData, voices, takes }` (Ergebnisse neueste zuerst) |
+| `POST` | `/api/singing` | Formular mit `file` (MIDI oder `score.abc`, bis 5 MB) oder `song` (`run/songN`), dazu `lyrics?`, `voice?`, `pitchShift?` (−24 bis 24), `autoShift?`, `title?`; antwortet `202` mit dem Ergebnis, der Fortschritt kommt als `singing`-Event (`queued`, `loading`, `singing` mit `progress`, dann `done` oder `failed` mit `message`); `422` ohne Melodie, `501` ohne SoulX-Singer |
+| `GET` / `DELETE` | `/api/singing/{id}[/audio]` | fertiges Ergebnis als WAV (`?download=true` als Download) bzw. abbrechen oder löschen |
 | `GET` | `/api/audio-midi` | Audio zu MIDI: `{ installed, python }` |
 | `POST` | `/api/audio-midi` | Aufnahme zu MIDI: Formular mit `file` (jedes Format, das ffmpeg liest, bis 200 MB), `mono?` (Standard an), `quantize?`, `bends?`, `tempo?`; antwortet sofort mit der MIDI-Datei, die Zahl der Noten im Header `X-Audio-Midi-Notes`; `400` für das Raster ohne Tempo, `422` ohne Noten, `501` ohne Basic Pitch |
 | `POST` | `/api/songs/{run}/{song}/stems/{id}/{name}/midi` | Ein Stem zu MIDI: `{ mono?, quantize?, bends?, tempo? }`, Tempo sonst aus `score.abc` des Songs; Antwort wie oben |

@@ -45,6 +45,7 @@ final class LogSession {
         ("server", String(localized: "Server")), ("worker", String(localized: "YuE2-Worker")),
         ("queue", String(localized: "Warteschlange")), ("lyrics", String(localized: "Songtexte")),
         ("voices", String(localized: "Stimmen und Stems")), ("speech", String(localized: "Sprachlabor")),
+        ("singing", String(localized: "Singen")),
         ("images", String(localized: "Cover")), ("ace", "ACE-Step"), ("video", String(localized: "Videos")),
         ("export", String(localized: "Export und Streaming")), ("logic", "Logic"), ("backup", "Backup"),
         ("push", String(localized: "Benachrichtigungen")), ("update", String(localized: "Updates")),

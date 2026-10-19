@@ -12,6 +12,7 @@ enum Page: Hashable {
     case voices
     case transcribe
     case speech
+    case sing
     case ace
     case insights
     case sketch
@@ -71,6 +72,7 @@ struct MainView: View {
                     Label("Stimmen", systemImage: "person.wave.2").tag(Page.voices)
                     Label("Transkription", systemImage: "music.quarternote.3").tag(Page.transcribe)
                     Label("Sprachlabor", systemImage: "bubble.left.and.text.bubble.right").tag(Page.speech)
+                    Label("Singen", systemImage: "music.mic").tag(Page.sing)
                     Label("ACE-Step", systemImage: "waveform.path").tag(Page.ace)
                     Label("Auswertung", systemImage: "chart.bar").tag(Page.insights)
                     Label("Ausarbeitung", systemImage: "pencil.and.scribble").tag(Page.sketch)
@@ -136,6 +138,8 @@ struct MainView: View {
                 TranscriptionView()
             case .speech:
                 SpeechView()
+            case .sing:
+                SingView()
             case .ace:
                 AceView()
             case .insights:

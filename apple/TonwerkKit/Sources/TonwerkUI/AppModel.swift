@@ -69,6 +69,10 @@ public final class AppModel {
     var liveSpeech: [String: Components.Schemas.SpeechTake] = [:]
     /// The speech lab's state, kept like the transcription page's.
     var speechPage: SpeechSession?
+    /// Takes of the singing page in the works or finished since, by id, from the snapshot and `singing` events.
+    var liveSinging: [String: Components.Schemas.SingTake] = [:]
+    /// The singing page's state, kept like the speech lab's.
+    var singPage: SingSession?
     /// ACE-Step's jobs in the works or finished since, by id, from the snapshot and `ace` events.
     var liveAce: [String: Components.Schemas.AceJob] = [:]
     /// The ACE-Step page's state, kept like the speech lab's.
@@ -160,6 +164,8 @@ public final class AppModel {
         liveTranscriptions = [:]
         liveSpeech = [:]
         speechPage = nil
+        liveSinging = [:]
+        singPage = nil
         liveAce = [:]
         acePage = nil
         insights = nil
@@ -233,6 +239,7 @@ public final class AppModel {
             liveTranscriptions = Dictionary(
                 (snapshot.transcriptions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             liveSpeech = Dictionary((snapshot.speech ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+            liveSinging = Dictionary((snapshot.singing ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             liveAce = Dictionary((snapshot.ace ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         case .queue(let jobs):
             queue = jobs
@@ -274,6 +281,8 @@ public final class AppModel {
             }
         case .speech(let take):
             liveSpeech[take.id] = take
+        case .singing(let take):
+            liveSinging[take.id] = take
         case .ace(let job):
             let before = liveAce[job.id]?.stage
             liveAce[job.id] = job

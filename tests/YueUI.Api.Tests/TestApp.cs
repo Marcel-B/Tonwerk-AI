@@ -67,6 +67,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeSpeech Speech { get; } = new();
 
+    public FakeSinging Singing { get; } = new();
+
     public FakeVideoRenderer Videos { get; } = new();
 
     public FakeMontage Montage { get; } = new();
@@ -208,6 +210,12 @@ public sealed class TestApp : WebApplicationFactory<Program>
             services.AddSingleton<IAudioMixer>(Mixer);
 
             services.AddSingleton<ISpeechEngine>(Speech);
+            services.AddSingleton<Api.Singing.ISingingEngine>(Singing);
+            services.Configure<Api.Singing.SingingOptions>(options =>
+            {
+                options.Root = Path.Combine(Root, "singing");
+                options.WaitInterval = TimeSpan.FromMilliseconds(10);
+            });
             services.AddSingleton<Video.IVideoRenderer>(Videos);
             services.AddSingleton<Video.IMontageBuilder>(Montage);
             services.Configure<Video.MontageOptions>(options => options.MediaRoot = MediaRoot);
@@ -1450,5 +1458,51 @@ public sealed class FakeListener : Timing.IWordListener
         return Failure is not null
             ? Task.FromException<IReadOnlyList<Timing.HeardWord>>(new Timing.TimingException(Failure))
             : Task.FromResult<IReadOnlyList<Timing.HeardWord>>(Words);
+    }
+}
+
+public sealed class FakeSinging : Singing.ISingingEngine
+{
+    public bool Installed { get; set; } = true;
+
+    public bool ModelDownloaded { get; set; } = true;
+
+    /// <summary>Held open to keep a take singing; completed by default.</summary>
+    public TaskCompletionSource Gate { get; set; } = CompletedGate();
+
+    /// <summary>Set to make the next takes fail with it.</summary>
+    public string? Failure { get; set; }
+
+    public List<Singing.SingingJob> Jobs { get; } = [];
+
+    public async Task<Singing.SingingResult> SingAsync(
+        Singing.SingingJob job,
+        Action<string> stage,
+        Action<double> progress,
+        Action<Singing.SingingAlignment> aligned,
+        CancellationToken cancellationToken)
+    {
+        lock (Jobs)
+        {
+            Jobs.Add(job);
+        }
+        aligned(new Singing.SingingAlignment(job.Notes.Count, 0, 0));
+        stage("loading");
+        stage("singing");
+        progress(0.5);
+        await Gate.Task.WaitAsync(cancellationToken);
+        if (Failure is { } failure)
+        {
+            throw new Singing.SingingException(failure);
+        }
+        await File.WriteAllBytesAsync(job.Output, FakeSpeech.Wav(3), cancellationToken);
+        return new Singing.SingingResult(20.5, 6.25, 5.1);
+    }
+
+    private static TaskCompletionSource CompletedGate()
+    {
+        var gate = new TaskCompletionSource();
+        gate.SetResult();
+        return gate;
     }
 }

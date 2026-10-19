@@ -10,7 +10,8 @@ namespace YueUI.Api.Singing;
 
 /// <summary>The melody of a file, ready to be sung, or why there is none.</summary>
 /// <param name="Part">The track or voice it was taken from.</param>
-public sealed record SingingScore(IReadOnlyList<SungNote> Notes, string? Part, string? Problem);
+/// <param name="TempoBpm">The first tempo of the file, for the note editor's grid.</param>
+public sealed record SingingScore(IReadOnlyList<SungNote> Notes, string? Part, string? Problem, double TempoBpm = 120);
 
 /// <summary>
 /// Reads the melody to sing from a MIDI file or a YuE2 score (<c>score.abc</c>, as the library's songs, the sketch page
@@ -45,7 +46,7 @@ public static partial class SingingScores
                 Round((n.StartTicks + n.DurationTicks) * secondsPerTick),
                 n.NoteNumber))
             .ToList();
-        return new(notes, voice.Id, null);
+        return new(notes, voice.Id, null, score.TempoBpm);
     }
 
     public static SingingScore FromMidi(byte[] file)
@@ -78,6 +79,7 @@ public static partial class SingingScores
         var chunks = midi.GetTrackChunks()
             .Select((chunk, index) => (
                 Name: chunk.Events.OfType<SequenceTrackNameEvent>().FirstOrDefault()?.Text?.Trim() ?? $"Track {index + 1}",
+                Named: !string.IsNullOrWhiteSpace(chunk.Events.OfType<SequenceTrackNameEvent>().FirstOrDefault()?.Text),
                 Notes: chunk.GetNotes().Where(n => n.Channel != 9).ToList(),
                 Lyrics: chunk.GetTimedEvents().Where(e => e.Event is LyricEvent).ToList()))
             .ToList();
@@ -104,9 +106,16 @@ public static partial class SingingScores
         }
 
         // A format 0 file split into tracks (as DryWetMidi and some converters do) keeps its lyrics in the first, note-less one.
-        if (track.Lyrics.Count == 0 && tracks.Count == 1 && chunks.FirstOrDefault(c => c.Notes.Count == 0 && c.Lyrics.Count > 0) is { Lyrics: { } loose })
+        if (tracks.Count == 1 && chunks.FirstOrDefault(c => c.Notes.Count == 0 && (c.Lyrics.Count > 0 || c.Named)) is { Notes: not null } loose)
         {
-            track.Lyrics = loose;
+            if (track.Lyrics.Count == 0)
+            {
+                track.Lyrics = loose.Lyrics;
+            }
+            if (!track.Named && loose.Named)
+            {
+                track.Name = loose.Name;
+            }
         }
 
         double Seconds(long ticks) => TimeConverter.ConvertTo<MetricTimeSpan>(ticks, tempo).TotalMicroseconds / 1_000_000.0;
@@ -132,7 +141,8 @@ public static partial class SingingScores
             }
             notes.Add(new SungNote(Round(Seconds(note.Time)), Round(Seconds(note.EndTime)), note.NoteNumber, lyric));
         }
-        return new(notes, track.Name, null);
+        var first = tempo.GetTempoAtTime(new MidiTimeSpan(0)).BeatsPerMinute;
+        return new(notes, track.Name, null, Math.Round(first, 3));
     }
 
     /// <summary>Whether a part's name says it is sung: <c>Vocal</c>, <c>Lead Vocals</c>, <c>Melody</c>, <c>Gesang</c>, ….</summary>

@@ -3790,6 +3790,13 @@
                   "song": {
                     "type": "string"
                   },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "tempoBpm": {
+                    "type": "number",
+                    "format": "double"
+                  },
                   "lyrics": {
                     "type": "string"
                   },
@@ -3865,6 +3872,158 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/singing/melody": {
+      "post": {
+        "operationId": "ReadSingingMelody",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  },
+                  "song": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingingMelody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/singing/align": {
+      "post": {
+        "operationId": "AlignSingingNotes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SingingAlignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingingAligned"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/singing/{id}/notes": {
+      "get": {
+        "operationId": "GetSingingNotes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingingMelody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
           }
         }
       }
@@ -6282,6 +6441,29 @@
           }
         }
       },
+      "AlignedNote": {
+        "required": [
+          "word",
+          "type",
+          "phonemes"
+        ],
+        "type": "object",
+        "properties": {
+          "word": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "phonemes": {
+            "type": "string"
+          }
+        }
+      },
       "AudioMidiInfo": {
         "required": [
           "installed",
@@ -8207,6 +8389,46 @@
           }
         }
       },
+      "SingingAligned": {
+        "required": [
+          "notes",
+          "leftover"
+        ],
+        "type": "object",
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlignedNote"
+            }
+          },
+          "leftover": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SingingAlignRequest": {
+        "required": [
+          "notes",
+          "lyrics"
+        ],
+        "type": "object",
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SungNote"
+            }
+          },
+          "lyrics": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "SingingInfo": {
         "required": [
           "installed",
@@ -8249,6 +8471,40 @@
             "items": {
               "$ref": "#/components/schemas/SingTake"
             }
+          }
+        }
+      },
+      "SingingMelody": {
+        "required": [
+          "notes",
+          "tempoBpm",
+          "lyrics",
+          "title",
+          "part"
+        ],
+        "type": "object",
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SungNote"
+            }
+          },
+          "tempoBpm": {
+            "type": "number",
+            "format": "double"
+          },
+          "lyrics": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "part": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8330,6 +8586,13 @@
           "noteCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "tempoBpm": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
           },
           "sung": {
             "type": [
@@ -9865,6 +10128,34 @@
       "Stream": {
         "type": "string",
         "format": "binary"
+      },
+      "SungNote": {
+        "required": [
+          "start",
+          "end",
+          "pitch"
+        ],
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "number",
+            "format": "double"
+          },
+          "end": {
+            "type": "number",
+            "format": "double"
+          },
+          "pitch": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lyric": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       },
       "SwapState": {
         "required": [

@@ -195,6 +195,10 @@ public sealed class RemoteEngines(HelperClient client, Machines machines)
                 cancellationToken);
             return Read<SingingResult>(outcome.Result) ?? new SingingResult(null, null, null);
         }
+
+        /// <summary>The editor's alignment loads only g2p_en and runs on this Mac (<c>POST /api/singing/align</c>), never here.</summary>
+        public Task<SingingAligned> AlignAsync(IReadOnlyList<SungNote> notes, string? lyrics, CancellationToken cancellationToken) =>
+            throw new SingingException("Alignment runs on this Mac.", StatusCodes.Status501NotImplemented);
     }
 
     private sealed class RemoteAce(HelperClient client, HelperMachine helper, Machines machines) : IAceEngine

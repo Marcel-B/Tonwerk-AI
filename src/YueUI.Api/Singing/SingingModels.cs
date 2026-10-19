@@ -95,6 +95,9 @@ public sealed record SingTake
     /// <summary>How many notes the melody has.</summary>
     public int NoteCount { get; init; }
 
+    /// <summary>The melody's tempo as its file or the editor gave it, so the editor can lay it on its grid again.</summary>
+    public double? TempoBpm { get; init; }
+
     /// <summary>Notes that got a word; the rest became rests.</summary>
     public int? Sung { get; init; }
 
@@ -125,6 +128,28 @@ public sealed record SingTake
     [JsonIgnore]
     public bool Finished => Stage is "done" or "failed" or "cancelled";
 }
+
+/// <summary>
+/// A melody for the app's note editor (<c>POST /api/singing/melody</c>, <c>GET /api/singing/{id}/notes</c>): the
+/// notes in seconds with the words written on them, the tempo to lay them on a grid, and the words to spread over them
+/// where the notes carry none.
+/// </summary>
+/// <param name="TempoBpm">The file's first tempo, or the score's; 120 where nothing says.</param>
+/// <param name="Lyrics">A library song's lyrics, or a take's words; empty for a file.</param>
+/// <param name="Part">The track or voice the notes were taken from.</param>
+public sealed record SingingMelody(IReadOnlyList<SungNote> Notes, double TempoBpm, string Lyrics, string Title, string? Part);
+
+/// <summary>Notes to lay words on (<c>POST /api/singing/align</c>): their own words where they have any, else <paramref name="Lyrics"/>.</summary>
+public sealed record SingingAlignRequest(IReadOnlyList<SungNote> Notes, string? Lyrics);
+
+/// <summary>What one note sings, in the order the notes were sent.</summary>
+/// <param name="Word">The word, or null for a note without one (a rest).</param>
+/// <param name="Type">SoulX-Singer's note type: 2 a word's first note, 3 a note the word before is held over, 1 a rest.</param>
+/// <param name="Phonemes">The word's pronunciation in ARPAbet (<c>HH AH0 L OW1</c>), as the model gets it; empty for a rest.</param>
+public sealed record AlignedNote(string? Word, int Type, string Phonemes);
+
+/// <param name="Leftover">Syllables of the lyrics left without a note.</param>
+public sealed record SingingAligned(IReadOnlyList<AlignedNote> Notes, int Leftover);
 
 /// <summary>What the script made of the words: how many notes got one.</summary>
 public sealed record SingingAlignment(int Sung, int Unsung, int Leftover);

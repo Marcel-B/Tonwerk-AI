@@ -2,9 +2,10 @@ import Foundation
 import Observation
 import TonwerkKit
 
-/// The singing page's state: a melody (a MIDI file or score.abc, or a library song's score) and words go to
-/// SoulX-Singer on the server (`POST api/singing`), which sings them with one of its voices. Kept by ``AppModel`` once
-/// opened, so a chosen melody and typed words survive a page change.
+/// The singing page's state: a melody in the note editor (``SingEditor``: drawn, or loaded from a MIDI file,
+/// a score.abc, a library song or an earlier take), a syllable on each note or a text spread over them, sung by
+/// SoulX-Singer on the server (`POST api/singing` with the editor's notes). Kept by ``AppModel`` once opened, so the
+/// notes survive a page change.
 @MainActor
 @Observable
 final class SingSession {
@@ -12,15 +13,11 @@ final class SingSession {
     private(set) var loading = false
     var problem: String?
 
-    var source: ScoreSource? {
-        didSet {
-            guard source != oldValue else { return }
-            title = source?.baseName ?? ""
-        }
-    }
-    /// The words; for a library song its own lyrics when left empty, for a MIDI file its lyric events.
-    var lyrics = ""
+    let editor = SingEditor()
+    /// Where the editor's melody came from, for the title and the MIDI file's name.
     var title = ""
+    /// The words to spread over the notes; a library song brings its lyrics.
+    var lyrics = ""
     var voiceId: String?
     /// Semitones the melody moves; ignored while ``autoShift`` moves it into the voice's range.
     var pitchShift = 0
@@ -28,6 +25,8 @@ final class SingSession {
     /// The Mac that sings; empty lets the server choose.
     var machine = ""
     private(set) var sending = false
+    /// A melody being read or words being spread.
+    private(set) var busy = false
 
     let preview = AudioPreview()
 
@@ -37,6 +36,8 @@ final class SingSession {
         self.model = model
         preview.songPlayer = model.player
     }
+
+    var installed: Bool { info?.installed == true }
 
     func load() async {
         guard !loading else { return }
@@ -75,30 +76,105 @@ final class SingSession {
             .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
     }
 
-    /// A library song brings its own lyrics; a file needs words unless its MIDI carries them, which the server checks.
+    /// Notes with words, or notes and a text to spread over them.
     var canSing: Bool {
-        source != nil && voiceId != nil && !sending && info?.installed == true && info?.modelDownloaded == true
+        !editor.notes.isEmpty && (editor.hasLyrics || !lyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            && voiceId != nil && !sending && installed && info?.modelDownloaded == true
     }
 
+    /// A MIDI file or score.abc into the editor, with the lyric events it has.
     func pick(_ url: URL) async {
         do {
-            source = .file(try await PickedFile.copy(from: url))
+            let file = try await PickedFile.copy(from: url)
+            await open(.file(file))
         } catch {
             problem = error.localizedDescription
         }
     }
 
+    /// A file's or a library song's melody into the editor; a song's lyrics go on its notes when they carry none.
+    func open(_ source: ScoreSource) async {
+        busy = true
+        defer { busy = false }
+        do {
+            let melody = try await model.singMelody(source)
+            editor.load(melody)
+            title = melody.title
+            if !melody.lyrics.isEmpty {
+                lyrics = melody.lyrics
+            }
+            problem = nil
+            if !editor.hasLyrics && !lyrics.isEmpty && installed {
+                await spread()
+            }
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    /// An earlier take's notes and words back into the editor, to change and sing again.
+    func open(_ take: Components.Schemas.SingTake) async {
+        busy = true
+        defer { busy = false }
+        do {
+            let melody = try await model.singTakeNotes(take.id)
+            editor.load(melody)
+            title = melody.title
+            lyrics = melody.lyrics
+            problem = nil
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    func clear() {
+        editor.player.stop()
+        editor.clear()
+        title = ""
+    }
+
+    /// The text laid on the notes by the server's rules (a word over as many notes as it has syllables, "-" holding
+    /// one), replacing the words on them.
+    func spread() async {
+        guard !editor.notes.isEmpty else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            let notes = editor.sung(all: true).map { entry in entry.filter { $0.key != "lyric" } }
+            editor.spread(try await model.alignSinging(notes, lyrics: lyrics))
+            problem = nil
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    /// The pronunciation of the words on the notes, asked again a moment after they change (the page calls this
+    /// from a task keyed by the editor's revision).
+    func readPhonemes() async {
+        guard installed, editor.hasLyrics else {
+            editor.forgetPhonemes()
+            return
+        }
+        let ids = editor.notes.map(\.id)
+        do {
+            let answer = try await model.alignSinging(editor.sung(all: true), lyrics: nil)
+            guard !Task.isCancelled, ids == editor.notes.map(\.id) else { return }
+            editor.read(answer, for: ids)
+        } catch {
+            // Only a help while typing; the take itself says what went wrong.
+        }
+    }
+
     func sing() async {
-        guard let source, let voiceId, canSing else { return }
+        guard let voiceId, canSing else { return }
         sending = true
         defer { sending = false }
-        var fields = [("voice", voiceId), ("autoShift", autoShift ? "true" : "false")]
+        var fields = [("voice", voiceId), ("autoShift", autoShift ? "true" : "false"), ("tempoBpm", String(editor.tempo))]
         if !autoShift && pitchShift != 0 {
             fields.append(("pitchShift", String(pitchShift)))
         }
-        let words = lyrics.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !words.isEmpty {
-            fields.append(("lyrics", words))
+        if !editor.hasLyrics {
+            fields.append(("lyrics", lyrics.trimmingCharacters(in: .whitespacesAndNewlines)))
         }
         let name = title.trimmingCharacters(in: .whitespaces)
         if !name.isEmpty {
@@ -108,7 +184,9 @@ final class SingSession {
             fields.append(("machine", machine))
         }
         do {
-            let take = try await model.sing(source, fields: fields)
+            let data = try JSONSerialization.data(withJSONObject: editor.sung())
+            fields.append(("notes", String(decoding: data, as: UTF8.self)))
+            let take = try await model.singNotes(fields: fields)
             if var info {
                 info.takes.insert(take, at: 0)
                 self.info = info
@@ -117,6 +195,25 @@ final class SingSession {
         } catch {
             problem = error.localizedDescription
         }
+    }
+
+    /// The editor's melody as a MIDI file with its words, in the temporary folder.
+    func midiFile() throws -> URL {
+        let folder = FileManager.default.temporaryDirectory
+            .appending(path: "Tonwerk-Gesang", directoryHint: .isDirectory)
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let name = title.trimmingCharacters(in: .whitespaces)
+        let file = folder.appending(path: "\(AppModel.projectName(name.isEmpty ? "Tonwerk" : name)).mid")
+        try editor.midi(title: name).write(to: file)
+        return file
+    }
+
+    func play() async {
+        if !model.soundLibrary.loaded {
+            await model.soundLibrary.load()
+        }
+        await editor.play(title: title, sound: model.soundLibrary.sound(forTrack: "Vocal", kind: "Melody"))
     }
 
     /// Stops a take still in the line or deletes a finished one.
@@ -193,32 +290,56 @@ extension AppModel {
         return try decode(Components.Schemas.SingingInfo.self, data)
     }
 
-    /// A file goes up as `file`; a library song is named by `song`, whose score the server reads itself.
-    func sing(_ source: ScoreSource, fields: [(String, String)]) async throws -> Components.Schemas.SingTake {
-        let url = try address("api/singing")
-        let data: Data
+    /// A file's or library song's melody for the editor (`POST api/singing/melody`).
+    func singMelody(_ source: ScoreSource) async throws -> SingMelodyAnswer {
+        let url = try address("api/singing/melody")
         switch source {
         case .file(let file):
-            (data, _) = try await uploadFile(url, fields: fields, fileField: "file", file: file, accept: [202])
+            let (data, _) = try await uploadFile(url, fields: [], fileField: "file", file: file, accept: [200])
+            return try decode(SingMelodyAnswer.self, data)
         case .song(let song):
-            let boundary = "tonwerk-\(UUID().uuidString)"
-            var body = Data()
-            for (name, value) in [("song", song.id)] + fields {
-                body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
-            }
-            body.append(Data("--\(boundary)--\r\n".utf8))
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-            request.timeoutInterval = 120
-            let (answer, response) = try await URLSession.shared.upload(for: request, from: body)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard status == 202 else {
-                throw ServerError(problem: ServerError.text(of: answer) ?? String(localized: "Der Server antwortete \(status)."))
-            }
-            data = answer
+            return try decode(SingMelodyAnswer.self, try await postForm(url, fields: [("song", song.id)], accept: [200]))
         }
-        return try decode(Components.Schemas.SingTake.self, data)
+    }
+
+    func singTakeNotes(_ id: String) async throws -> SingMelodyAnswer {
+        let (data, _) = try await call("GET", address("api/singing", id, "notes"))
+        return try decode(SingMelodyAnswer.self, data)
+    }
+
+    /// What each note sings and how its word is spoken (`POST api/singing/align`).
+    func alignSinging(_ notes: [[String: Any]], lyrics: String?) async throws -> SingAlignAnswer {
+        var body: [String: Any] = ["notes": notes]
+        if let lyrics {
+            body["lyrics"] = lyrics
+        }
+        let (data, _) = try await call("POST", address("api/singing/align"), json: body)
+        return try decode(SingAlignAnswer.self, data)
+    }
+
+    /// The editor's notes to sing, as a form without a file.
+    func singNotes(fields: [(String, String)]) async throws -> Components.Schemas.SingTake {
+        try decode(Components.Schemas.SingTake.self, try await postForm(address("api/singing"), fields: fields, accept: [202]))
+    }
+
+    /// A multipart form of text fields only.
+    private func postForm(_ url: URL, fields: [(String, String)], accept: Set<Int>) async throws -> Data {
+        let boundary = "tonwerk-\(UUID().uuidString)"
+        var body = Data()
+        for (name, value) in fields {
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+        }
+        body.append(Data("--\(boundary)--\r\n".utf8))
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
+        let (answer, response) = try await URLSession.shared.upload(for: request, from: body)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard accept.contains(status) else {
+            throw ServerError(problem: ServerError.text(of: answer) ?? String(localized: "Der Server antwortete \(status)."))
+        }
+        return answer
     }
 
     func deleteSingTake(_ id: String) async throws {

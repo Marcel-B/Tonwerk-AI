@@ -1516,6 +1516,32 @@ public sealed class FakeSinging : Singing.ISingingEngine
         return new Singing.SingingResult(20.5, 6.25, 5.1);
     }
 
+    /// <summary>The script's rules in small: a note's own word, "-" holding the one before, else one word of the lyrics per note.</summary>
+    public Task<Singing.SingingAligned> AlignAsync(IReadOnlyList<Singing.SungNote> notes, string? lyrics, CancellationToken cancellationToken)
+    {
+        if (!Installed)
+        {
+            throw new Singing.SingingException("SoulX-Singer is not installed; run deploy/install-singing.sh.", Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+        var order = notes.Select((note, index) => (note, index)).OrderBy(n => n.note.Start).ToList();
+        var result = new Singing.AlignedNote[notes.Count];
+        var own = notes.Any(n => !string.IsNullOrWhiteSpace(n.Lyric));
+        var words = (lyrics ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        string? last = null;
+        var next = 0;
+        foreach (var (note, index) in order)
+        {
+            var word = own ? note.Lyric?.Trim() : next < words.Length ? words[next++] : null;
+            result[index] = word switch
+            {
+                "-" when last is not null => new(last, 3, last.ToUpperInvariant()),
+                null or "" or "-" => new(null, 1, ""),
+                _ => new(last = word, 2, word.ToUpperInvariant()),
+            };
+        }
+        return Task.FromResult(new Singing.SingingAligned(result, Math.Max(0, words.Length - next)));
+    }
+
     private static TaskCompletionSource CompletedGate()
     {
         var gate = new TaskCompletionSource();

@@ -108,6 +108,7 @@ public static class SingingEndpoints
     /// <param name="tempoBpm">The editor's tempo, kept with the take so it opens on the same grid.</param>
     /// <param name="pitchShift">Semitones the melody moves, -24 to 24.</param>
     /// <param name="autoShift">Moves the melody into the voice's range instead.</param>
+    /// <param name="machine">The Mac to sing on: <c>local</c>, a helper's id, or empty for whichever is free.</param>
     private static async Task<IResult> SingAsync(
         IFormFile? file,
         [FromForm] string? song,
@@ -118,8 +119,10 @@ public static class SingingEndpoints
         [FromForm] int? pitchShift,
         [FromForm] bool? autoShift,
         [FromForm] string? title,
+        [FromForm] string? machine,
         SingingStudio studio,
         ISingingEngine engine,
+        Machines.Machines machines,
         SongLibrary library,
         IAbcScoreParser parser,
         IOptions<SingingOptions> options,
@@ -160,11 +163,12 @@ public static class SingingEndpoints
         {
             errors["title"] = ["At most 200 characters."];
         }
+        machines.TryNormalize(machine, out var place, errors);
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
         }
-        if (!engine.Installed || !engine.ModelDownloaded)
+        if (!machines.CanRun(Machines.Engines.Singing, place, engine.Installed && engine.ModelDownloaded))
         {
             return Results.Problem(
                 $"SoulX-Singer is not installed ({settings.ResolvedRoot}); run deploy/install-singing.sh on the Mac.",
@@ -242,6 +246,7 @@ public static class SingingEndpoints
             AutoShift = autoShift ?? false,
             NoteCount = score.Notes.Count,
             TempoBpm = drawn is not null ? tempoBpm ?? 120 : score.TempoBpm,
+            Machine = place,
             CreatedAt = now,
             UpdatedAt = now,
         };

@@ -120,6 +120,12 @@ public sealed record ImageState
 
     public double? PeakMemoryGb { get; init; }
 
+    /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
+    public string? Machine { get; init; }
+
+    /// <summary>The name of the Mac that runs it, once one does.</summary>
+    public string? RanOn { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
 
     public DateTimeOffset UpdatedAt { get; init; }
@@ -130,7 +136,8 @@ public sealed record ImageState
 /// <param name="Prompt">What to paint, up to <see cref="MaxPromptLength"/> characters.</param>
 /// <param name="Model">An <see cref="ImageModel.Id"/>; null for the first one offered.</param>
 /// <param name="Seed">Null for a new one each time.</param>
-public sealed record ImageRequest(string? Prompt, string? Model, long? Seed)
+/// <param name="Machine">The Mac to paint on: <c>local</c>, a helper's id, or null for whichever is free.</param>
+public sealed record ImageRequest(string? Prompt, string? Model, long? Seed, string? Machine = null)
 {
     /// <summary>Klein reads its prompt through Qwen3 with 512 tokens; this stays well inside.</summary>
     public const int MaxPromptLength = 2000;

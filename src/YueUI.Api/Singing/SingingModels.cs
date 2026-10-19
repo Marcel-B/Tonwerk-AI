@@ -115,6 +115,12 @@ public sealed record SingTake
 
     public double? PeakMemoryGb { get; init; }
 
+    /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
+    public string? Machine { get; init; }
+
+    /// <summary>The name of the Mac that runs it, once one does.</summary>
+    public string? RanOn { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
 
     public DateTimeOffset UpdatedAt { get; init; }

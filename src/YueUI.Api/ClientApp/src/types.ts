@@ -434,6 +434,10 @@ export interface LyricsState {
   message: string | null
   updatedAt: string
   finished: boolean
+  /** The Mac it was asked for: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
+  /** The name of the Mac that runs it, once one does. */
+  ranOn?: string | null
 }
 
 /** The volume the songs are written to (LibraryEndpoints.cs). */
@@ -575,6 +579,10 @@ export interface StemSetState {
   createdAt: string
   updatedAt: string
   finished: boolean
+  /** The Mac it was asked for: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
+  /** The name of the Mac that runs it, once one does. */
+  ranOn?: string | null
 }
 
 /** A reference voice (Voices/VoiceModels.cs). */
@@ -660,6 +668,10 @@ export interface SwapState {
   createdAt: string
   updatedAt: string
   finished: boolean
+  /** The Mac it was asked for: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
+  /** The name of the Mac that runs it, once one does. */
+  ranOn?: string | null
 }
 
 /** A song sung with another voice (Voices/VoiceModels.cs); live changes arrive as `version` events. */
@@ -685,6 +697,10 @@ export interface VersionState {
   createdAt: string
   updatedAt: string
   finished: boolean
+  /** The Mac it was asked for: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
+  /** The name of the Mac that runs it, once one does. */
+  ranOn?: string | null
 }
 
 /** A voice chosen in the form, with its settings (SongVoice in Voices/VoiceModels.cs). */
@@ -760,6 +776,10 @@ export interface SpeechTake {
   createdAt: string
   updatedAt: string
   finished: boolean
+  /** The Mac it was asked for: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
+  /** The name of the Mac that runs it, once one does. */
+  ranOn?: string | null
 }
 
 /** Everything the lab page draws (SpeechInfo in Speech/SpeechModels.cs). */
@@ -800,6 +820,10 @@ export interface ImageState {
   createdAt: string
   updatedAt: string
   finished: boolean
+  /** The Mac it was asked for: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
+  /** The name of the Mac that runs it, once one does. */
+  ranOn?: string | null
 }
 
 export interface ImageModelInfo {
@@ -911,6 +935,10 @@ export interface AceJob {
   createdAt: string
   updatedAt: string
   finished: boolean
+  /** The Mac it was asked for: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
+  /** The name of the Mac that runs it, once one does. */
+  ranOn?: string | null
 }
 
 /** `GET /api/ace`: whether acestep.cpp is built, which GGUF files are there, and the jobs, newest first. */
@@ -1014,4 +1042,16 @@ export interface SketchInfo {
 export interface ClaudeModelChoice {
   id: string
   name: string
+}
+
+/** A Mac a job can run on (`GET /api/machines`): this one and the helpers it hands jobs to. */
+export interface MachineInfo {
+  id: string
+  name: string
+  local: boolean
+  reachable: boolean
+  holder: string | null
+  busy: boolean
+  engines: string[]
+  message?: string | null
 }

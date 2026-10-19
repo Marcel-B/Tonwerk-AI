@@ -71,15 +71,28 @@ public static class AceEndpoints
         return api;
     }
 
-    private static IResult Compose(AceSongRequest request, IAceEngine engine, AceComposer composer, SongLibrary library, IOptions<AceOptions> options)
+    private static IResult Compose(
+        AceSongRequest request,
+        IAceEngine engine,
+        AceComposer composer,
+        SongLibrary library,
+        Machines.Machines machines,
+        IOptions<AceOptions> options)
     {
-        var files = engine.Files();
+        var placeErrors = new Dictionary<string, string[]>();
+        machines.TryNormalize(request.Machine, out var machine, placeErrors);
+        var local = engine.Files();
+        var files = FilesFor(machine, local, machines);
         var errors = Validate(request, files, library);
+        foreach (var (field, messages) in placeErrors)
+        {
+            errors[field] = messages;
+        }
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
         }
-        if (!engine.Installed || !files.Complete)
+        if (!machines.CanRun(Machines.Engines.Ace, machine, engine.Installed && local.Complete))
         {
             return Results.Problem(
                 engine.Installed
@@ -89,7 +102,7 @@ public static class AceEndpoints
         }
         // Chosen here rather than by acestep.cpp, so the songs' seeds are known and stored with them.
         var seed = request.Seed ?? Random.Shared.NextInt64(0, (long)uint.MaxValue + 1);
-        var job = composer.Enqueue(Trimmed(request), seed);
+        var job = composer.Enqueue(Trimmed(request) with { Machine = machine }, seed);
         return Results.Accepted($"/api/ace/{job.Id}", job);
     }
 
@@ -104,6 +117,30 @@ public static class AceEndpoints
         Adapter = string.IsNullOrWhiteSpace(request.Adapter) ? null : request.Adapter,
         Source = request.UsesLm ? null : request.Source,
     };
+
+    /// <summary>
+    /// The model files a request may name: those of the Mac it is asked for, or for whichever is free those of any (the
+    /// job then fails on a Mac without them). A helper not heard from yet is taken to have this Mac's.
+    /// </summary>
+    private static AceModelFiles FilesFor(string? machine, AceModelFiles local, Machines.Machines machines)
+    {
+        if (machine == Machines.Machines.Local)
+        {
+            return local;
+        }
+        var helpers = machine is null ? machines.Helpers : [.. machines.Helpers.Where(h => h.Id == machine)];
+        var theirs = helpers.Select(h => machines.StatusOf(h)?.Ace ?? local).ToList();
+        if (machine is not null)
+        {
+            return theirs.FirstOrDefault() ?? local;
+        }
+        return theirs.Aggregate(local, (all, other) => new AceModelFiles(
+            [.. all.Lm.Union(other.Lm)],
+            [.. all.Dit.Union(other.Dit)],
+            all.TextEncoder || other.TextEncoder,
+            all.Vae || other.Vae,
+            [.. all.Adapters.Union(other.Adapters)]));
+    }
 
     internal static Dictionary<string, string[]> Validate(AceSongRequest request, AceModelFiles files, SongLibrary library)
     {

@@ -143,6 +143,12 @@ public sealed record LyricsState
     /// <summary>Why it failed, e.g. LM Studio's own message.</summary>
     public string? Message { get; init; }
 
+    /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
+    public string? Machine { get; init; }
+
+    /// <summary>The name of the Mac that runs it, once one does.</summary>
+    public string? RanOn { get; init; }
+
     public DateTimeOffset UpdatedAt { get; init; }
 
     public bool Finished => Stage is "done" or "failed";

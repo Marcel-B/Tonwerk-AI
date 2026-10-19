@@ -15,14 +15,15 @@ namespace YueUI.Api.Singing;
 /// <remarks>
 /// SoulX-Singer is small for a model (2.8 GB of weights), but runs on the GPU beside YuE2's 10 to 12 GB, so it follows
 /// the rule the speech lab follows: it waits while songs are generated or another large model holds the memory, shuts
-/// an idle YuE worker down, and holds the memory itself while it sings (<see cref="ModelMemory"/>). Queued takes
+/// an idle YuE worker down, and holds the memory itself while it sings (<see cref="ModelMemory"/>); or it sings on another
+/// Mac (<see cref="Machines.Machines"/>), which waits for its own memory. Queued takes
 /// survive a restart; one that was halfway is marked failed.
 /// </remarks>
 public sealed class SingingStudio(
     SqliteSingingStore store,
     ISingingEngine engine,
-    ModelMemory memory,
-    WorkerHost host,
+    Machines.Machines machines,
+    Machines.RemoteEngines remote,
     Status.StatusHub hub,
     PushStore pushStore,
     IPushSender pushSender,
@@ -158,14 +159,15 @@ public sealed class SingingStudio(
                 ?? throw new SingingException($"The voice {take.VoiceId} is no longer offered.");
             var notes = store.Notes(id);
 
-            await memory.ClaimAsync(LargeModel.Singing, options.Value.WaitInterval, time, cancel.Token);
-            // YuE2 keeps its model for ten idle minutes; SoulX-Singer needs the memory now.
-            await host.ShutdownWorkerAsync();
+            await using var placement = await machines.PlaceAsync(
+                LargeModel.Singing, Machines.Engines.Singing, take.Machine, options.Value.WaitInterval, cancel.Token,
+                engine.Installed && engine.ModelDownloaded);
+            var singer = placement.Helper is { } helper ? remote.Singing(helper) : engine;
 
-            take = Update(take, t => t with { Stage = "loading" });
+            take = Update(take, t => t with { Stage = "loading", RanOn = placement.Name });
             Directory.CreateDirectory(work);
             var output = Path.Combine(work, "take.wav");
-            var result = await engine.SingAsync(
+            var result = await singer.SingAsync(
                 new SingingJob(notes, take.Lyrics, voice, take.PitchShift, take.AutoShift, output),
                 stage => take = Update(take, t => t with { Stage = stage is "loading" ? "loading" : "singing" }),
                 share => take = Update(take, t => t with { Stage = "singing", Progress = Math.Round(share, 3) }),
@@ -207,7 +209,6 @@ public sealed class SingingStudio(
         }
         finally
         {
-            memory.Release(LargeModel.Singing);
             lock (_gate)
             {
                 _running = null;

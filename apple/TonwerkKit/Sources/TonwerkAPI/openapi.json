@@ -1358,6 +1358,15 @@
     "/api/lyrics/models": {
       "get": {
         "operationId": "ListLyricsModels",
+        "parameters": [
+          {
+            "name": "machine",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1365,6 +1374,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LyricsModels"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -2541,6 +2560,9 @@
                   },
                   "dereverb": {
                     "type": "boolean"
+                  },
+                  "machine": {
+                    "type": "string"
                   }
                 }
               }
@@ -2877,6 +2899,9 @@
                   },
                   "keepReverb": {
                     "type": "boolean"
+                  },
+                  "machine": {
+                    "type": "string"
                   }
                 }
               }
@@ -3579,6 +3604,9 @@
                   "model": {
                     "type": "string"
                   },
+                  "machine": {
+                    "type": "string"
+                  },
                   "file": {
                     "$ref": "#/components/schemas/IFormFile"
                   }
@@ -3783,6 +3811,9 @@
                     "type": "boolean"
                   },
                   "title": {
+                    "type": "string"
+                  },
+                  "machine": {
                     "type": "string"
                   }
                 }
@@ -5056,6 +5087,26 @@
         }
       }
     },
+    "/api/machines": {
+      "get": {
+        "operationId": "ListMachines",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MachineInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/logic/convert": {
       "post": {
         "operationId": "ConvertLogicScore",
@@ -6155,6 +6206,18 @@
             ],
             "format": "double"
           },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ranOn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -6366,6 +6429,12 @@
               "number"
             ],
             "format": "double"
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "usesLm": {
             "type": "boolean"
@@ -6840,6 +6909,12 @@
               "integer"
             ],
             "format": "int64"
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6917,6 +6992,18 @@
               "number"
             ],
             "format": "double"
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ranOn": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -7484,6 +7571,12 @@
               "null",
               "string"
             ]
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -7506,6 +7599,18 @@
             ]
           },
           "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ranOn": {
             "type": [
               "null",
               "string"
@@ -7545,6 +7650,49 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "MachineInfo": {
+        "required": [
+          "id",
+          "name",
+          "local",
+          "reachable",
+          "busy",
+          "engines"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "local": {
+            "type": "boolean"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "holder": {
+            "$ref": "#/components/schemas/LargeModel"
+          },
+          "busy": {
+            "type": "boolean"
+          },
+          "engines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8495,6 +8643,18 @@
             ],
             "format": "double"
           },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ranOn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -9345,6 +9505,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -9430,6 +9596,18 @@
               "number"
             ],
             "format": "double"
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ranOn": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -9701,6 +9879,12 @@
           "dereverb": {
             "type": "boolean",
             "default": false
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -9741,6 +9925,18 @@
             "items": {
               "$ref": "#/components/schemas/StemFile"
             }
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ranOn": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -10018,6 +10214,18 @@
             "format": "double"
           },
           "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ranOn": {
             "type": [
               "null",
               "string"
@@ -10390,6 +10598,12 @@
           "keepReverb": {
             "type": "boolean",
             "default": true
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -10450,6 +10664,18 @@
             "format": "double"
           },
           "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "machine": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ranOn": {
             "type": [
               "null",
               "string"

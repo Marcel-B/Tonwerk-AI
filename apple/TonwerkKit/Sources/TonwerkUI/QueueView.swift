@@ -434,7 +434,11 @@ private struct VoiceJobCard: View {
                 .foregroundStyle(Theme.accent)
                 .frame(width: 44, height: 44)
                 .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            JobRow(title: names.title, detail: names.detail, stage: job.stage, fraction: job.fraction, message: nil) {
+            JobRow(
+                title: names.title,
+                detail: [names.detail, model.ranOnNote(job.ranOn)].compactMap { $0 }.joined(separator: " · "),
+                stage: job.stage, fraction: job.fraction, message: nil
+            ) {
                 Button(role: .destructive) {
                     Task { await model.cancel(job) }
                 } label: {
@@ -547,6 +551,7 @@ private struct SpeechJobCard: View {
                         Text(take.source ?? take.modelLabel).lineLimit(1)
                         Text(take.source == nil ? take.text : take.modelLabel)
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        RanOnCaption(ranOn: take.ranOn)
                     }
                     Spacer()
                     Text(SpeechSession.stageName(take))
@@ -588,6 +593,7 @@ private struct SingJobCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(take.title ?? "").lineLimit(1)
                         Text(take.voiceLabel ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        RanOnCaption(ranOn: take.ranOn)
                     }
                     Spacer()
                     Text(SingSession.stageName(take))
@@ -629,6 +635,7 @@ private struct AceJobCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(job.title).lineLimit(1)
                         Text(job.request.caption ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        RanOnCaption(ranOn: job.ranOn)
                     }
                     Spacer()
                     Text(AceSession.stageName(job))
@@ -650,6 +657,18 @@ private struct AceJobCard: View {
             }
         }
         .card(padding: 12)
+    }
+}
+
+/// "auf <Mac>" under a job, where the server has helpers or the job ran on another Mac.
+private struct RanOnCaption: View {
+    @Environment(AppModel.self) private var model
+    let ranOn: String?
+
+    var body: some View {
+        if let note = model.ranOnNote(ranOn) {
+            Text(note).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        }
     }
 }
 

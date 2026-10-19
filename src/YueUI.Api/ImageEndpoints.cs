@@ -85,6 +85,7 @@ public static class ImageEndpoints
         SongLibrary library,
         ImageMaker images,
         IImageEngine engine,
+        Machines.Machines machines,
         IOptions<ImageOptions> options)
     {
         if (library.SongDirectory(run, song) is not { } directory)
@@ -107,11 +108,12 @@ public static class ImageEndpoints
         {
             errors["seed"] = [$"From 0 to {uint.MaxValue}."];
         }
+        machines.TryNormalize(request.Machine, out var machine, errors);
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
         }
-        if (!engine.Installed)
+        if (!machines.CanRun(Machines.Engines.Images, machine, engine.Installed))
         {
             return Results.Problem(
                 $"mflux is not installed ({options.Value.ResolvedPython}); run deploy/install-images.sh.",
@@ -119,7 +121,7 @@ public static class ImageEndpoints
         }
         // mflux seeds MLX's generator, which takes 32 bits.
         var seed = request.Seed ?? Random.Shared.NextInt64(0, (long)uint.MaxValue + 1);
-        var image = images.Enqueue($"{run}/{song}", library.TitleOf(run, directory), model!, prompt, seed);
+        var image = images.Enqueue($"{run}/{song}", library.TitleOf(run, directory), model!, prompt, seed, machine);
         return Results.Accepted($"/api/images/{image.Id}", image);
     }
 }

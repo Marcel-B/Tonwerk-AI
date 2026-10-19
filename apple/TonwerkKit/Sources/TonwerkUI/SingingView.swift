@@ -172,6 +172,7 @@ private struct SingSessionView: View {
                         : String(localized: "\(session.pitchShift > 0 ? "+" : "")\(session.pitchShift) Halbtöne"))
                 }
             }
+            MachinePicker(selection: $session.machine, engine: "singing")
             HStack(spacing: 10) {
                 Button {
                     Task { await session.sing() }
@@ -245,7 +246,8 @@ private struct SingSessionView: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(take.title ?? "").fontWeight(.semibold).lineLimit(1)
-                Text([take.voiceLabel, take.seconds.map(Song.clock)].compactMap { $0 }.joined(separator: " · "))
+                Text([take.voiceLabel, take.seconds.map(Song.clock), model.ranOnNote(take.ranOn)].compactMap { $0 }
+                    .joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 4)

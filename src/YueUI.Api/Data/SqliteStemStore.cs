@@ -38,8 +38,8 @@ public sealed class SqliteStemStore(SqliteDatabase database)
             connection,
             null,
             """
-            INSERT INTO song_stems (id, song_id, title, model, dereverb, stage, message, stems, created_at, updated_at)
-            VALUES ($id, $song, $title, $model, $dereverb, $stage, $message, $stems, $created, $updated)
+            INSERT INTO song_stems (id, song_id, title, model, dereverb, stage, message, stems, machine, ran_on, created_at, updated_at)
+            VALUES ($id, $song, $title, $model, $dereverb, $stage, $message, $stems, $machine, $ranOn, $created, $updated)
             """,
             ("$id", set.Id),
             ("$song", set.SongId),
@@ -49,6 +49,8 @@ public sealed class SqliteStemStore(SqliteDatabase database)
             ("$stage", set.Stage),
             ("$message", (object?)set.Message ?? DBNull.Value),
             ("$stems", JsonSerializer.Serialize(set.Stems, Json)),
+            ("$machine", (object?)set.Machine ?? DBNull.Value),
+            ("$ranOn", (object?)set.RanOn ?? DBNull.Value),
             ("$created", Time(set.CreatedAt)),
             ("$updated", Time(set.UpdatedAt)));
     }
@@ -60,11 +62,12 @@ public sealed class SqliteStemStore(SqliteDatabase database)
         return SqliteDatabase.Execute(
             connection,
             null,
-            "UPDATE song_stems SET stage = $stage, message = $message, stems = $stems, updated_at = $updated WHERE id = $id",
+            "UPDATE song_stems SET stage = $stage, message = $message, stems = $stems, ran_on = $ranOn, updated_at = $updated WHERE id = $id",
             ("$id", set.Id),
             ("$stage", set.Stage),
             ("$message", (object?)set.Message ?? DBNull.Value),
             ("$stems", JsonSerializer.Serialize(set.Stems, Json)),
+            ("$ranOn", (object?)set.RanOn ?? DBNull.Value),
             ("$updated", Time(set.UpdatedAt))) > 0;
     }
 
@@ -139,6 +142,8 @@ public sealed class SqliteStemStore(SqliteDatabase database)
         Stage = reader.GetString(reader.GetOrdinal("stage")),
         Message = reader.IsDBNull(reader.GetOrdinal("message")) ? null : reader.GetString(reader.GetOrdinal("message")),
         Stems = JsonSerializer.Deserialize<List<StemFile>>(reader.GetString(reader.GetOrdinal("stems")), Json) ?? [],
+        Machine = reader.IsDBNull(reader.GetOrdinal("machine")) ? null : reader.GetString(reader.GetOrdinal("machine")),
+        RanOn = reader.IsDBNull(reader.GetOrdinal("ran_on")) ? null : reader.GetString(reader.GetOrdinal("ran_on")),
         CreatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("created_at")), CultureInfo.InvariantCulture),
         UpdatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("updated_at")), CultureInfo.InvariantCulture),
     };

@@ -30,8 +30,8 @@ public sealed class AceComposer(
     IAceEngine engine,
     IAudioMixer mixer,
     SongLibrary library,
-    ModelMemory memory,
-    WorkerHost host,
+    Machines.Machines machines,
+    Machines.RemoteEngines remote,
     Status.StatusHub hub,
     IOptions<AceOptions> options,
     TimeProvider time,
@@ -75,6 +75,7 @@ public sealed class AceComposer(
             Title = TitleFor(request),
             Request = request,
             Seed = seed,
+            Machine = request.Machine,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -173,27 +174,29 @@ public sealed class AceComposer(
         var work = Path.Combine(WorkRoot, id);
         try
         {
-            var files = engine.Files();
+            await using var placement = await machines.PlaceAsync(
+                LargeModel.Ace, Machines.Engines.Ace, job.Machine, options.Value.WaitInterval, cancel.Token,
+                engine.Installed && engine.Files().Complete);
+            var composer = placement.Helper is { } helper ? remote.Ace(helper) : engine;
+            // The models of the Mac that makes the song: a helper's as it last said.
+            var files = composer.Files();
             if (!files.Complete)
             {
-                throw new AceException("The ACE-Step models are incomplete; run deploy/install-ace.sh.");
+                throw new AceException($"The ACE-Step models on {placement.Name} are incomplete; run deploy/install-ace.sh there.");
             }
             var lm = job.Request.LmModel ?? files.Lm.FirstOrDefault();
             var dit = job.Request.DitModel ?? files.Dit[0];
             if (job.Request.UsesLm && (lm is null || !files.Lm.Contains(lm)))
             {
-                throw new AceException($"The LM {lm} is no longer there.");
+                throw new AceException($"The LM {lm} is not on {placement.Name}.");
             }
             if (!files.Dit.Contains(dit))
             {
-                throw new AceException($"The DiT {dit} is no longer there.");
+                throw new AceException($"The DiT {dit} is not on {placement.Name}.");
             }
 
-            await memory.ClaimAsync(LargeModel.Ace, options.Value.WaitInterval, time, cancel.Token);
-            // YuE2 keeps its model for ten idle minutes; ACE-Step needs the memory now.
-            await host.ShutdownWorkerAsync();
             var started = time.GetTimestamp();
-            job = Update(job, j => j with { Stage = "loading", Fraction = 0 });
+            job = Update(job, j => j with { Stage = "loading", Fraction = 0, RanOn = placement.Name });
 
             if (Directory.Exists(work))
             {
@@ -208,7 +211,7 @@ public sealed class AceComposer(
 
             var request = AceRequestJson.Build(job.Request, job.Seed, lm, dit);
             var shown = (Stage: job.Stage, Fraction: 0.0);
-            var outputs = await engine.GenerateAsync(
+            var outputs = await composer.GenerateAsync(
                 new AceRun(work, request, job.Request.UsesLm, source),
                 (stage, fraction) =>
                 {
@@ -244,7 +247,6 @@ public sealed class AceComposer(
         }
         finally
         {
-            memory.Release(LargeModel.Ace);
             lock (_gate)
             {
                 _running = null;
@@ -323,6 +325,8 @@ public sealed class AceComposer(
             {
                 Seed = seed,
                 Batch = null,
+                // Where it ran is no part of the song; making it again goes wherever is free.
+                Machine = null,
                 Lyrics = instrumental || !string.IsNullOrWhiteSpace(job.Request.Lyrics) ? job.Request.Lyrics : lyrics,
             };
             await File.WriteAllTextAsync(Path.Combine(song, RequestFile), JsonSerializer.Serialize(own, Json), cancellationToken);

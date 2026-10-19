@@ -35,6 +35,7 @@ namespace YueUI.Api.Data;
 /// Version 25: what was heard in songs, tempo, key and how clearly the lyrics are sung (<see cref="SqliteSongTraitStore"/>).
 /// Version 26: written song sketches and their plans (<see cref="SqliteSketchStore"/>).
 /// Version 27: melodies sung by SoulX-Singer, with their notes (<see cref="SqliteSingingStore"/>).
+/// Version 28: which Mac a speech take, version, stem set or voice swap was asked for and ran on (Machines/).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -586,6 +587,24 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                         created_at TEXT NOT NULL
                     );
                     PRAGMA user_version = 27;
+                    """);
+            }
+            if (current < 28)
+            {
+                // Which Mac a job was asked for (null for whichever is free) and which one ran it (Machines/).
+                Execute(
+                    connection,
+                    null,
+                    """
+                    ALTER TABLE speech_takes ADD COLUMN machine TEXT;
+                    ALTER TABLE speech_takes ADD COLUMN ran_on TEXT;
+                    ALTER TABLE song_versions ADD COLUMN machine TEXT;
+                    ALTER TABLE song_versions ADD COLUMN ran_on TEXT;
+                    ALTER TABLE song_stems ADD COLUMN machine TEXT;
+                    ALTER TABLE song_stems ADD COLUMN ran_on TEXT;
+                    ALTER TABLE voice_swaps ADD COLUMN machine TEXT;
+                    ALTER TABLE voice_swaps ADD COLUMN ran_on TEXT;
+                    PRAGMA user_version = 28;
                     """);
             }
             _ready = true;

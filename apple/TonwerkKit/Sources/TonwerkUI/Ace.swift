@@ -64,6 +64,8 @@ struct AceForm: Codable, Equatable {
     var coverStrength: Double?
     var repaintStart: Double?
     var repaintEnd: Double?
+    /// The Mac that composes; empty lets the server choose.
+    var machine = ""
 
     init() {}
 
@@ -106,6 +108,7 @@ struct AceForm: Codable, Equatable {
         read(.coverStrength, &coverStrength)
         read(.repaintStart, &repaintStart)
         read(.repaintEnd, &repaintEnd)
+        read(.machine, &machine)
     }
 
     private static let key = "aceForm"
@@ -193,12 +196,15 @@ struct AceForm: Codable, Equatable {
         put("coverStrength", task == .cover ? coverStrength : nil)
         put("repaintStart", task == .repaint ? repaintStart : nil)
         put("repaintEnd", task == .repaint ? repaintEnd : nil)
+        put("machine", text(machine))
         return body
     }
 
     /// A song's request laid over the form, as `fromAceRequest` does: what it does not say goes back to the default.
-    init(request: Components.Schemas.AceSongRequest) {
+    /// The Mac chosen is the page's, not the song's, so it is handed over.
+    init(request: Components.Schemas.AceSongRequest, machine: String = "") {
         self.init()
+        self.machine = machine
         title = request.title ?? ""
         caption = request.caption ?? ""
         lyrics = request.lyrics ?? ""
@@ -275,6 +281,7 @@ final class AceSession {
         guard !loading else { return }
         loading = true
         defer { loading = false }
+        await model.loadMachines()
         do {
             let info = try await model.aceInfo()
             self.info = info
@@ -347,7 +354,7 @@ final class AceSession {
     func reuse(_ job: Components.Schemas.AceJob) {
         var request = job.request
         request.seed = job.seed
-        model.aceForm = AceForm(request: request)
+        model.aceForm = AceForm(request: request, machine: model.aceForm.machine)
     }
 
     /// The songs the job made, as the library lists them; one deleted since is left out.
@@ -412,7 +419,7 @@ extension AppModel {
         guard let answer = try? await call("GET", address("api/songs", song.run, song.name, "ace")),
               let request = try? decode(Components.Schemas.AceSongRequest.self, answer.0)
         else { return }
-        aceForm = AceForm(request: request)
+        aceForm = AceForm(request: request, machine: aceForm.machine)
         openAce()
     }
 }

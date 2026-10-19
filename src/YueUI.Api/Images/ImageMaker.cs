@@ -14,15 +14,16 @@ namespace YueUI.Api.Images;
 /// <remarks>
 /// Klein holds about 9 GB while it paints, so it follows the memory rule the speech lab follows on 24 GB: a picture
 /// waits while songs are generated, lyrics written, a voice sung or a take spoken, an idle YuE worker is shut down
-/// first, and while it holds the memory (<see cref="ModelMemory"/>) the others wait. Candidates are not cover material
+/// first, and while it holds the memory (<see cref="ModelMemory"/>) the others wait. A picture may be painted on another
+/// Mac instead (<see cref="Machines.Machines"/>), which waits for its own memory. Candidates are not cover material
 /// yet, so they lie in <c>images/</c> next to the database as a JPEG and a JSON each, not in the database; waiting ones survive a restart, one that was halfway is marked failed.
 /// </remarks>
 public sealed class ImageMaker(
     SqliteDatabase database,
     IImageEngine engine,
     IPromptTranslator translator,
-    ModelMemory memory,
-    WorkerHost host,
+    Machines.Machines machines,
+    Machines.RemoteEngines remote,
     Status.StatusHub hub,
     IOptions<ImageOptions> options,
     TimeProvider time,
@@ -69,7 +70,8 @@ public sealed class ImageMaker(
         }
     }
 
-    public ImageState Enqueue(string songId, string? title, ImageModel model, string prompt, long seed)
+    /// <param name="machine">Where to paint, as <see cref="Machines.Machines.Normalize"/> stores it.</param>
+    public ImageState Enqueue(string songId, string? title, ImageModel model, string prompt, long seed, string? machine = null)
     {
         var now = time.GetUtcNow();
         var image = new ImageState
@@ -81,6 +83,7 @@ public sealed class ImageMaker(
             ModelLabel = model.Label,
             Prompt = prompt,
             Seed = seed,
+            Machine = machine,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -209,13 +212,13 @@ public sealed class ImageMaker(
                 image = Update(image, i => i with { PaintedPrompt = english });
             }
 
-            await memory.ClaimAsync(LargeModel.Images, options.Value.WaitInterval, time, cancel.Token);
-            // YuE2 keeps its model for ten idle minutes; the image model needs the memory now.
-            await host.ShutdownWorkerAsync();
+            await using var placement = await machines.PlaceAsync(
+                LargeModel.Images, Machines.Engines.Images, image.Machine, options.Value.WaitInterval, cancel.Token, engine.Installed);
+            var painter = placement.Helper is { } helper ? remote.Images(helper) : engine;
 
-            image = Update(image, i => i with { Stage = "loading" });
+            image = Update(image, i => i with { Stage = "loading", RanOn = placement.Name });
             var shown = 0.0;
-            var result = await engine.PaintAsync(
+            var result = await painter.PaintAsync(
                 new ImageJob(model, image.PaintedPrompt ?? image.Prompt, image.Seed, Size, Size, output),
                 (stage, fraction) =>
                 {
@@ -253,7 +256,6 @@ public sealed class ImageMaker(
         }
         finally
         {
-            memory.Release(LargeModel.Images);
             lock (_gate)
             {
                 _running = null;

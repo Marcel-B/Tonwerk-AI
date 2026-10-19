@@ -89,6 +89,8 @@ public final class AppModel {
     var logPage: LogSession?
     /// The storage page's state, kept like the log's.
     var storagePage: StorageSession?
+    /// This Mac and the helpers the server may hand a job to (`GET api/machines`); empty when it has none to say.
+    var machines: [Components.Schemas.MachineInfo] = []
 
     var soundLibrary: SoundLibrary {
         if let sounds { return sounds }
@@ -176,6 +178,7 @@ public final class AppModel {
         transcriptionPage = nil
         logPage = nil
         storagePage = nil
+        machines = []
         templateList = nil
         worker = nil
         memoryHolder = nil
@@ -203,7 +206,8 @@ public final class AppModel {
             do {
                 async let library: Void = reloadLibrary()
                 async let lists: Void = reloadPlaylists()
-                _ = await (library, lists)
+                async let helpers: Void = loadMachines()
+                _ = await (library, lists, helpers)
                 for try await event in try await tonwerk.events() {
                     connection = .live
                     handle(event)
@@ -405,6 +409,27 @@ public final class AppModel {
         guard let index = songs.firstIndex(where: { $0.id == id }) else { return }
         songs[index] = change(songs[index])
         player.refresh(from: songs)
+    }
+
+    // MARK: Machines
+
+    /// The Macs a job may run on; empty where the server cannot say (an older one, the demo).
+    func loadMachines() async {
+        guard let tonwerk else { return }
+        machines = (try? await tonwerk.api.listMachines().ok.body.json) ?? []
+    }
+
+    /// Whether another Mac than this one is offered, the only case the pages show a choice.
+    var helpersOffered: Bool {
+        machines.contains { !$0.local }
+    }
+
+    /// "auf <Mac>" for a job's `ranOn`, only where it says something: with helpers, or on another Mac than this one.
+    func ranOnNote(_ ranOn: String?) -> String? {
+        guard let ranOn, !ranOn.isEmpty else { return nil }
+        let local = machines.first { $0.local }?.name
+        guard helpersOffered || (local != nil && local != ranOn) else { return nil }
+        return String(localized: "auf \(ranOn)")
     }
 
     // MARK: Playlists

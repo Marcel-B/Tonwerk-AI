@@ -27,7 +27,7 @@ URL="${YUEUI_URL:-http://127.0.0.1:5090}"
 SETTINGS="$HOME/Library/Application Support/YueUI/app/appsettings.Production.json"
 LMS="$HOME/.lmstudio/bin/lms"
 DOMAIN="gui/$(id -u)"
-PARTS="yue2 ane songs lmstudio speech images montage acestep acesongs separator seedvc versions stems videos"
+PARTS="yue2 ane songs lmstudio speech images montage acestep acesongs singing separator seedvc versions stems videos"
 SUFFIX=tonwerk-move
 
 fail() { echo "$1" >&2; exit 1; }
@@ -41,7 +41,7 @@ setting() {
 }
 
 # The same defaults the server uses (YuePaths, DataOptions, SpeechOptions, ImageOptions, MontageOptions, AceOptions,
-# VoiceOptions).
+# SingingOptions, VoiceOptions).
 or_default() { if [ -n "$1" ]; then echo "$1"; else echo "$2"; fi; }
 YUE_ROOT="$(or_default "$(setting Yue.InstallRoot)" "$HOME/Library/Application Support/YuE Studio")"
 DATA_PATH="$(setting Data.Path)"
@@ -60,6 +60,10 @@ path_of() {
     montage) or_default "$(setting Montage.ModelCache)" "$(or_default "$(setting Montage.Root)" "$APP_DATA/montage")/models" ;;
     acestep) or_default "$(setting Ace.Models)" "$(or_default "$(setting Ace.Root)" "$APP_DATA/ace")/models" ;;
     acesongs) or_default "$(setting Ace.Songs)" "$DATA/ace-songs" ;;
+    # SoulX-Singer's weights: the folder of Singing.Model when set, else models/ under its root.
+    singing)
+      model="$(setting Singing.Model)"
+      if [ -n "$model" ]; then dirname "$model"; else echo "$(or_default "$(setting Singing.Root)" "$APP_DATA/singing")/models"; fi ;;
     separator) or_default "$(setting Voice.SeparatorModels)" "$ENGINES/separator/models" ;;
     seedvc) or_default "$(setting Voice.SeedVcModels)" "$ENGINES/seed-vc/models" ;;
     versions | stems | videos) echo "$DATA/$1" ;;
@@ -78,6 +82,7 @@ describe() {
     montage) echo "CLIP models for photo videos with a motif" ;;
     acestep) echo "ACE-Step models" ;;
     acesongs) echo "songs made with ACE-Step" ;;
+    singing) echo "SoulX-Singer's weights for the singing page" ;;
     separator) echo "stem separation models" ;;
     seedvc) echo "Seed-VC checkpoints" ;;
     versions) echo "songs sung with another voice" ;;

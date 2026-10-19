@@ -25,6 +25,7 @@ namespace YueUI.Api.Ace;
 /// <param name="CoverStrength">Share of the DiT steps that see the source, 0 to 1.</param>
 /// <param name="RepaintStart">Seconds; negative adds music before the song.</param>
 /// <param name="RepaintEnd">Seconds; beyond the song's end adds music after it, null for its end.</param>
+/// <param name="Machine">The Mac to make it on: <c>local</c>, a helper's id, or null for whichever is free.</param>
 public sealed record AceSongRequest(
     string? Title = null,
     string? Caption = null,
@@ -55,7 +56,8 @@ public sealed record AceSongRequest(
     string? Source = null,
     double? CoverStrength = null,
     double? RepaintStart = null,
-    double? RepaintEnd = null)
+    double? RepaintEnd = null,
+    string? Machine = null)
 {
     public const int MaxCaptionLength = 2000;
 
@@ -109,6 +111,12 @@ public sealed record AceJob
 
     /// <summary>How long it took from the memory being free to the songs being stored.</summary>
     public double? Seconds { get; init; }
+
+    /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
+    public string? Machine { get; init; }
+
+    /// <summary>The name of the Mac that runs it, once one does.</summary>
+    public string? RanOn { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; }
 

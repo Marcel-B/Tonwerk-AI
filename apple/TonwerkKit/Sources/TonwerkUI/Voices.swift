@@ -12,6 +12,8 @@ struct VoiceSettings: Equatable {
     var strength = 0.7
     var steps = 50
     var keepReverb = true
+    /// The Mac that sings; empty lets the server choose.
+    var machine = ""
 
     static let octaves: [(value: Int, name: String)] = [
         (-12, String(localized: "−1 Oktave")), (0, String(localized: "Original")), (12, String(localized: "+1 Oktave")),
@@ -233,6 +235,8 @@ final class VoicesSession {
         didSet { defaults.set(stemModel, forKey: "stemModel") }
     }
     var dereverb = false
+    /// The Mac that separates; empty lets the server choose.
+    var stemMachine = ""
     private(set) var separating = false
 
     // MIDI from stems.
@@ -261,6 +265,7 @@ final class VoicesSession {
     }
 
     func load() async {
+        await model.loadMachines()
         info = await model.voiceInfo()
         async let voiceList: Void = loadVoices()
         async let stemList: Void = loadStems()
@@ -397,9 +402,9 @@ final class VoicesSession {
         do {
             let set: Components.Schemas.StemSetState
             if stemSource == .song, let id = stemSong, let song = model.song(id) {
-                set = try await model.separate(song, model: stemModel, dereverb: dereverb)
+                set = try await model.separate(song, model: stemModel, dereverb: dereverb, machine: stemMachine)
             } else if let file = stemFile {
-                set = try await model.separate(file, model: stemModel, dereverb: dereverb)
+                set = try await model.separate(file, model: stemModel, dereverb: dereverb, machine: stemMachine)
                 stemFile = nil
             } else {
                 return
@@ -582,6 +587,15 @@ enum VoiceJob: Identifiable {
         }
     }
 
+    /// The Mac it runs on, once one took it.
+    var ranOn: String? {
+        switch self {
+        case .version(let version): version.ranOn
+        case .stems(let set): set.ranOn
+        case .swap(let swap): swap.ranOn
+        }
+    }
+
     var symbol: String {
         switch self {
         case .version: "music.mic"
@@ -760,13 +774,13 @@ extension AppModel {
     /// A version of the song sung with a voice; the library lists it under the song while it is made.
     func sing(_ song: Song, settings: VoiceSettings) async throws -> Components.Schemas.VersionState {
         guard let voice = settings.voice else { throw ServerError(String(localized: "Wähle eine Stimme.")) }
+        var body: [String: Any] = [
+            "voiceId": voice, "semiToneShift": settings.semitones, "strength": settings.strength,
+            "diffusionSteps": settings.steps, "keepReverb": settings.keepReverb,
+        ]
+        if !settings.machine.isEmpty { body["machine"] = settings.machine }
         let (data, _) = try await call(
-            "POST", address("api/songs", song.run, song.name, "versions"),
-            json: [
-                "voiceId": voice, "semiToneShift": settings.semitones, "strength": settings.strength,
-                "diffusionSteps": settings.steps, "keepReverb": settings.keepReverb,
-            ],
-            accept: [202])
+            "POST", address("api/songs", song.run, song.name, "versions"), json: body, accept: [202])
         let version = try decode(Components.Schemas.VersionState.self, data)
         if liveVersions[version.id] == nil {
             liveVersions[version.id] = version
@@ -791,17 +805,23 @@ extension AppModel {
         return try decode([Components.Schemas.StemSetState].self, data)
     }
 
-    func separate(_ song: Song, model: String?, dereverb: Bool) async throws -> Components.Schemas.StemSetState {
+    func separate(_ song: Song, model: String?, dereverb: Bool, machine: String = "") async throws
+        -> Components.Schemas.StemSetState
+    {
         var body: [String: Any] = ["dereverb": dereverb]
         if let model { body["model"] = model }
+        if !machine.isEmpty { body["machine"] = machine }
         let (data, _) = try await call(
             "POST", address("api/songs", song.run, song.name, "stems"), json: body, accept: [202])
         return try decode(Components.Schemas.StemSetState.self, data)
     }
 
-    func separate(_ file: PickedFile, model: String?, dereverb: Bool) async throws -> Components.Schemas.StemSetState {
+    func separate(_ file: PickedFile, model: String?, dereverb: Bool, machine: String = "") async throws
+        -> Components.Schemas.StemSetState
+    {
         var fields = [("dereverb", dereverb ? "true" : "false")]
         if let model { fields.append(("model", model)) }
+        if !machine.isEmpty { fields.append(("machine", machine)) }
         let data = try await upload(address("api/stems"), fields: fields, fileField: "file", file: file, accept: [202])
         return try decode(Components.Schemas.StemSetState.self, data)
     }
@@ -857,11 +877,12 @@ extension AppModel {
         -> Components.Schemas.SwapState
     {
         guard let voice = settings.voice else { throw ServerError(String(localized: "Wähle eine Stimme.")) }
-        let fields = [
+        var fields = [
             ("voiceId", voice), ("semiToneShift", String(settings.semitones)), ("strength", String(settings.strength)),
             ("diffusionSteps", String(settings.steps)), ("separate", separate ? "true" : "false"),
             ("keepReverb", settings.keepReverb ? "true" : "false"),
         ]
+        if !settings.machine.isEmpty { fields.append(("machine", settings.machine)) }
         let data = try await upload(address("api/swaps"), fields: fields, fileField: "file", file: file, accept: [202])
         return try decode(Components.Schemas.SwapState.self, data)
     }

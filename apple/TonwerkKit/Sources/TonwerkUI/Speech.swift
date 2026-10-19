@@ -98,6 +98,8 @@ final class SpeechSession {
     // Speaking
     var text = String(localized: "Willkommen zu einer neuen Folge! Heute geht es darum, wie Musik auf dem eigenen Rechner entsteht, ganz ohne Cloud. Klingt das hier natürlich? Hört man die Pausen, die Betonung, vielleicht sogar ein Lächeln? Genau das wollen wir herausfinden.")
     var picked: Set<String> = []
+    /// The Mac that speaks; empty lets the server choose. Cleanups share it, since both are the lab's models.
+    var machine = ""
     private(set) var sending = false
 
     // Cleaning
@@ -118,6 +120,7 @@ final class SpeechSession {
         guard !loading else { return }
         loading = true
         defer { loading = false }
+        await model.loadMachines()
         do {
             let info = try await model.speechLab()
             self.info = info
@@ -223,7 +226,7 @@ final class SpeechSession {
         sending = true
         defer { sending = false }
         do {
-            added(try await model.speak(text, voiceId: voiceId, models: pickedModels))
+            added(try await model.speak(text, voiceId: voiceId, models: pickedModels, machine: machine))
             problem = nil
         } catch {
             problem = error.localizedDescription
@@ -253,7 +256,7 @@ final class SpeechSession {
         cleaning = true
         defer { cleaning = false }
         do {
-            added([try await model.cleanSpeech(cleanFile, model: cleanModel)])
+            added([try await model.cleanSpeech(cleanFile, model: cleanModel, machine: machine)])
             self.cleanFile = nil
             problem = nil
         } catch {
@@ -345,16 +348,22 @@ extension AppModel {
         _ = try await call("DELETE", address("api/speech/voices", id), accept: [204, 404])
     }
 
-    func speak(_ text: String, voiceId: String?, models: [String]) async throws -> [Components.Schemas.SpeechTake] {
-        let (data, _) = try await call(
-            "POST", address("api/speech/takes"),
-            json: ["text": text, "voiceId": voiceId.map { $0 as Any } ?? NSNull(), "models": models], accept: [202])
+    func speak(_ text: String, voiceId: String?, models: [String], machine: String = "") async throws
+        -> [Components.Schemas.SpeechTake]
+    {
+        var body: [String: Any] = ["text": text, "voiceId": voiceId.map { $0 as Any } ?? NSNull(), "models": models]
+        if !machine.isEmpty { body["machine"] = machine }
+        let (data, _) = try await call("POST", address("api/speech/takes"), json: body, accept: [202])
         return try decode([Components.Schemas.SpeechTake].self, data)
     }
 
-    func cleanSpeech(_ file: PickedFile, model: String) async throws -> Components.Schemas.SpeechTake {
+    func cleanSpeech(_ file: PickedFile, model: String, machine: String = "") async throws
+        -> Components.Schemas.SpeechTake
+    {
+        var fields = [("model", model)]
+        if !machine.isEmpty { fields.append(("machine", machine)) }
         let (data, _) = try await uploadFile(
-            address("api/speech/cleanups"), fields: [("model", model)], fileField: "file", file: file, accept: [202])
+            address("api/speech/cleanups"), fields: fields, fileField: "file", file: file, accept: [202])
         return try decode(Components.Schemas.SpeechTake.self, data)
     }
 

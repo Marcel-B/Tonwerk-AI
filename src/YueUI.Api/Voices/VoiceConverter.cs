@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using YueUI.Api.Data;
 using YueUI.Api.Library;
 using YueUI.Api.Lyrics;
+using YueUI.Api.Machines;
 using YueUI.Api.Worker;
 
 namespace YueUI.Api.Voices;
@@ -19,7 +20,8 @@ namespace YueUI.Api.Voices;
 /// singer in another song. Converting afterwards is what makes a voice recognizable across songs.
 /// The Mac has 24 GB, and YuE2, a separation model and Seed-VC do not fit beside each other, so this works like the
 /// lyrics writer: a version waits while songs are generated or lyrics written, an idle YuE worker is shut down
-/// first, and while <see cref="IsConverting"/> no song or draft starts. A take of the speech lab is waited for the same way. Queued versions survive a restart; one that
+/// first, and while <see cref="IsConverting"/> no song or draft starts. A job may run on another Mac instead
+/// (<see cref="Machines.Machines"/>): it is separated and converted there, under that Mac's memory, and mixed here. A take of the speech lab is waited for the same way. Queued versions survive a restart; one that
 /// was halfway is marked failed, since its intermediate files are gone.
 /// </remarks>
 public sealed class VoiceConverter(
@@ -27,9 +29,10 @@ public sealed class VoiceConverter(
     SqliteStemStore stemStore,
     SqliteSwapStore swapStore,
     SongLibrary library,
-    WorkerHost host,
     Status.StatusHub hub,
     Memory.ModelMemory memory,
+    Machines.Machines machines,
+    Machines.RemoteEngines remote,
     VoiceEngine voices,
     StemSeparator stems,
     IAudioMixer mixer,
@@ -68,7 +71,7 @@ public sealed class VoiceConverter(
         store.Unfinished().Any(v => song is null ? v.Run == run : v.SongId == $"{run}/{song}")
         || stemStore.Unfinished().Any(s => song is null ? s.Run == run : s.SongId == $"{run}/{song}");
 
-    public StemSetState EnqueueStems(string songId, string title, string model, bool dereverb)
+    public StemSetState EnqueueStems(string songId, string title, string model, bool dereverb, string? machine = null)
     {
         var now = time.GetUtcNow();
         return EnqueueStems(new StemSetState
@@ -78,6 +81,7 @@ public sealed class VoiceConverter(
             Title = title,
             Model = model,
             Dereverb = dereverb,
+            Machine = machine,
             CreatedAt = now,
             UpdatedAt = now,
         });
@@ -133,7 +137,8 @@ public sealed class VoiceConverter(
         hub.UpdateSwap(swap with { Stage = "cancelled", UpdatedAt = time.GetUtcNow() });
     }
 
-    public VersionState Enqueue(string songId, string title, ReferenceVoice voice, VersionRequest request)
+    /// <param name="machine">Where to make it, as <see cref="Machines.Machines.Normalize"/> stores it.</param>
+    public VersionState Enqueue(string songId, string title, ReferenceVoice voice, VersionRequest request, string? machine = null)
     {
         var now = time.GetUtcNow();
         var version = new VersionState
@@ -148,6 +153,7 @@ public sealed class VoiceConverter(
             DiffusionSteps = request.DiffusionSteps,
             KeepReverb = request.KeepReverb,
             StemModel = options.Value.StemModel,
+            Machine = machine,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -241,30 +247,32 @@ public sealed class VoiceConverter(
         try
         {
             Interlocked.Exchange(ref _waitingTicks, version.CreatedAt.UtcTicks);
+            Placement placement;
             try
             {
-                await memory.ClaimAsync(Memory.LargeModel.Voices, options.Value.WaitInterval, time, cancel.Token);
+                placement = await PlaceAsync(Machines.Engines.Voices, version.Machine, options.Value.ConversionConfigured, cancel.Token);
             }
             finally
             {
                 Interlocked.Exchange(ref _waitingTicks, 0);
             }
+            await using var placed = placement;
             if (library.SongDirectory(version.Run, version.SongId[(version.Run.Length + 1)..]) is not { } directory
                 || !File.Exists(Path.Combine(directory, "audio.flac")))
             {
                 throw new VoiceServiceException("The song is gone.");
             }
-            // YuE2 keeps its model for ten idle minutes; the separation needs the memory now.
-            await host.ShutdownWorkerAsync();
 
-            version = Update(version, v => v with { Stage = "separating" });
-            var separated = await stems.SeparateAsync(Path.Combine(directory, "audio.flac"), version.StemModel, work, cancel.Token);
+            version = Update(version, v => v with { Stage = "separating", RanOn = placement.Name });
+            var separated = await stems.SeparateAsync(Path.Combine(directory, "audio.flac"), version.StemModel, work, cancel.Token, Separator(placement));
 
             version = Update(version, v => v with { Stage = "converting", Fraction = 0 });
             var converted = Path.Combine(work, "converted.wav");
             // Reaching 1 means the estimate ran out; the browser says so instead of a percentage stuck at the end.
-            await voices.ConvertAsync(version.Conversion, separated.Vocals, converted, (fraction, estimated) =>
+            await ConvertAsync(placement, version.Conversion, separated.Vocals, converted, (fraction, estimated) =>
                 version = Update(version, v => v with { Fraction = Math.Round(Math.Clamp(fraction, 0, 1), 3), EstimatedSeconds = estimated }), cancel.Token);
+            // Mixing needs no model; whatever waits for the memory may go on.
+            placement.Release();
 
             version = Update(version, v => v with { Stage = "mixing", Fraction = 0 });
             var mix = Path.Combine(work, "mix.flac");
@@ -297,7 +305,6 @@ public sealed class VoiceConverter(
         }
         finally
         {
-            memory.Release(Memory.LargeModel.Voices);
             lock (_gate)
             {
                 _running = null;
@@ -341,14 +348,16 @@ public sealed class VoiceConverter(
         try
         {
             Interlocked.Exchange(ref _waitingTicks, set.CreatedAt.UtcTicks);
+            Placement placement;
             try
             {
-                await memory.ClaimAsync(Memory.LargeModel.Voices, options.Value.WaitInterval, time, cancel.Token);
+                placement = await PlaceAsync(Machines.Engines.Stems, set.Machine, options.Value.StemsConfigured, cancel.Token);
             }
             finally
             {
                 Interlocked.Exchange(ref _waitingTicks, 0);
             }
+            await using var placed = placement;
             string input;
             if (set.Upload)
             {
@@ -366,16 +375,14 @@ public sealed class VoiceConverter(
             {
                 throw new VoiceServiceException("The song is gone.");
             }
-            await host.ShutdownWorkerAsync();
-
-            set = UpdateStems(set, s => s with { Stage = "separating" });
-            var files = await stems.ExtractAsync(input, set.Model, set.Dereverb, work, cancel.Token);
+            set = UpdateStems(set, s => s with { Stage = "separating", RanOn = placement.Name });
+            var files = await stems.ExtractAsync(input, set.Model, set.Dereverb, work, cancel.Token, Separator(placement));
             if (files.Count == 0)
             {
                 throw new VoiceServiceException($"The separation model {set.Model} gave no stems.");
             }
             // The model has left the memory; measuring and encoding need none to speak of.
-            memory.Release(Memory.LargeModel.Voices);
+            placement.Release();
 
             var measured = files.Select(file => (File: file, Read: WavPeaks.Read(file, PeakCount))).ToList();
             // One scale for the whole set, so a quiet stem (the reverb) also looks quiet beside the others.
@@ -432,7 +439,6 @@ public sealed class VoiceConverter(
         }
         finally
         {
-            memory.Release(Memory.LargeModel.Voices);
             lock (_gate)
             {
                 _running = null;
@@ -463,19 +469,22 @@ public sealed class VoiceConverter(
         try
         {
             Interlocked.Exchange(ref _waitingTicks, swap.CreatedAt.UtcTicks);
+            Placement placement;
             try
             {
-                await memory.ClaimAsync(Memory.LargeModel.Voices, options.Value.WaitInterval, time, cancel.Token);
+                placement = await PlaceAsync(
+                    Machines.Engines.Voices, swap.Machine, swap.Separate ? options.Value.ConversionConfigured : options.Value.VoicesConfigured, cancel.Token);
             }
             finally
             {
                 Interlocked.Exchange(ref _waitingTicks, 0);
             }
+            await using var placed = placement;
             if (swapStore.SourcePath(id) is not { } source)
             {
                 throw new VoiceServiceException("The uploaded file is gone.");
             }
-            await host.ShutdownWorkerAsync();
+            swap = UpdateSwap(swap, s => s with { RanOn = placement.Name });
             Directory.CreateDirectory(work);
             var converted = Path.Combine(work, "converted.wav");
             void Progress(double fraction, double estimated) =>
@@ -488,10 +497,11 @@ public sealed class VoiceConverter(
                 var song = Path.Combine(work, "song.flac");
                 await mixer.DecodeAsync(source, song, cancel.Token);
                 swap = UpdateSwap(swap, s => s with { Stage = "separating" });
-                var separated = await stems.SeparateAsync(song, swap.StemModel, Path.Combine(work, "stems"), cancel.Token);
+                var separated = await stems.SeparateAsync(song, swap.StemModel, Path.Combine(work, "stems"), cancel.Token, Separator(placement));
 
                 swap = UpdateSwap(swap, s => s with { Stage = "converting", Fraction = 0 });
-                await voices.ConvertAsync(swap.Conversion, separated.Vocals, converted, Progress, cancel.Token);
+                await ConvertAsync(placement, swap.Conversion, separated.Vocals, converted, Progress, cancel.Token);
+                placement.Release();
 
                 swap = UpdateSwap(swap, s => s with { Stage = "mixing", Fraction = 0 });
                 await mixer.MixAsync(new MixInput(separated.Instrumental, converted, separated.Vocals, swap.KeepReverb ? separated.Reverb : null), result, cancel.Token);
@@ -501,8 +511,8 @@ public sealed class VoiceConverter(
                 var vocals = Path.Combine(work, "vocals.wav");
                 await mixer.DecodeAsync(source, vocals, cancel.Token);
                 swap = UpdateSwap(swap, s => s with { Stage = "converting", Fraction = 0 });
-                await voices.ConvertAsync(swap.Conversion, vocals, converted, Progress, cancel.Token);
-                memory.Release(Memory.LargeModel.Voices);
+                await ConvertAsync(placement, swap.Conversion, vocals, converted, Progress, cancel.Token);
+                placement.Release();
                 await mixer.EncodeFlacAsync(converted, result, cancel.Token);
             }
 
@@ -528,7 +538,6 @@ public sealed class VoiceConverter(
         }
         finally
         {
-            memory.Release(Memory.LargeModel.Voices);
             lock (_gate)
             {
                 _running = null;
@@ -536,6 +545,27 @@ public sealed class VoiceConverter(
             }
             DeleteFolder(work);
         }
+    }
+
+    /// <summary>Waits for the memory, here or on another Mac (<see cref="Machines.Machines.PlaceAsync"/>).</summary>
+    /// <param name="localAvailable">Whether this Mac can do it (its own tools or the old services).</param>
+    private Task<Placement> PlaceAsync(string engine, string? machine, bool localAvailable, CancellationToken cancellationToken) =>
+        machines.PlaceAsync(Memory.LargeModel.Voices, engine, machine, options.Value.WaitInterval, cancellationToken, localAvailable);
+
+    /// <summary>The separator of the Mac the job was placed on; null for this one's.</summary>
+    private IStemBackend? Separator(Placement placement) => placement.Helper is { } helper ? remote.Stems(helper) : null;
+
+    /// <summary>Seed-VC of the Mac the job was placed on; another Mac gets the reference voice sent along.</summary>
+    private async Task ConvertAsync(
+        Placement placement, VoiceConversion conversion, string vocals, string output, VoiceProgress progress, CancellationToken cancellationToken)
+    {
+        if (placement.Helper is not { } helper)
+        {
+            await voices.ConvertAsync(conversion, vocals, output, progress, cancellationToken);
+            return;
+        }
+        var reference = await voices.VoiceAudioAsync(conversion.VoiceId, cancellationToken);
+        await remote.ConvertAsync(helper, conversion, reference.Audio, vocals, output, progress, cancellationToken);
     }
 
     /// <summary>Stores the change (a swap deleted meanwhile stays deleted) and tells the browsers.</summary>

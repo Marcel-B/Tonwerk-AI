@@ -253,7 +253,9 @@ private struct VoicesSessionView: View {
             ForEach(session.versions, id: \.id) { version in
                 JobRow(
                     title: model.song(version.songId)?.displayTitle ?? version.title ?? version.songId,
-                    detail: version.voiceLabel, stage: version.stage, fraction: version.fraction,
+                    detail: [version.voiceLabel, model.ranOnNote(version.ranOn)].compactMap { $0 }
+                        .joined(separator: " · "),
+                    stage: version.stage, fraction: version.fraction,
                     message: version.message
                 ) {
                     if version.finished != true, let song = model.song(version.songId) {
@@ -329,6 +331,7 @@ private struct VoicesSessionView: View {
                 Text(session.modelHint).font(.caption).foregroundStyle(.secondary)
             }
             Toggle("Hall vom Gesang trennen", isOn: $session.dereverb)
+            MachinePicker(selection: $session.stemMachine, engine: "stems")
             Button {
                 Task { await session.separate() }
             } label: {
@@ -412,6 +415,9 @@ private struct VoicesSessionView: View {
         }
         if let created = set.createdAt {
             parts.append(created.formatted(date: .abbreviated, time: .shortened))
+        }
+        if let ranOn = model.ranOnNote(set.ranOn) {
+            parts.append(ranOn)
         }
         return parts.joined(separator: " · ")
     }
@@ -551,7 +557,9 @@ private struct VoicesSessionView: View {
 
     private func swapRow(_ swap: Components.Schemas.SwapState) -> some View {
         JobRow(
-            title: swap.fileName, detail: swap.voiceLabel, stage: swap.stage, fraction: swap.fraction,
+            title: swap.fileName,
+            detail: [swap.voiceLabel, model.ranOnNote(swap.ranOn)].compactMap { $0 }.joined(separator: " · "),
+            stage: swap.stage, fraction: swap.fraction,
             message: swap.message
         ) {
             if swap.stage == "done" {
@@ -730,6 +738,7 @@ struct VoiceSettingsForm: View {
             if reverb {
                 Toggle("Hall des Originals behalten", isOn: $settings.keepReverb)
             }
+            MachinePicker(selection: $settings.machine, engine: "voices")
         }
     }
 
@@ -799,6 +808,7 @@ struct SingSheet: View {
 
     // Read whenever the dialog opens, since a voice may have been added meanwhile.
     private func load() async {
+        await model.loadMachines()
         do {
             voices = try await model.referenceVoices()
             if !voices.contains(where: { $0.id == model.voiceSettings.voice }) {

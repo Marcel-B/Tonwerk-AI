@@ -70,7 +70,7 @@ public sealed class SketchOptions
         }
     }
 
-    private static string Expand(string path) => Path.GetFullPath(path.StartsWith("~/", StringComparison.Ordinal)
+    internal static string Expand(string path) => Path.GetFullPath(path.StartsWith("~/", StringComparison.Ordinal)
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path[2..])
         : path);
 }

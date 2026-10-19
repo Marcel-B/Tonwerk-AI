@@ -62,6 +62,8 @@ public struct CreateForm: Codable, Equatable, Sendable {
     public var german = true
     /// The lyrics model; empty for the server's default, so a changed default reaches the form.
     public var lyricsModel = ""
+    /// The Mac whose lyrics model drafts; empty lets the server choose.
+    public var lyricsMachine = ""
     /// The draft this form asked for and still waits for, kept so it lands after a restart too.
     public var draftId = ""
     public var instrumental = false
@@ -92,7 +94,7 @@ public struct CreateForm: Codable, Equatable, Sendable {
     public init() {}
 
     enum CodingKeys: String, CodingKey {
-        case title, style, lyrics, idea, german, lyricsModel, draftId, instrumental, full, batch, seed
+        case title, style, lyrics, idea, german, lyricsModel, lyricsMachine, draftId, instrumental, full, batch, seed
         case useAbc, abc, useAdvanced, planning, draftSteps, fullSteps, engines, maxSeconds
         case abcSampling, semanticSampling, lora, loraStrength
     }
@@ -110,6 +112,7 @@ public struct CreateForm: Codable, Equatable, Sendable {
         idea = value(.idea, empty.idea)
         german = value(.german, empty.german)
         lyricsModel = value(.lyricsModel, empty.lyricsModel)
+        lyricsMachine = value(.lyricsMachine, empty.lyricsMachine)
         draftId = value(.draftId, empty.draftId)
         instrumental = value(.instrumental, empty.instrumental)
         full = value(.full, empty.full)

@@ -146,7 +146,7 @@ final class SketchSession {
     /// The plan on the ACE-Step page, as far as ACE-Step reads it: it takes no score, so melody and chords stay here.
     func useAce(_ detail: SketchDetail) {
         guard let request = detail.ace else { return }
-        model.aceForm = AceForm(request: request)
+        model.aceForm = AceForm(request: request, machine: model.aceForm.machine)
         model.saveAceForm()
         model.openAce()
     }

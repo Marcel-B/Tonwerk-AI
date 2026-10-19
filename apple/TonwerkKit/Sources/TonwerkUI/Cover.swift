@@ -130,11 +130,13 @@ extension AppModel {
         (try? await tonwerk?.api.listSongImages(path: .init(run: song.run, song: song.name)).ok.body.json) ?? []
     }
 
-    func paint(_ song: Song, prompt: String, model: String) async throws -> Components.Schemas.ImageState {
+    func paint(_ song: Song, prompt: String, model: String, machine: String = "") async throws
+        -> Components.Schemas.ImageState
+    {
         guard let tonwerk else { throw ServerError(String(localized: "Kein Server verbunden.")) }
         switch try await tonwerk.api.createSongImage(
             path: .init(run: song.run, song: song.name),
-            body: .json(.init(prompt: prompt, model: model, seed: nil)))
+            body: .json(.init(prompt: prompt, model: model, seed: nil, machine: machine.isEmpty ? nil : machine)))
         {
         case .accepted(let accepted):
             let image = try accepted.body.json
@@ -313,6 +315,8 @@ struct PaintCoverView: View {
     let song: Song
     @AppStorage("imageModel") private var modelId = ""
     @AppStorage("imageWithTitle") private var withTitle = false
+    /// The Mac that paints; empty lets the server choose.
+    @AppStorage("imageMachine") private var machine = ""
     @State private var prompt = ""
     /// Whether the description is still the suggestion, so that the title switch may rewrite it.
     @State private var suggested = true
@@ -431,6 +435,7 @@ struct PaintCoverView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
+                MachinePicker(selection: $machine, engine: "images")
                 if let chosen {
                     Text(chosen.commercial
                         ? "\(chosen.license), auch für veröffentlichte Songs"
@@ -481,7 +486,8 @@ struct PaintCoverView: View {
             picture(image)
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text("\(image.modelLabel) · Seed \(image.seed.map(String.init) ?? "–")")
+            Text(([image.modelLabel, "Seed \(image.seed.map(String.init) ?? "–")", model.ranOnNote(image.ranOn)]
+                as [String?]).compactMap { $0 }.joined(separator: " · "))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -573,7 +579,8 @@ struct PaintCoverView: View {
         suggested = true
         async let about = model.imageInfo()
         async let listed = model.images(of: song)
-        let (info, images) = await (about, listed)
+        async let helpers: Void = model.loadMachines()
+        let (info, images, _) = await (about, listed, helpers)
         self.info = info
         loaded = images
         if let info, !info.models.contains(where: { $0.id == modelId }) {
@@ -586,7 +593,7 @@ struct PaintCoverView: View {
         message = nil
         Task {
             do {
-                let image = try await model.paint(song, prompt: prompt, model: modelId)
+                let image = try await model.paint(song, prompt: prompt, model: modelId, machine: machine)
                 loaded = [image] + loaded.filter { $0.id != image.id }
             } catch {
                 failed = true

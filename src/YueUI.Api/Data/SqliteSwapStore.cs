@@ -36,8 +36,8 @@ public sealed class SqliteSwapStore(SqliteDatabase database)
             null,
             """
             INSERT INTO voice_swaps (id, file_name, voice_id, voice_label, semi_tone_shift, strength, diffusion_steps, separate,
-                keep_reverb, stem_model, stage, message, created_at, updated_at)
-            VALUES ($id, $file, $voice, $label, $shift, $strength, $steps, $separate, $reverb, $model, $stage, $message, $created, $updated)
+                keep_reverb, stem_model, stage, message, machine, ran_on, created_at, updated_at)
+            VALUES ($id, $file, $voice, $label, $shift, $strength, $steps, $separate, $reverb, $model, $stage, $message, $machine, $ranOn, $created, $updated)
             """,
             ("$id", swap.Id),
             ("$file", swap.FileName),
@@ -51,6 +51,8 @@ public sealed class SqliteSwapStore(SqliteDatabase database)
             ("$model", (object?)swap.StemModel ?? DBNull.Value),
             ("$stage", swap.Stage),
             ("$message", (object?)swap.Message ?? DBNull.Value),
+            ("$machine", (object?)swap.Machine ?? DBNull.Value),
+            ("$ranOn", (object?)swap.RanOn ?? DBNull.Value),
             ("$created", Time(swap.CreatedAt)),
             ("$updated", Time(swap.UpdatedAt)));
     }
@@ -62,10 +64,11 @@ public sealed class SqliteSwapStore(SqliteDatabase database)
         return SqliteDatabase.Execute(
             connection,
             null,
-            "UPDATE voice_swaps SET stage = $stage, message = $message, updated_at = $updated WHERE id = $id",
+            "UPDATE voice_swaps SET stage = $stage, message = $message, ran_on = $ranOn, updated_at = $updated WHERE id = $id",
             ("$id", swap.Id),
             ("$stage", swap.Stage),
             ("$message", (object?)swap.Message ?? DBNull.Value),
+            ("$ranOn", (object?)swap.RanOn ?? DBNull.Value),
             ("$updated", Time(swap.UpdatedAt))) > 0;
     }
 
@@ -120,6 +123,8 @@ public sealed class SqliteSwapStore(SqliteDatabase database)
         StemModel = reader.IsDBNull(reader.GetOrdinal("stem_model")) ? null : reader.GetString(reader.GetOrdinal("stem_model")),
         Stage = reader.GetString(reader.GetOrdinal("stage")),
         Message = reader.IsDBNull(reader.GetOrdinal("message")) ? null : reader.GetString(reader.GetOrdinal("message")),
+        Machine = reader.IsDBNull(reader.GetOrdinal("machine")) ? null : reader.GetString(reader.GetOrdinal("machine")),
+        RanOn = reader.IsDBNull(reader.GetOrdinal("ran_on")) ? null : reader.GetString(reader.GetOrdinal("ran_on")),
         CreatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("created_at")), CultureInfo.InvariantCulture),
         UpdatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("updated_at")), CultureInfo.InvariantCulture),
     };

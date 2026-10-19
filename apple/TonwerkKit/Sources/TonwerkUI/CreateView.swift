@@ -82,6 +82,7 @@ struct CreateView: View {
                     model.form = CreateForm()
                     model.form.german = keep.german
                     model.form.lyricsModel = keep.lyricsModel
+                    model.form.lyricsMachine = keep.lyricsMachine
                 } label: {
                     Label("Formular leeren", systemImage: "trash")
                 }
@@ -89,7 +90,13 @@ struct CreateView: View {
         }
         .onChange(of: model.form) { model.saveForm() }
         .onChange(of: draftState?.finished) { take(draftState) }
-        .task { models = await model.lyricsModels() }
+        .task {
+            await model.loadMachines()
+            models = await model.lyricsModels(on: model.form.lyricsMachine)
+        }
+        .onChange(of: model.form.lyricsMachine) {
+            Task { models = await model.lyricsModels(on: model.form.lyricsMachine) }
+        }
         .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) {
             guard let item = photoItem else { return }
@@ -180,6 +187,7 @@ struct CreateView: View {
             Text("Deutsch").tag(true)
             Text("Englisch").tag(false)
         }
+        MachinePicker(selection: $model.form.lyricsMachine, engine: "lyrics")
         if let models {
             Picker("Modell", selection: $model.form.lyricsModel) {
                 Text("Standard (\(models.models.first { $0.id == models._default }?.name ?? models._default))").tag("")
@@ -192,7 +200,8 @@ struct CreateView: View {
             Spacer()
             if drafting {
                 ProgressView().controlSize(.small)
-                Text(draftStage).foregroundStyle(.secondary)
+                Text([draftStage, model.ranOnNote(draftState?.ranOn)].compactMap { $0 }.joined(separator: " · "))
+                    .foregroundStyle(.secondary)
                 Button("Nicht mehr warten") { model.form.draftId = "" }
                     .buttonStyle(.borderless)
             } else {
@@ -350,7 +359,8 @@ extension AppModel {
             style: form.style,
             language: form.german ? .german : .english,
             model: form.lyricsModel.isEmpty ? nil : form.lyricsModel,
-            image: photo.map { "data:image/jpeg;base64,\($0.base64EncodedString())" })
+            image: photo.map { "data:image/jpeg;base64,\($0.base64EncodedString())" },
+            machine: form.lyricsMachine.isEmpty ? nil : form.lyricsMachine)
         switch try await tonwerk.api.writeLyrics(body: .json(request)) {
         case .accepted(let accepted):
             let state = try accepted.body.json
@@ -363,9 +373,10 @@ extension AppModel {
         }
     }
 
-    /// The lyrics models LM Studio offers plus Claude's, or nil while LM Studio is down and no key is set.
-    func lyricsModels() async -> Components.Schemas.LyricsModels? {
-        try? await tonwerk?.api.listLyricsModels().ok.body.json
+    /// The lyrics models LM Studio offers plus Claude's, or nil while LM Studio is down and no key is set. With a
+    /// machine, that Mac's LM Studio.
+    func lyricsModels(on machine: String = "") async -> Components.Schemas.LyricsModels? {
+        try? await tonwerk?.api.listLyricsModels(query: .init(machine: machine.isEmpty ? nil : machine)).ok.body.json
     }
 
     /// A song's request laid over the form, its own score along switched off, then the form shown.

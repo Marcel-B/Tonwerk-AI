@@ -25,6 +25,8 @@ final class SingSession {
     /// Semitones the melody moves; ignored while ``autoShift`` moves it into the voice's range.
     var pitchShift = 0
     var autoShift = false
+    /// The Mac that sings; empty lets the server choose.
+    var machine = ""
     private(set) var sending = false
 
     let preview = AudioPreview()
@@ -40,6 +42,7 @@ final class SingSession {
         guard !loading else { return }
         loading = true
         defer { loading = false }
+        await model.loadMachines()
         do {
             let info = try await model.singing()
             self.info = info
@@ -100,6 +103,9 @@ final class SingSession {
         let name = title.trimmingCharacters(in: .whitespaces)
         if !name.isEmpty {
             fields.append(("title", name))
+        }
+        if !machine.isEmpty {
+            fields.append(("machine", machine))
         }
         do {
             let take = try await model.sing(source, fields: fields)

@@ -288,6 +288,7 @@ private struct SpeechSessionView: View {
                 .toggleStyle(.checkbox)
                 #endif
             }
+            MachinePicker(selection: $session.machine, engine: "speech")
             HStack(spacing: 10) {
                 Button {
                     Task { await session.speak() }
@@ -326,7 +327,8 @@ private struct SpeechSessionView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     takeHeader(take, title: take.modelLabel,
                                subtitle: [take.voiceLabel ?? String(localized: "Stimme des Modells"),
-                                          take.seconds.map(Song.clock)].compactMap { $0 }.joined(separator: " · "))
+                                          take.seconds.map(Song.clock), model.ranOnNote(take.ranOn)]
+                                   .compactMap { $0 }.joined(separator: " · "))
                     Text(take.text).font(.callout).lineLimit(2)
                     if take.stage == "done" {
                         Text(SpeechSession.stats(take)).font(.caption).foregroundStyle(.secondary)
@@ -436,6 +438,7 @@ private struct SpeechSessionView: View {
                 }
                 .buttonStyle(.plain)
             }
+            MachinePicker(selection: $session.machine, engine: "speech")
             HStack(spacing: 10) {
                 Button {
                     Task { await session.clean() }
@@ -460,8 +463,8 @@ private struct SpeechSessionView: View {
             ForEach(session.cleanups, id: \.id) { take in
                 VStack(alignment: .leading, spacing: 4) {
                     takeHeader(take, title: take.source ?? "",
-                               subtitle: [take.modelLabel, take.seconds.map(Song.clock)].compactMap { $0 }
-                                   .joined(separator: " · "))
+                               subtitle: [take.modelLabel, take.seconds.map(Song.clock), model.ranOnNote(take.ranOn)]
+                                   .compactMap { $0 }.joined(separator: " · "))
                     if take.stage == "cleaning", let progress = take.progress {
                         ProgressView(value: min(max(progress, 0), 1))
                     }

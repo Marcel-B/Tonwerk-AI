@@ -14,14 +14,15 @@ namespace YueUI.Api.Speech;
 /// <remarks>
 /// A speech model is 3 to 17 GB, so it follows the rule the lyrics writer and the voice converter follow on 24 GB:
 /// a take waits while songs are generated, lyrics written or a song sung with another voice, an idle YuE worker is
-/// shut down first, and while it holds the memory (<see cref="ModelMemory"/>) the others wait. Takes are not in
+/// shut down first, and while it holds the memory (<see cref="ModelMemory"/>) the others wait. A take may be handed to
+/// another Mac instead (<see cref="Machines.Machines"/>), which then waits for its own memory. Takes are not in
 /// <c>JobQueue</c>: a take is short, and the lab lists its own. Queued takes survive a restart; one that was halfway is marked failed.
 /// </remarks>
 public sealed class SpeechLab(
     SqliteSpeechStore store,
     ISpeechEngine engine,
-    ModelMemory memory,
-    WorkerHost host,
+    Machines.Machines machines,
+    Machines.RemoteEngines remote,
     Status.StatusHub hub,
     IOptions<SpeechOptions> options,
     TimeProvider time,
@@ -33,7 +34,8 @@ public sealed class SpeechLab(
     private CancellationTokenSource? _cancel;
 
     /// <summary>One take per model, spoken in the order given.</summary>
-    public IReadOnlyList<SpeechTake> Enqueue(string text, SpeechVoice? voice, IEnumerable<SpeechModel> models)
+    /// <param name="machine">Where to speak, as <see cref="Machines.Machines.Normalize"/> stores it.</param>
+    public IReadOnlyList<SpeechTake> Enqueue(string text, SpeechVoice? voice, IEnumerable<SpeechModel> models, string? machine = null)
     {
         var takes = new List<SpeechTake>();
         foreach (var model in models)
@@ -47,6 +49,7 @@ public sealed class SpeechLab(
                 Text = text,
                 VoiceId = voice?.Id,
                 VoiceLabel = voice?.Label,
+                Machine = machine,
                 CreatedAt = now,
                 UpdatedAt = now,
             };
@@ -63,7 +66,7 @@ public sealed class SpeechLab(
     /// It waits in the same line as the spoken takes: an enhancement model is small, but loads through the same
     /// mlx-audio and would otherwise run beside a 9 GB speech model.
     /// </summary>
-    public SpeechTake EnqueueCleanup(string id, string source, SpeechModel model)
+    public SpeechTake EnqueueCleanup(string id, string source, SpeechModel model, string? machine = null)
     {
         var now = time.GetUtcNow();
         var take = new SpeechTake
@@ -73,6 +76,7 @@ public sealed class SpeechLab(
             ModelLabel = model.Label,
             Text = "",
             Source = source,
+            Machine = machine,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -157,11 +161,11 @@ public sealed class SpeechLab(
                 throw new SpeechException("The recording is gone.");
             }
 
-            await memory.ClaimAsync(LargeModel.Speech, options.Value.WaitInterval, time, cancel.Token);
-            // YuE2 keeps its model for ten idle minutes; the speech model needs the memory now.
-            await host.ShutdownWorkerAsync();
+            await using var placement = await machines.PlaceAsync(
+                LargeModel.Speech, Machines.Engines.Speech, take.Machine, options.Value.WaitInterval, cancel.Token, engine.Installed);
+            var speaker = placement.Helper is { } helper ? remote.Speech(helper) : engine;
 
-            take = Update(take, t => t with { Stage = "loading" });
+            take = Update(take, t => t with { Stage = "loading", RanOn = placement.Name });
             Directory.CreateDirectory(work);
             var output = Path.Combine(work, "take.wav");
             var working = cleaning ? "cleaning" : "speaking";
@@ -169,8 +173,8 @@ public sealed class SpeechLab(
             // The script reports in steps of a percent at most, so every report may go to the browsers.
             void Progressed(double share) => take = Update(take, t => t with { Stage = working, Progress = Math.Round(share, 3) });
             var result = cleaning
-                ? await engine.CleanAsync(new CleanJob(model, source, output, WavInfo.Seconds(source) ?? 0), Staged, Progressed, cancel.Token)
-                : await engine.SpeakAsync(
+                ? await speaker.CleanAsync(new CleanJob(model, source, output, WavInfo.Seconds(source) ?? 0), Staged, Progressed, cancel.Token)
+                : await speaker.SpeakAsync(
                     new SpeechJob(model, take.Text, voice is null ? null : store.VoicePath(voice.Id), voice?.Transcript is { Length: > 0 } words ? words : null, output),
                     Staged,
                     cancel.Token);
@@ -209,7 +213,6 @@ public sealed class SpeechLab(
         }
         finally
         {
-            memory.Release(LargeModel.Speech);
             lock (_gate)
             {
                 _running = null;

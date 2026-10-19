@@ -27,11 +27,12 @@ public sealed class StemSeparator(MlxStemSeparator local, StemClient service, IO
     private IStemBackend Backend => options.Value.LocalStems ? local : service;
 
     /// <param name="model">The model the version was asked with; the configured one where it names none.</param>
-    public async Task<Stems> SeparateAsync(string flac, string? model, string directory, CancellationToken cancellationToken)
+    /// <param name="backend">Another Mac's separator (Machines/RemoteEngines.cs); this one's where null.</param>
+    public async Task<Stems> SeparateAsync(string flac, string? model, string directory, CancellationToken cancellationToken, IStemBackend? backend = null)
     {
         model ??= options.Value.StemModel;
         // Dry vocals: Seed-VC would copy the reverb into the new voice, and it is mixed back in untouched instead.
-        await Backend.ExtractAsync(flac, model, dereverb: true, directory, cancellationToken);
+        await (backend ?? Backend).ExtractAsync(flac, model, dereverb: true, directory, cancellationToken);
         string? Stem(string name) => File.Exists(Path.Combine(directory, name)) ? Path.Combine(directory, name) : null;
         var vocals = Stem("vocals_dry.wav") ?? Stem("vocals.wav");
         var instrumental = Stem("instrumental.wav");
@@ -43,8 +44,9 @@ public sealed class StemSeparator(MlxStemSeparator local, StemClient service, IO
     }
 
     /// <inheritdoc cref="IStemBackend.ExtractAsync"/>
-    public Task<IReadOnlyList<string>> ExtractAsync(string flac, string model, bool dereverb, string directory, CancellationToken cancellationToken) =>
-        Backend.ExtractAsync(flac, model, dereverb, directory, cancellationToken);
+    public Task<IReadOnlyList<string>> ExtractAsync(
+        string flac, string model, bool dereverb, string directory, CancellationToken cancellationToken, IStemBackend? backend = null) =>
+        (backend ?? Backend).ExtractAsync(flac, model, dereverb, directory, cancellationToken);
 
     /// <inheritdoc cref="IStemBackend.ListModelsAsync"/>
     public Task<IReadOnlyList<StemModel>?> ListModelsAsync(CancellationToken cancellationToken) => Backend.ListModelsAsync(cancellationToken);

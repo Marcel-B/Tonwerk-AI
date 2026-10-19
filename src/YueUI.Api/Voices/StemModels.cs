@@ -20,7 +20,8 @@ public sealed record StemModel(
 
 /// <param name="Model">One of <c>GET /api/stems/models</c>; the configured one where it names none.</param>
 /// <param name="Dereverb">Also splits the vocals into dry vocals and their reverb, which takes longer.</param>
-public sealed record StemRequest(string? Model = null, bool Dereverb = false)
+/// <param name="Machine">The Mac to separate on: <c>local</c>, a helper's id, or null for whichever is free.</param>
+public sealed record StemRequest(string? Model = null, bool Dereverb = false, string? Machine = null)
 {
     public Dictionary<string, string[]> Validate()
     {
@@ -75,6 +76,12 @@ public sealed record StemSetState
 
     /// <summary>Filled once it is done, in the order StemMyWav made them.</summary>
     public IReadOnlyList<StemFile> Stems { get; init; } = [];
+
+    /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
+    public string? Machine { get; init; }
+
+    /// <summary>The name of the Mac that runs it, once one does.</summary>
+    public string? RanOn { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; }
 

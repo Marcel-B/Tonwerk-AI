@@ -150,6 +150,7 @@ public static class VoiceEndpoints
         SongLibrary library,
         VoiceEngine voices,
         VoiceConverter converter,
+        Machines.Machines machines,
         IOptions<VoiceOptions> options,
         CancellationToken cancellationToken)
     {
@@ -158,6 +159,7 @@ public static class VoiceEndpoints
             return Results.Problem(title: "Voices are not set up: neither Seed-VC and the separator (deploy/setup-mac.sh --voices) nor ChangeMyVoice and StemMyWav (Voice:BaseUrl, Voice:StemsBaseUrl and their keys).", statusCode: StatusCodes.Status501NotImplemented);
         }
         var errors = request.Validate();
+        machines.TryNormalize(request.Machine, out var machine, errors);
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -174,7 +176,7 @@ public static class VoiceEndpoints
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["voiceId"] = ["No such reference voice."] });
             }
-            var version = converter.Enqueue($"{run}/{song}", library.TitleOf(run, directory), voice, request);
+            var version = converter.Enqueue($"{run}/{song}", library.TitleOf(run, directory), voice, request, machine);
             return Results.Accepted($"/api/songs/{run}/{song}/versions/{version.Id}/audio", version);
         });
     }

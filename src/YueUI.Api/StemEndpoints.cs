@@ -105,6 +105,7 @@ public static class StemEndpoints
         StemRequest? request,
         SongLibrary library,
         VoiceConverter converter,
+        Machines.Machines machines,
         IOptions<VoiceOptions> options)
     {
         if (!options.Value.StemsConfigured)
@@ -113,6 +114,7 @@ public static class StemEndpoints
         }
         request ??= new StemRequest();
         var errors = request.Validate();
+        machines.TryNormalize(request.Machine, out var machine, errors);
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -121,7 +123,7 @@ public static class StemEndpoints
         {
             return Results.NotFound();
         }
-        var set = converter.EnqueueStems($"{run}/{song}", library.TitleOf(run, directory), request.Model ?? options.Value.StemModel, request.Dereverb);
+        var set = converter.EnqueueStems($"{run}/{song}", library.TitleOf(run, directory), request.Model ?? options.Value.StemModel, request.Dereverb, machine);
         return Results.Accepted($"/api/stems", set);
     }
 
@@ -130,7 +132,9 @@ public static class StemEndpoints
         IFormFile? file,
         [FromForm] string? model,
         [FromForm] bool? dereverb,
+        [FromForm] string? machine,
         VoiceConverter converter,
+        Machines.Machines machines,
         SqliteStemStore store,
         IOptions<VoiceOptions> options,
         TimeProvider time,
@@ -142,6 +146,7 @@ public static class StemEndpoints
         }
         var request = new StemRequest(string.IsNullOrEmpty(model) ? null : model, dereverb ?? false);
         var errors = request.Validate();
+        machines.TryNormalize(machine, out var place, errors);
         if (file is null || file.Length == 0)
         {
             errors["file"] = ["A recording: WAV, MP3, FLAC, M4A or OGG."];
@@ -160,6 +165,7 @@ public static class StemEndpoints
             Title = title is { Length: > 0 and <= 200 } ? title : "upload",
             Model = request.Model ?? options.Value.StemModel,
             Dereverb = request.Dereverb,
+            Machine = place,
             CreatedAt = now,
             UpdatedAt = now,
         };

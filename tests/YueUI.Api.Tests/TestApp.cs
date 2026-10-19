@@ -123,6 +123,12 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// <summary>How long a draft or version may be passed by songs; set before the first request.</summary>
     public TimeSpan BundleWindow { get; set; } = TimeSpan.FromMinutes(20);
 
+    /// <summary>Settings of <c>Machines</c> on top of the test's own (no helpers, no serving, no key file).</summary>
+    public Action<Api.Machines.MachineOptions>? Machines { get; set; }
+
+    /// <summary>What the helper client talks to, typically another <see cref="TestApp"/>'s server; null for none.</summary>
+    public Func<HttpMessageHandler>? HelperHandler { get; set; }
+
     public FakeWorker Worker => Launcher.Current ?? throw new InvalidOperationException("No worker was started.");
 
     /// <summary>The worker a job from the queue starts on the queue's own thread.</summary>
@@ -253,6 +259,17 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.Root = Path.Combine(Root, "speech");
                 options.WaitInterval = TimeSpan.FromMilliseconds(10);
             });
+
+            services.Configure<Api.Machines.MachineOptions>(options =>
+            {
+                options.KeyFile = Path.Combine(Root, "helper.key");
+                options.PollInterval = TimeSpan.FromMilliseconds(20);
+                Machines?.Invoke(options);
+            });
+            if (HelperHandler is { } helperHandler)
+            {
+                services.AddHttpClient(Api.Machines.HelperClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(helperHandler);
+            }
 
             services.Configure<Queue.QueueOptions>(options => options.BundleWindow = BundleWindow);
             services.Configure<PushOptions>(options => options.DataPath = Path.Combine(Root, "push.json"));

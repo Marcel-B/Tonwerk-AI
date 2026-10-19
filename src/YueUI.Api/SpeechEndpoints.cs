@@ -170,10 +170,17 @@ public static class SpeechEndpoints
         }
     }
 
-    private static IResult AddTakes(SpeechRequest request, SqliteSpeechStore store, ISpeechEngine engine, SpeechLab lab, IOptions<SpeechOptions> options)
+    private static IResult AddTakes(
+        SpeechRequest request,
+        SqliteSpeechStore store,
+        ISpeechEngine engine,
+        SpeechLab lab,
+        Machines.Machines machines,
+        IOptions<SpeechOptions> options)
     {
         var offered = options.Value.ResolvedModels;
         var errors = request.Validate(offered);
+        machines.TryNormalize(request.Machine, out var machine, errors);
         var voice = request.VoiceId is { Length: > 0 } voiceId ? store.Voice(voiceId) : null;
         if (request.VoiceId is { Length: > 0 } && voice is null)
         {
@@ -183,7 +190,7 @@ public static class SpeechEndpoints
         {
             return Results.ValidationProblem(errors);
         }
-        if (!engine.Installed)
+        if (!machines.CanRun(Machines.Engines.Speech, machine, engine.Installed))
         {
             return Results.Problem(
                 title: $"mlx-audio is not installed ({options.Value.ResolvedPython}); run deploy/install-speech.sh on the Mac.",
@@ -191,7 +198,7 @@ public static class SpeechEndpoints
         }
         // In the order the models are offered, whatever order they were ticked in: the page compares them side by side.
         var models = offered.Where(m => request.Models!.Contains(m.Id));
-        return Results.Accepted("/api/speech", lab.Enqueue(request.Text!.Trim(), voice, models));
+        return Results.Accepted("/api/speech", lab.Enqueue(request.Text!.Trim(), voice, models, machine));
     }
 
     private static SpeechModelInfo Info(SpeechModel model, ISpeechEngine engine) =>
@@ -204,14 +211,17 @@ public static class SpeechEndpoints
 
     private static async Task<IResult> AddCleanupAsync(
         [FromForm] string? model,
+        [FromForm] string? machine,
         IFormFile? file,
         SqliteSpeechStore store,
         ISpeechEngine engine,
         SpeechLab lab,
+        Machines.Machines machines,
         IOptions<SpeechOptions> options,
         CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
+        machines.TryNormalize(machine, out var place, errors);
         var chosen = options.Value.ResolvedCleanModels.FirstOrDefault(m => m.Id == model);
         if (chosen is null)
         {
@@ -225,7 +235,7 @@ public static class SpeechEndpoints
         {
             return Results.ValidationProblem(errors);
         }
-        if (!engine.Installed)
+        if (!machines.CanRun(Machines.Engines.Speech, place, engine.Installed))
         {
             return Results.Problem(
                 title: $"mlx-audio is not installed ({options.Value.ResolvedPython}); run deploy/install-speech.sh on the Mac.",
@@ -253,7 +263,7 @@ public static class SpeechEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["file"] = ["The recording holds no audio."] });
             }
             var name = Path.GetFileName(file.FileName) is { Length: > 0 and <= 200 } given ? given : "recording";
-            return Results.Accepted("/api/speech", lab.EnqueueCleanup(id, name, chosen!));
+            return Results.Accepted("/api/speech", lab.EnqueueCleanup(id, name, chosen!, place));
         }
         catch (SpeechException exception)
         {

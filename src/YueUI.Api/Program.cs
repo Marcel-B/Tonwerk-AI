@@ -47,6 +47,16 @@ builder.Services.AddSingleton<WorkerHost>();
 builder.Services.AddHostedService(services => services.GetRequiredService<WorkerHost>());
 // Which large model holds the memory; on 24 GB they take turns (Memory/ModelMemory.cs).
 builder.Services.AddSingleton<YueUI.Api.Memory.ModelMemory>();
+// Other Macs that compute for this one, and this one computing for others (Machines/).
+builder.Services.Configure<YueUI.Api.Machines.MachineOptions>(builder.Configuration.GetSection(YueUI.Api.Machines.MachineOptions.Section));
+builder.Services.AddSingleton<YueUI.Api.Machines.Machines>();
+builder.Services.AddSingleton<YueUI.Api.Machines.HelperClient>();
+builder.Services.AddSingleton<YueUI.Api.Machines.RemoteEngines>();
+builder.Services.AddSingleton<YueUI.Api.Machines.EngineInventory>();
+builder.Services.AddSingleton<YueUI.Api.Machines.HelperRuns>();
+builder.Services.AddHostedService<YueUI.Api.Machines.MachineMonitor>();
+// A job's answer streams for as long as the job runs there, an ACE-Step song or a long cleanup for an hour and more.
+builder.Services.AddHttpClient(YueUI.Api.Machines.HelperClient.HttpClientName, client => client.Timeout = Timeout.InfiniteTimeSpan);
 // Lyrics drafts from LM Studio; loading a 15 GB model and writing take far longer than HttpClient's 100 s default allows for.
 builder.Services.Configure<LyricsOptions>(builder.Configuration.GetSection(LyricsOptions.Section));
 builder.Services.AddSingleton<ILmStudioStarter, LmsCli>();
@@ -241,6 +251,7 @@ api.MapAudioMidiEndpoints();
 api.MapBackupEndpoints();
 api.MapLogEndpoints();
 api.MapStorageEndpoints();
+api.MapMachineEndpoints();
 
 app.MapMetrics();
 app.MapClientApp();

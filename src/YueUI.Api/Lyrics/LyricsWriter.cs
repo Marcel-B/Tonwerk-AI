@@ -33,6 +33,8 @@ public sealed partial class LyricsWriter(
     WorkerHost worker,
     Status.StatusHub hub,
     ModelMemory memory,
+    Machines.Machines machines,
+    Machines.RemoteEngines remote,
     TimeProvider time,
     ILogger<LyricsWriter> logger)
 {
@@ -82,6 +84,10 @@ public sealed partial class LyricsWriter(
     /// <summary>A draft is in progress, so the lyrics model may be in memory: no song should start now.</summary>
     public bool IsWriting => memory.Holds(LargeModel.Lyrics);
 
+    /// <summary>Whether <paramref name="model"/> is one of the Claude models, which run in the cloud.</summary>
+    public bool IsCloud(string? model) =>
+        !string.IsNullOrWhiteSpace(model) && options.Value.ClaudeModels.Contains(model.Trim(), StringComparer.Ordinal);
+
     /// <summary>
     /// Starts a draft in the background; its progress and result arrive as <c>lyrics</c> events (see
     /// <see cref="LyricsState"/>), so a phone that locks meanwhile still gets it.
@@ -90,11 +96,11 @@ public sealed partial class LyricsWriter(
     /// <param name="image">A photo as a <c>data:image/…;base64,</c> URL for a model that can see; the lyrics are about it.</param>
     /// <param name="revision">Lyrics to change as instructed, instead of new ones.</param>
     /// <param name="id">The id the draft was promised under while it waited in the queue; a new one otherwise.</param>
+    /// <param name="machine">
+    /// The Mac whose LM Studio writes it (<see cref="Machines.Machines.Normalize"/>): null for this one if its memory is
+    /// free, else a free helper. Ignored for a Claude model.
+    /// </param>
     /// <exception cref="LyricsBusyException">Another draft is in progress, YuE2 is generating, or another model holds the memory.</exception>
-    /// <summary>Whether <paramref name="model"/> is one of the Claude models, which run in the cloud.</summary>
-    public bool IsCloud(string? model) =>
-        !string.IsNullOrWhiteSpace(model) && options.Value.ClaudeModels.Contains(model.Trim(), StringComparer.Ordinal);
-
     public LyricsState Start(
         string? keywords,
         string? style,
@@ -102,26 +108,60 @@ public sealed partial class LyricsWriter(
         string? model = null,
         string? image = null,
         LyricsRevision? revision = null,
-        string? id = null)
+        string? id = null,
+        string? machine = null)
     {
-        model = string.IsNullOrWhiteSpace(model) ? options.Value.Model : model.Trim();
-        var local = !IsCloud(model);
-        // From here on no song can start (see IsWriting); a cloud draft takes nothing from the Mac's memory.
-        if (local && !memory.TryClaim(LargeModel.Lyrics))
+        var asked = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
+        model = asked ?? options.Value.Model;
+        var cloudModel = IsCloud(model);
+        // From here on no song can start (see IsWriting); a cloud draft or one on a helper takes nothing from this Mac's memory.
+        var placement = cloudModel ? null : Place(machine);
+        var state = new LyricsState
         {
-            throw new LyricsBusyException(
-                IsWriting ? "Lyrics are already being written."
-                : worker.IsBusy ? "YuE2 is generating; the lyrics model would not fit into memory beside it."
-                // The worker is shut down below to make room; a transcription in it would end with it.
-                : worker.IsTranscribing ? "A transcription is running in the worker."
-                : "Another model holds the memory.");
-        }
-        var state = new LyricsState { Id = id ?? NewId(), UpdatedAt = time.GetUtcNow() };
+            Id = id ?? NewId(),
+            Machine = cloudModel ? null : machine,
+            RanOn = cloudModel ? null : placement!.Name,
+            UpdatedAt = time.GetUtcNow(),
+        };
         hub.UpdateLyrics(state);
         var brief = new Brief(keywords?.Trim() ?? "", style, language, image, revision);
-        _ = Task.Run(() => RunAsync(state, brief, model, local));
+        // A helper drafts with its own default when none was chosen: this Mac's may not be loaded there.
+        _ = Task.Run(() => RunAsync(state, brief, placement?.Helper is null ? model : asked, placement));
         return state;
     }
+
+    /// <exception cref="LyricsBusyException">Nowhere to write it now.</exception>
+    private Machines.Placement Place(string? machine)
+    {
+        if (machine is not null && machine != Machines.Machines.Local)
+        {
+            return machines.Find(machine) is { } helper
+                ? machines.Remote(helper)
+                : throw new LyricsBusyException($"There is no Mac {machine} any more.");
+        }
+        if (memory.TryClaim(LargeModel.Lyrics))
+        {
+            return new Machines.Placement(null, machines.LocalName, () => memory.Release(LargeModel.Lyrics));
+        }
+        if (machine is null && machines.FreeHelper(Machines.Engines.Lyrics) is { } free)
+        {
+            return machines.Remote(free);
+        }
+        throw new LyricsBusyException(
+            IsWriting ? "Lyrics are already being written."
+            : worker.IsBusy ? "YuE2 is generating; the lyrics model would not fit into memory beside it."
+            // The worker is shut down below to make room; a transcription in it would end with it.
+            : worker.IsTranscribing ? "A transcription is running in the worker."
+            : "Another model holds the memory.");
+    }
+
+    /// <summary>
+    /// A draft another Mac asked for (Machines/HelperRuns.cs), with this Mac's LM Studio. The caller holds the memory;
+    /// the worker is shut down and the model loaded and unloaded as for a draft of this Mac's own.
+    /// </summary>
+    /// <exception cref="LyricsUnavailableException">LM Studio could not be reached or refused.</exception>
+    public Task<string> WriteForAsync(Machines.LyricsHelperJob job, CancellationToken cancellationToken) =>
+        WriteAsync(string.IsNullOrWhiteSpace(job.Model) ? options.Value.Model : job.Model.Trim(), new Brief(job.Keywords.Trim(), job.Style, job.Language, job.Image, job.Revision), cancellationToken);
 
     /// <summary>The id of a <see cref="LyricsState"/>, which the form keeps to take the result.</summary>
     public static string NewId() => Guid.NewGuid().ToString("N")[..12];
@@ -129,15 +169,20 @@ public sealed partial class LyricsWriter(
     /// <summary>What the song is to be about, as the form sent it.</summary>
     private sealed record Brief(string Keywords, string? Style, LyricsLanguage Language, string? Image, LyricsRevision? Revision);
 
-    private async Task RunAsync(LyricsState state, Brief brief, string model, bool local)
+    /// <param name="placement">Null for Claude.</param>
+    /// <param name="model">Null only on a helper, which then writes with its own default.</param>
+    private async Task RunAsync(LyricsState state, Brief brief, string? model, Machines.Placement? placement)
     {
         LyricsState result;
         try
         {
-            var lyrics = local ? await WriteAsync(model, brief, CancellationToken.None) : await WriteInCloudAsync(model, brief, CancellationToken.None);
+            var lyrics = placement is null ? await WriteInCloudAsync(model!, brief, CancellationToken.None)
+                : placement.Helper is { } helper ? await remote.WriteLyricsAsync(
+                    helper, new Machines.LyricsHelperJob(model, brief.Keywords, brief.Style, brief.Language, brief.Image, brief.Revision), CancellationToken.None)
+                : await WriteAsync(model!, brief, CancellationToken.None);
             result = state with { Stage = "done", Lyrics = lyrics };
         }
-        catch (LyricsUnavailableException exception)
+        catch (Exception exception) when (exception is LyricsUnavailableException or Machines.HelperException)
         {
             result = state with { Stage = "failed", Message = exception.Message };
         }
@@ -149,10 +194,7 @@ public sealed partial class LyricsWriter(
         finally
         {
             // Before the result goes out, so that a song started in answer to it is not refused.
-            if (local)
-            {
-                memory.Release(LargeModel.Lyrics);
-            }
+            placement?.Release();
         }
         hub.UpdateLyrics(result with { UpdatedAt = time.GetUtcNow() });
     }
@@ -321,6 +363,30 @@ public sealed partial class LyricsWriter(
         }
         models.AddRange(claude);
         return new LyricsModels(settings.Model, models);
+    }
+
+    /// <summary>
+    /// What a draft on <paramref name="helper"/> can be written with: its LM Studio's models and its default, plus the
+    /// Claude models, which write from here whichever Mac is chosen.
+    /// </summary>
+    /// <exception cref="LyricsUnavailableException">The helper could not be reached, or its LM Studio not.</exception>
+    public async Task<LyricsModels> ListModelsAsync(Machines.HelperMachine helper, CancellationToken cancellationToken)
+    {
+        LyricsModels listed;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(30));
+            listed = await remote.LyricsModelsAsync(helper, timeout.Token);
+        }
+        catch (Exception exception) when (exception is Machines.HelperException or OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            throw new LyricsUnavailableException($"{helper.Label}: {exception.Message}");
+        }
+        List<LyricsModel> claude = cloud.Configured
+            ? [.. options.Value.ClaudeModels.Distinct().Select(id => new LyricsModel(id, Sketches.ClaudeModelChoice.NameOf(id), null, false, true, Cloud: true))]
+            : [];
+        return listed with { Models = [.. listed.Models.Where(m => !m.Cloud), .. claude] };
     }
 
 

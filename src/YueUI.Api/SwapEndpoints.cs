@@ -79,7 +79,9 @@ public static class SwapEndpoints
         [FromForm] int? diffusionSteps,
         [FromForm] bool? separate,
         [FromForm] bool? keepReverb,
+        [FromForm] string? machine,
         VoiceEngine voices,
+        Machines.Machines machines,
         VoiceConverter converter,
         SqliteSwapStore store,
         IOptions<VoiceOptions> options,
@@ -98,6 +100,7 @@ public static class SwapEndpoints
         }
         var request = new VersionRequest(voiceId, semiToneShift ?? 0, strength ?? 0.7, diffusionSteps ?? 50, keepReverb ?? true);
         var errors = request.Validate();
+        machines.TryNormalize(machine, out var place, errors);
         if (file is null || file.Length == 0)
         {
             errors["file"] = ["A recording: WAV, MP3, FLAC, M4A or OGG."];
@@ -127,6 +130,7 @@ public static class SwapEndpoints
                 Separate = whole,
                 KeepReverb = whole && request.KeepReverb,
                 StemModel = whole ? settings.StemModel : null,
+                Machine = place,
                 CreatedAt = now,
                 UpdatedAt = now,
             };

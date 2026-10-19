@@ -106,6 +106,7 @@ private struct AceSessionView: View {
                     TextField("Bis (Sekunden)", value: $model.aceForm.repaintEnd, format: .number, prompt: Text("Ende"))
                 }
             }
+            MachinePicker(selection: $model.aceForm.machine, engine: "ace")
         } header: {
             HStack {
                 CardHeading("Aufgabe", systemImage: "waveform.path")
@@ -441,6 +442,9 @@ private struct AceSessionView: View {
         }
         if let seconds = job.seconds {
             parts.append(Duration.seconds(seconds).formatted(.time(pattern: .minuteSecond)))
+        }
+        if let ranOn = model.ranOnNote(job.ranOn) {
+            parts.append(ranOn)
         }
         return parts.joined(separator: " · ")
     }

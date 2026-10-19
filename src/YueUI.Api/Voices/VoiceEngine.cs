@@ -200,14 +200,20 @@ public sealed class SeedVcVoices(
         return Task.CompletedTask;
     }
 
-    public async Task ConvertAsync(VoiceConversion version, string vocals, string output, VoiceProgress progress, CancellationToken cancellationToken)
+    public Task ConvertAsync(VoiceConversion version, string vocals, string output, VoiceProgress progress, CancellationToken cancellationToken)
     {
-        var settings = options.Value;
         var reference = store.FilePath(version.VoiceId);
         if (store.Get(version.VoiceId) is null || !File.Exists(reference))
         {
             throw new VoiceServiceException("The reference voice is gone.");
         }
+        return ConvertAsync(version, reference, vocals, output, progress, cancellationToken);
+    }
+
+    /// <summary>With a reference voice that is not in this server's collection: another Mac's, sent with a job (Machines/).</summary>
+    public async Task ConvertAsync(VoiceConversion version, string reference, string vocals, string output, VoiceProgress progress, CancellationToken cancellationToken)
+    {
+        var settings = options.Value;
         var ffmpeg = Ffmpeg();
         var work = Path.Combine(Path.GetDirectoryName(output)!, "seed-vc");
         Directory.CreateDirectory(work);

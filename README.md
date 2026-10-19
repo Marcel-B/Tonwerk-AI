@@ -171,6 +171,28 @@ Damit es klappt:
 
 Externe Platten werden beim Anmelden eingehängt, zusammen mit dem Start von Tonwerk. Fehlt die Platte, fehlt nur, was auf ihr liegt, bis sie wieder da ist.
 
+## Zwei Macs: ein zweiter rechnet mit
+
+Ein zweiter Mac mit Tonwerk kann Aufträge übernehmen, während der erste YuE2 oder ein anderes großes Modell im Speicher hat: Textentwürfe mit LM Studio, Sprachlabor und „Sprache säubern“, Cover malen, ACE-Step, Singen, Stimmen (Fassungen und „Stimmenspur tauschen“) und Stems. YuE2 selbst, Transkription, Videos und Audio zu MIDI bleiben auf dem eigenen Mac. Jeder Mac hält sich an seine eigene Regel „ein großes Modell zur Zeit“; ein Auftrag auf dem Helfer belegt hier nichts und läuft deshalb neben YuE2.
+
+Bei jedem dieser Aufträge lässt sich der Rechner wählen: **Automatisch** (der eigene Mac, wenn sein Speicher frei ist, sonst ein freier Helfer, der das Werkzeug hat), der eigene Mac oder ein bestimmter Helfer. Die Auswahl erscheint nur, wenn ein Helfer eingetragen ist. Am Auftrag steht danach, wo er lief. Dateien gehen hin und zurück über die Verbindung; die Ergebnisse liegen wie immer auf dem eigenen Mac, der Helfer behält nichts.
+
+Einrichtung:
+
+1. Auf dem Helfer Tonwerk installieren (`deploy/setup-mac.sh` mit den Werkzeugen, die er rechnen soll, z. B. `--speech --images --voices`; YuE2 braucht er nicht) und in seiner `appsettings.Production.json` `"Machines": { "Serve": true, "Name": "Alter Mac" }` eintragen.
+2. Einen gemeinsamen Schlüssel erzeugen und auf **beiden** Macs in `~/.config/tonwerk/helper.key` legen: `openssl rand -hex 32 > ~/.config/tonwerk/helper.key` und die Datei auf den anderen Mac kopieren.
+3. Den Helfer über Tailscale erreichbar machen, wie den eigenen Mac (`tailscale serve --bg --https=8443 http://127.0.0.1:5090`). Eine LAN-Adresse geht nicht, macOS lässt den LaunchAgent nicht ins lokale Netz.
+4. Auf dem Haupt-Mac den Helfer eintragen:
+
+```json
+"Machines": {
+  "Name": "Neuer Mac",
+  "Helpers": [ { "Id": "alt", "Name": "Alter Mac", "Url": "https://mac-alt.tailxxxx.ts.net:8443/" } ]
+}
+```
+
+Nach einem Neustart fragt Tonwerk den Helfer alle fünf Sekunden, ob er frei ist und was er kann; `GET /api/machines` und das Protokoll (Quelle `server`) zeigen, ob er erreichbar ist. Ein Helfer ohne `Serve` antwortet auf seine Helfer-Adressen mit `404`, ein falscher Schlüssel mit `401`.
+
 ## YuE Studio und Tonwerk gleichzeitig
 
 Beide haben einen eigenen Worker und damit ein eigenes Modell im Speicher. Rechnen beide gleichzeitig, kann der Speicher knapp werden. Die Oberfläche zeigt deshalb einen Hinweis, solange die App geöffnet ist. **Worker beenden** in der Warteschlange gibt den Speicher von Tonwerk sofort frei. Ansonsten entlädt der Worker das Modell nach zehn Minuten Leerlauf von selbst.
@@ -493,6 +515,10 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `Sketch:KeyFile` (`Sketch__KeyFile`) | `~/.config/tonwerk/anthropic.key` | Datei mit dem API-Schlüssel von Anthropic (oder `ANTHROPIC_API_KEY`, `Sketch:ApiKey`) |
 | `Sketch:MaxTokens` (`Sketch__MaxTokens`) | `64000` | Obergrenze der Antwort samt Denkphase |
 | `Sketch:Timeout` (`Sketch__Timeout`) | `00:20:00` | so lange darf ein Plan dauern |
+| `Machines:Name` (`Machines__Name`) | `Dieser Mac` | Name dieses Macs in der Rechnerwahl und am Auftrag |
+| `Machines:Helpers` (`Machines__Helpers__0__Url`, …) | – | andere Macs, an die Tonwerk Aufträge geben darf: je `Id`, `Name`, `Url` (über Tailscale) und optional ein eigener `Key` |
+| `Machines:Serve` (`Machines__Serve`) | `false` | für einen anderen Mac rechnen (`/api/helper`) |
+| `Machines:KeyFile` (`Machines__KeyFile`) | `~/.config/tonwerk/helper.key` | gemeinsamer Schlüssel der Macs (oder `Machines:Key`) |
 | `Logic:SplitSections` (`Logic__SplitSections`) | `false` | eine Region je Songabschnitt statt einer je Spur |
 | `Queue:BundleWindow` (`Queue__BundleWindow`) | `00:20:00` | so lange dürfen Songs für YuE2 an einem wartenden Textentwurf oder einer wartenden Fassung vorbei; `00:00:00` hält die Reihenfolge streng ein |
 | `Voice:EngineRoot` (`Voice__EngineRoot`) | `~/Library/Application Support/YuE UI/engines` | wo `--voices` Trennung und Seed-VC einrichtet; die folgenden fünf liegen darunter |
@@ -564,6 +590,7 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `POST` | `/api/loras` | LoRA hochladen (Formular: `file` als `.safetensors` bis 1 GB, `name` optional); `201` mit der LoRA |
 | `DELETE` | `/api/loras/{name}` | LoRA löschen |
 | `POST` | `/api/songs/{run}/{song}/render` | Song aus seinen Tokens neu synthetisieren, z. B. einen Entwurf in voller Qualität; `202` wie bei `generate` |
+| `GET` | `/api/machines` | Rechner für die Rechnerwahl: dieser Mac (`local`) und die Helfer mit `reachable`, `holder`, `busy` und `engines` (`lyrics`, `speech`, `images`, `ace`, `voices`, `stems`, `singing`); Aufträge dieser Werkzeuge nehmen `machine` (`local`, die `Id` eines Helfers, leer für automatisch) und nennen danach `ranOn` |
 | `GET` | `/api/queue` | wartende Aufträge in Reihenfolge (auch im Snapshot und als `queue`-Event) |
 | `DELETE` | `/api/queue/{id}` | wartenden Auftrag herausnehmen; `404`, wenn er nicht (mehr) wartet |
 | `POST` | `/api/queue/{id}/move` | `{ offset }`: wartenden Auftrag um so viele Plätze verschieben, negativ nach vorn |

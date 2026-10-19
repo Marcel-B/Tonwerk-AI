@@ -266,6 +266,12 @@ public sealed record SpeechTake
 
     public double? PeakMemoryGb { get; init; }
 
+    /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
+    public string? Machine { get; init; }
+
+    /// <summary>The name of the Mac that runs it, once one does.</summary>
+    public string? RanOn { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
 
     public DateTimeOffset UpdatedAt { get; init; }
@@ -276,7 +282,8 @@ public sealed record SpeechTake
 /// <param name="Text">What to say, up to <see cref="MaxTextLength"/> characters.</param>
 /// <param name="VoiceId">A recorded voice to clone, or null for each model's own.</param>
 /// <param name="Models">One take per model, spoken one after the other.</param>
-public sealed record SpeechRequest(string? Text, string? VoiceId, IReadOnlyList<string>? Models)
+/// <param name="Machine">The Mac to speak on: <c>local</c>, a helper's id, or null for whichever is free (<c>GET /api/machines</c>).</param>
+public sealed record SpeechRequest(string? Text, string? VoiceId, IReadOnlyList<string>? Models, string? Machine = null)
 {
     /// <summary>A few paragraphs: enough to hear a model, short enough that a take is done in minutes.</summary>
     public const int MaxTextLength = 3000;

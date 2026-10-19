@@ -15,6 +15,10 @@ namespace YueUI.Api;
 /// Lyrics to revise instead of writing new ones, typically the last draft; <paramref name="Instruction"/> says how.
 /// </param>
 /// <param name="Instruction">What to change in <paramref name="Lyrics"/>, e.g. "make the chorus catchier".</param>
+/// <param name="Machine">
+/// The Mac whose LM Studio writes it: <c>local</c>, a helper's id (<c>GET /api/machines</c>), or empty for whichever is
+/// free. Ignored for a Claude model.
+/// </param>
 public sealed record LyricsRequest(
     string? Keywords,
     string? Style,
@@ -22,7 +26,8 @@ public sealed record LyricsRequest(
     string? Model = null,
     string? Image = null,
     string? Lyrics = null,
-    string? Instruction = null);
+    string? Instruction = null,
+    string? Machine = null);
 
 /// <summary>
 /// Drafting lyrics with a local language model (LM Studio), see <see cref="LyricsWriter"/>. Like the worker's
@@ -48,11 +53,19 @@ public static class LyricsEndpoints
     public static RouteGroupBuilder MapLyricsEndpoints(this RouteGroupBuilder api)
     {
         // 503 when LM Studio neither answers nor can be started: the form then drafts with the configured model.
-        api.MapGet("/lyrics/models", async (LyricsWriter writer, CancellationToken cancellationToken) =>
+        // With machine, a helper's models: each Mac has its own LM Studio.
+        api.MapGet("/lyrics/models", async (string? machine, LyricsWriter writer, Machines.Machines machines, CancellationToken cancellationToken) =>
         {
+            var errors = new Dictionary<string, string[]>();
+            if (!machines.TryNormalize(machine, out var place, errors))
+            {
+                return Results.ValidationProblem(errors);
+            }
             try
             {
-                return Results.Ok(await writer.ListModelsAsync(cancellationToken));
+                return Results.Ok(machines.Find(place) is { } helper
+                    ? await writer.ListModelsAsync(helper, cancellationToken)
+                    : await writer.ListModelsAsync(cancellationToken));
             }
             catch (LyricsUnavailableException exception)
             {
@@ -61,10 +74,17 @@ public static class LyricsEndpoints
         })
             .WithName("ListLyricsModels")
             .Produces<LyricsModels>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
-        api.MapPost("/lyrics", async (LyricsRequest request, JobQueue queue, CancellationToken cancellationToken) =>
+        api.MapPost("/lyrics", async (LyricsRequest request, JobQueue queue, Machines.Machines machines, CancellationToken cancellationToken) =>
         {
+            var placeErrors = new Dictionary<string, string[]>();
+            if (!machines.TryNormalize(request.Machine, out var machine, placeErrors))
+            {
+                return Results.ValidationProblem(placeErrors);
+            }
+            request = request with { Machine = machine };
             if (request.Image is { } image && !IsImage(image))
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>

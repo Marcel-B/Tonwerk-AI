@@ -21,12 +21,14 @@ public sealed record ReferenceVoice(string Id, string Label, double Seconds, Dat
 /// Mixes the original's reverb back in. The separated vocals are dry, and a dry voice sits oddly in a mix made
 /// with reverb; the reverb carries a trace of the original voice, though.
 /// </param>
+/// <param name="Machine">The Mac to make it on: <c>local</c>, a helper's id, or null for whichever is free.</param>
 public sealed record VersionRequest(
     string? VoiceId,
     int SemiToneShift = 0,
     double Strength = 0.7,
     int DiffusionSteps = 50,
-    bool KeepReverb = true)
+    bool KeepReverb = true,
+    string? Machine = null)
 {
     public const int MaxSemiToneShift = 24;
     public const int MinDiffusionSteps = 10;
@@ -121,6 +123,12 @@ public sealed record VersionState
     /// <summary>Why it failed.</summary>
     public string? Message { get; init; }
 
+    /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
+    public string? Machine { get; init; }
+
+    /// <summary>The name of the Mac that runs it, once one does.</summary>
+    public string? RanOn { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
 
     public DateTimeOffset UpdatedAt { get; init; }
@@ -180,6 +188,12 @@ public sealed record SwapState
 
     /// <summary>Why it failed.</summary>
     public string? Message { get; init; }
+
+    /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
+    public string? Machine { get; init; }
+
+    /// <summary>The name of the Mac that runs it, once one does.</summary>
+    public string? RanOn { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; }
 

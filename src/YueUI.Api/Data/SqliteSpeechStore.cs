@@ -65,9 +65,9 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
             null,
             """
             INSERT INTO speech_takes (id, model_id, model_label, text, source, voice_id, voice_label, stage, message,
-                progress, seconds, load_seconds, speak_seconds, peak_memory_gb, created_at, updated_at)
+                progress, seconds, load_seconds, speak_seconds, peak_memory_gb, machine, ran_on, created_at, updated_at)
             VALUES ($id, $model, $modelLabel, $text, $source, $voice, $voiceLabel, $stage, $message, $progress, $seconds,
-                $load, $speak, $memory, $created, $updated)
+                $load, $speak, $memory, $machine, $ranOn, $created, $updated)
             """,
             TakeParameters(take));
     }
@@ -81,7 +81,7 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
             null,
             """
             UPDATE speech_takes SET stage = $stage, message = $message, progress = $progress, seconds = $seconds, load_seconds = $load,
-                speak_seconds = $speak, peak_memory_gb = $memory, updated_at = $updated
+                speak_seconds = $speak, peak_memory_gb = $memory, ran_on = $ranOn, updated_at = $updated
             WHERE id = $id
             """,
             TakeParameters(take)) > 0;
@@ -113,6 +113,8 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
         ("$load", Nullable(take.LoadSeconds)),
         ("$speak", Nullable(take.SpeakSeconds)),
         ("$memory", Nullable(take.PeakMemoryGb)),
+        ("$machine", Nullable(take.Machine)),
+        ("$ranOn", Nullable(take.RanOn)),
         ("$created", Time(take.CreatedAt)),
         ("$updated", Time(take.UpdatedAt)),
     ];
@@ -171,6 +173,8 @@ public sealed class SqliteSpeechStore(SqliteDatabase database)
         LoadSeconds = Number(reader, "load_seconds"),
         SpeakSeconds = Number(reader, "speak_seconds"),
         PeakMemoryGb = Number(reader, "peak_memory_gb"),
+        Machine = Text(reader, "machine"),
+        RanOn = Text(reader, "ran_on"),
         CreatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("created_at")), CultureInfo.InvariantCulture),
         UpdatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("updated_at")), CultureInfo.InvariantCulture),
     };

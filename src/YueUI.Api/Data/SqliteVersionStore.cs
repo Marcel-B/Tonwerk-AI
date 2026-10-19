@@ -30,8 +30,8 @@ public sealed class SqliteVersionStore(SqliteDatabase database)
             null,
             """
             INSERT INTO song_versions (id, song_id, title, voice_id, voice_label, semi_tone_shift, strength, diffusion_steps,
-                keep_reverb, stem_model, stage, message, created_at, updated_at)
-            VALUES ($id, $song, $title, $voice, $label, $shift, $strength, $steps, $reverb, $stem, $stage, $message, $created, $updated)
+                keep_reverb, stem_model, stage, message, machine, ran_on, created_at, updated_at)
+            VALUES ($id, $song, $title, $voice, $label, $shift, $strength, $steps, $reverb, $stem, $stage, $message, $machine, $ranOn, $created, $updated)
             """,
             ("$id", version.Id),
             ("$song", version.SongId),
@@ -45,6 +45,8 @@ public sealed class SqliteVersionStore(SqliteDatabase database)
             ("$stem", (object?)version.StemModel ?? DBNull.Value),
             ("$stage", version.Stage),
             ("$message", (object?)version.Message ?? DBNull.Value),
+            ("$machine", (object?)version.Machine ?? DBNull.Value),
+            ("$ranOn", (object?)version.RanOn ?? DBNull.Value),
             ("$created", Time(version.CreatedAt)),
             ("$updated", Time(version.UpdatedAt)));
     }
@@ -56,10 +58,11 @@ public sealed class SqliteVersionStore(SqliteDatabase database)
         return SqliteDatabase.Execute(
             connection,
             null,
-            "UPDATE song_versions SET stage = $stage, message = $message, updated_at = $updated WHERE id = $id",
+            "UPDATE song_versions SET stage = $stage, message = $message, ran_on = $ranOn, updated_at = $updated WHERE id = $id",
             ("$id", version.Id),
             ("$stage", version.Stage),
             ("$message", (object?)version.Message ?? DBNull.Value),
+            ("$ranOn", (object?)version.RanOn ?? DBNull.Value),
             ("$updated", Time(version.UpdatedAt))) > 0;
     }
 
@@ -137,6 +140,8 @@ public sealed class SqliteVersionStore(SqliteDatabase database)
         StemModel = reader.IsDBNull(reader.GetOrdinal("stem_model")) ? null : reader.GetString(reader.GetOrdinal("stem_model")),
         Stage = reader.GetString(reader.GetOrdinal("stage")),
         Message = reader.IsDBNull(reader.GetOrdinal("message")) ? null : reader.GetString(reader.GetOrdinal("message")),
+        Machine = reader.IsDBNull(reader.GetOrdinal("machine")) ? null : reader.GetString(reader.GetOrdinal("machine")),
+        RanOn = reader.IsDBNull(reader.GetOrdinal("ran_on")) ? null : reader.GetString(reader.GetOrdinal("ran_on")),
         CreatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("created_at")), CultureInfo.InvariantCulture),
         UpdatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("updated_at")), CultureInfo.InvariantCulture),
     };

@@ -109,9 +109,10 @@ public sealed class JobQueue(
     public async Task<LyricsState> LyricsAsync(LyricsRequest request, CancellationToken cancellationToken)
     {
         var id = LyricsWriter.NewId();
-        if (lyrics.IsCloud(request.Model))
+        if (lyrics.IsCloud(request.Model) || (request.Machine is { } machine && machine != Machines.Machines.Local))
         {
-            // Claude writes at Anthropic: nothing on the Mac to wait for, so it starts at once, beside songs.
+            // Claude writes at Anthropic, a helper with its own memory: nothing on this Mac to wait for, so it starts
+            // at once, beside songs (the helper's run waits there if its memory is taken).
             return StartLyricsNow(request, id);
         }
         var title = request.Keywords?.Trim() ?? "";
@@ -520,7 +521,8 @@ public sealed class JobQueue(
             request.Model,
             request.Image,
             revision,
-            id);
+            id,
+            request.Machine);
     }
 
     /// <summary>A job that could not start leaves the queue; the log says why, and a draft's form hears it too.</summary>

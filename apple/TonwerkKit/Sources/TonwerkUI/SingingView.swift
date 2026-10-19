@@ -336,7 +336,7 @@ private struct SingSessionView: View {
         guard let low = voice.low, let high = voice.high else { return nil }
         let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
         let name = { (note: Int) in "\(names[((note % 12) + 12) % 12])\(note / 12 - 2)" }
-        return "\(name(low))–\(name(high))"
+        return "\(name(Int(low)))–\(name(Int(high)))"
     }
 
     // MARK: Takes

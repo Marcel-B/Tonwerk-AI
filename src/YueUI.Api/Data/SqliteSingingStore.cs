@@ -80,4 +80,58 @@ public sealed class SqliteSingingStore(SqliteDatabase database)
         {
         }
     }
+
+    /// <summary>A voice of one's own: the phrase SoulX-Singer clones.</summary>
+    public string VoiceAudioPath(string id) => Path.Combine(database.Directory, "singing", "voices", $"{id}.wav");
+
+    /// <summary>Its notes and words in SoulX-Singer's metadata format.</summary>
+    public string VoiceMetadataPath(string id) => Path.Combine(database.Directory, "singing", "voices", $"{id}.json");
+
+    /// <summary>The voices of one's own, oldest first.</summary>
+    public IReadOnlyList<SingingOwnVoice> Voices()
+    {
+        using var connection = database.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT voice FROM sing_voices ORDER BY created_at, id";
+        using var reader = command.ExecuteReader();
+        var voices = new List<SingingOwnVoice>();
+        while (reader.Read())
+        {
+            if (JsonSerializer.Deserialize<SingingOwnVoice>(reader.GetString(0), Json) is { } voice)
+            {
+                voices.Add(voice);
+            }
+        }
+        return voices;
+    }
+
+    public void AddVoice(SingingOwnVoice voice)
+    {
+        using var connection = database.Open();
+        SqliteDatabase.Execute(
+            connection,
+            null,
+            "INSERT INTO sing_voices (id, voice, created_at) VALUES ($id, $voice, $created)",
+            ("$id", voice.Id),
+            ("$voice", JsonSerializer.Serialize(voice, Json)),
+            ("$created", voice.CreatedAt.ToString("O")));
+    }
+
+    public void RemoveVoice(string id)
+    {
+        using (var connection = database.Open())
+        {
+            SqliteDatabase.Execute(connection, null, "DELETE FROM sing_voices WHERE id = $id", ("$id", id));
+        }
+        foreach (var path in (string[])[VoiceAudioPath(id), VoiceMetadataPath(id)])
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
 }

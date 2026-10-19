@@ -607,6 +607,21 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 28;
                     """);
             }
+            if (current < 29)
+            {
+                // Singing voices of one's own (Singing/SingingVoices.cs), one JSON each; the files lie in singing/voices/.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE sing_voices (
+                        id TEXT PRIMARY KEY,
+                        voice TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 29;
+                    """);
+            }
             _ready = true;
         }
     }

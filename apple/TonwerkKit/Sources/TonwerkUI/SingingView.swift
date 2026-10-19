@@ -22,8 +22,13 @@ struct SingView: View {
 private struct SingSessionView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: SingSession
-    @State private var importing = false
+    @State private var importing: Importing?
     @State private var saving: URL?
+    @State private var deletingVoice: Components.Schemas.SingingVoiceInfo?
+
+    enum Importing {
+        case melody, voice
+    }
 
     var body: some View {
         ScrollView {
@@ -40,6 +45,7 @@ private struct SingSessionView: View {
                     }
                     melodyCard
                     wordsCard(info)
+                    voicesCard
                     takesCard
                 } else if session.loading {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
@@ -62,11 +68,31 @@ private struct SingSessionView: View {
             if model.connection == .live { Task { await session.load() } }
         }
         .fileImporter(
-            isPresented: $importing,
-            allowedContentTypes: [.midi, UTType(filenameExtension: "abc") ?? .plainText, .plainText]
+            isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
+            allowedContentTypes: importing == .voice
+                ? [.audio, .movie]
+                : [.midi, UTType(filenameExtension: "abc") ?? .plainText, .plainText]
         ) { result in
+            let target = importing
             guard case .success(let url) = result else { return }
-            Task { await session.pick(url) }
+            Task {
+                if target == .voice {
+                    await session.pickVoice(url)
+                } else {
+                    await session.pick(url)
+                }
+            }
+        }
+        .confirmationDialog(
+            "Die Stimme „\(deletingVoice?.label ?? "")“ löschen? Fertige Ergebnisse bleiben.",
+            isPresented: Binding(get: { deletingVoice != nil }, set: { if !$0 { deletingVoice = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Löschen", role: .destructive) {
+                if let voice = deletingVoice {
+                    Task { await session.deleteVoice(voice) }
+                }
+            }
         }
         .fileMover(isPresented: Binding(get: { saving != nil }, set: { if !$0 { saving = nil } }), file: saving) { _ in }
     }
@@ -97,7 +123,7 @@ private struct SingSessionView: View {
                 }
                 Menu {
                     Button("Neu (leer)", systemImage: "doc") { session.clear() }
-                    Button("MIDI-Datei oder score.abc …", systemImage: "folder") { importing = true }
+                    Button("MIDI-Datei oder score.abc …", systemImage: "folder") { importing = .melody }
                     let songs = model.songs.filter(\.hasScore)
                     Menu("Aus der Bibliothek") {
                         if songs.isEmpty {
@@ -192,6 +218,125 @@ private struct SingSessionView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
+    }
+
+    // MARK: Own voices
+
+    private var voicesCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CardHeading("Eigene Stimmen", systemImage: "person.wave.2")
+            Text("Aus einer Aufnahme deines Gesangs macht der Server eine Stimme: Er hört die Noten heraus, legt den Text darauf und behält die erste Phrase von bis zu zwölf Sekunden.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(session.ownVoices, id: \.id) { voice in
+                HStack(spacing: 8) {
+                    Button {
+                        if let url = try? model.singingVoiceAudio(voice.id) { session.preview.toggle("voice:\(voice.id)", url: url) }
+                    } label: {
+                        Image(systemName: session.preview.plays("voice:\(voice.id)") ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(PlayButtonStyle(size: 30))
+                    .help("Anhören")
+                    .accessibilityLabel("Anhören")
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(voice.label).fontWeight(.semibold).lineLimit(1)
+                        Text([voice.text.map { "„\($0)“" }, voice.seconds.map(Song.clock), Self.range(voice)].compactMap { $0 }
+                            .joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                    Spacer(minLength: 4)
+                    Button(role: .destructive) {
+                        deletingVoice = voice
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Stimme löschen")
+                }
+            }
+            if let heard = session.heard {
+                Text(SingSession.heardNote(heard)).font(.caption).foregroundStyle(heard.leftover > 0 ? .orange : .secondary)
+            }
+            Divider()
+            Text("Neue Stimme").font(.headline)
+            Text("Gesungener Text (Englisch, genau so, wie du ihn singst)").font(.caption).foregroundStyle(.secondary)
+            TextEditor(text: $session.voiceLyrics)
+                .frame(minHeight: 60)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text("So klappt es am besten: eine Phrase von 6 bis 12 Sekunden am Stück, in der Lage und dem Stil, in dem die Stimme später singen soll. Ruhiger, trockener Raum ohne Hall und Musik, gleicher Abstand zum Mikrofon (eine Handbreit), nicht übersteuern. Gerade Töne, eine Silbe pro Ton, wenig Vibrato und keine langen Schleifer; Silben deutlich absetzen. Ein anderer englischer Text geht auch, er muss nur genau stimmen.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                if session.recorder.recording {
+                    Button(role: .destructive) {
+                        session.recorder.stop()
+                    } label: {
+                        Label("Stopp", systemImage: "stop.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    Text("Nimmt auf … \(session.recorder.seconds) s").font(.callout).foregroundStyle(.red)
+                } else {
+                    Button {
+                        Task { await session.record() }
+                    } label: {
+                        Label(session.recorded == nil ? "Aufnehmen" : "Neu aufnehmen", systemImage: "mic")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(session.savingVoice)
+                    Button {
+                        importing = .voice
+                    } label: {
+                        Label("WAV oder andere Datei", systemImage: "folder")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(session.savingVoice)
+                }
+            }
+            if let recorded = session.recorded, !session.recorder.recording {
+                HStack(spacing: 10) {
+                    Button {
+                        session.preview.toggle("new-voice", url: recorded.url)
+                    } label: {
+                        Image(systemName: session.preview.plays("new-voice") ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(PlayButtonStyle(size: 30))
+                    .accessibilityLabel("Anhören")
+                    Text(recorded.name).lineLimit(1).truncationMode(.middle)
+                    if let seconds = recorded.seconds {
+                        Text(Song.clock(seconds)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                HStack(spacing: 10) {
+                    TextField("Name der Stimme", text: $session.voiceName)
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+                    Button {
+                        Task { await session.saveVoice() }
+                    } label: {
+                        if session.savingVoice {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Stimme anlegen", systemImage: "square.and.arrow.down")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!session.canSaveVoice)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+
+    /// The notes the voice sang, as Logic names them (C3 = 60).
+    private static func range(_ voice: Components.Schemas.SingingVoiceInfo) -> String? {
+        guard let low = voice.low, let high = voice.high else { return nil }
+        let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let name = { (note: Int) in "\(names[((note % 12) + 12) % 12])\(note / 12 - 2)" }
+        return "\(name(Int(low)))–\(name(Int(high)))"
     }
 
     // MARK: Takes

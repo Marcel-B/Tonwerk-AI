@@ -30,6 +30,18 @@ final class SingSession {
 
     let preview = AudioPreview()
 
+    // A voice of one's own: a recording of singing and the words sung, from which the server keeps a phrase.
+    let recorder = VoiceRecorder()
+    var recorded: PickedFile?
+    var voiceName = ""
+    var voiceLyrics = SingSession.suggestedPhrase
+    private(set) var savingVoice = false
+    /// What the server heard in the last recording made into a voice.
+    private(set) var heard: Components.Schemas.SingingVoiceMade?
+
+    /// Public domain, one syllable per note on steady notes, which is what the server reads best from a recording.
+    nonisolated static let suggestedPhrase = "Twinkle, twinkle, little star, how I wonder what you are"
+
     private unowned let model: AppModel
 
     init(model: AppModel) {
@@ -232,6 +244,87 @@ final class SingSession {
         }
     }
 
+    // MARK: Voices
+
+    var ownVoices: [Components.Schemas.SingingVoiceInfo] { (info?.voices ?? []).filter { $0.own == true } }
+
+    func record() async {
+        preview.stop()
+        do {
+            try await recorder.start { [weak self] file in
+                self?.recorded = file
+            }
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    func pickVoice(_ url: URL) async {
+        do {
+            recorded = try await PickedFile.copy(from: url)
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    var canSaveVoice: Bool {
+        recorded != nil && !recorder.recording && !savingVoice && installed
+            && !voiceName.trimmingCharacters(in: .whitespaces).isEmpty
+            && !voiceLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func saveVoice() async {
+        guard let recorded, canSaveVoice else { return }
+        savingVoice = true
+        defer { savingVoice = false }
+        do {
+            let created = try await model.addSingingVoice(
+                label: voiceName.trimmingCharacters(in: .whitespaces),
+                lyrics: voiceLyrics.trimmingCharacters(in: .whitespacesAndNewlines), file: recorded)
+            self.recorded = nil
+            voiceName = ""
+            heard = created.heard
+            problem = nil
+            await load()
+            voiceId = created.voice.id
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    func deleteVoice(_ voice: Components.Schemas.SingingVoiceInfo) async {
+        if preview.current == "voice:\(voice.id)" {
+            preview.stop()
+        }
+        do {
+            try await model.deleteSingingVoice(voice.id)
+            if voiceId == voice.id {
+                voiceId = nil
+            }
+            heard = nil
+            await load()
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    /// What the server made of a recording, and what to do about it where it heard something off.
+    nonisolated static func heardNote(_ heard: Components.Schemas.SingingVoiceMade) -> String {
+        var parts = [String(localized: "Behalten: \(heard.seconds.formatted(.number.precision(.fractionLength(1)))) s mit „\(heard.text)“, \(heard.notes) Noten gehört.")]
+        if heard.leftover > 0 {
+            parts.append(String(localized: "\(heard.leftover) Silben ohne Note: Text und Gesang passen nicht ganz, am besten genau den Text singen und Silben deutlich absetzen."))
+        }
+        if heard.peak > 0.98 {
+            parts.append(String(localized: "Die Aufnahme ist übersteuert; etwas weiter weg vom Mikrofon singen."))
+        } else if heard.peak < 0.05 {
+            parts.append(String(localized: "Die Aufnahme ist sehr leise; näher ans Mikrofon."))
+        }
+        if heard.seconds < 4 {
+            parts.append(String(localized: "Die Phrase ist kurz; ohne lange Pause 6 bis 12 Sekunden am Stück singen."))
+        }
+        return parts.joined(separator: " ")
+    }
+
     // MARK: Names
 
     nonisolated static func finished(_ take: Components.Schemas.SingTake) -> Bool {
@@ -341,6 +434,20 @@ extension AppModel {
         }
         return answer
     }
+
+    /// A recording of one's own singing made into a voice (`POST api/singing/voices`).
+    func addSingingVoice(label: String, lyrics: String, file: PickedFile) async throws -> Components.Schemas.SingingVoiceCreated {
+        let (data, _) = try await uploadFile(
+            address("api/singing/voices"), fields: [("label", label), ("lyrics", lyrics)], fileField: "file", file: file,
+            accept: [201])
+        return try decode(Components.Schemas.SingingVoiceCreated.self, data)
+    }
+
+    func deleteSingingVoice(_ id: String) async throws {
+        _ = try await call("DELETE", address("api/singing/voices", id), accept: [204, 404])
+    }
+
+    func singingVoiceAudio(_ id: String) throws -> URL { try address("api/singing/voices", id, "audio") }
 
     func deleteSingTake(_ id: String) async throws {
         _ = try await call("DELETE", address("api/singing", id), accept: [204, 404])

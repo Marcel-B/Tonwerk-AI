@@ -31,6 +31,13 @@ public interface ISingingEngine
     /// spread over them. Needs the environment, not the weights.
     /// </summary>
     Task<SingingAligned> AlignAsync(IReadOnlyList<SungNote> notes, string? lyrics, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A voice of one's own from a recording of singing (any format ffmpeg reads) and the words sung: the notes heard,
+    /// the words laid on them, and the first phrase of a few seconds written as SoulX-Singer's prompt, its audio as a
+    /// 24 kHz WAV and its metadata. Needs the environment, not the weights; the model is not loaded.
+    /// </summary>
+    Task<SingingVoiceMade> MakeVoiceAsync(string recording, string lyrics, string audio, string metadata, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -150,24 +157,112 @@ public sealed class SoulXSingerEngine(IOptions<SingingOptions> options, ILogger<
 
     public async Task<SingingAligned> AlignAsync(IReadOnlyList<SungNote> notes, string? lyrics, CancellationToken cancellationToken)
     {
-        var settings = options.Value;
+        RequireInstalled();
+        SingingAligned? result = null;
+        // Only g2p_en loads, a second or two; a dictionary that never answers must not hold the editor.
+        await RunScriptAsync(
+            new JsonObject { ["mode"] = "align", ["notes"] = Notes(notes), ["lyrics"] = lyrics },
+            AlignTimeout,
+            "The pronunciation dictionary did not answer.",
+            data =>
+            {
+                if ((string?)data["event"] == "assigned")
+                {
+                    var sung = (data["notes"] as JsonArray ?? [])
+                        .Select(n => new AlignedNote((string?)n?["word"], (int?)n?["type"] ?? 1, (string?)n?["phonemes"] ?? ""))
+                        .ToList();
+                    result = new SingingAligned(sung, (int?)data["leftover"] ?? 0);
+                }
+            },
+            () => result is not null && result.Notes.Count == notes.Count,
+            "Aligning",
+            StatusCodes.Status500InternalServerError,
+            cancellationToken);
+        return result!;
+    }
+
+    public async Task<SingingVoiceMade> MakeVoiceAsync(string recording, string lyrics, string audio, string metadata, CancellationToken cancellationToken)
+    {
+        RequireInstalled();
+        var prepared = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(audio))!, $"recording-{Guid.NewGuid():N}.wav");
+        try
+        {
+            try
+            {
+                await MlxAudioEngine.TrimmedVoiceAsync(recording, prepared, cancellationToken);
+            }
+            catch (SpeechException exception)
+            {
+                throw new SingingException(exception.Message, exception.Status);
+            }
+            SingingVoiceMade? result = null;
+            await RunScriptAsync(
+                new JsonObject
+                {
+                    ["mode"] = "voice",
+                    ["audio"] = prepared,
+                    ["lyrics"] = lyrics,
+                    ["outputAudio"] = audio,
+                    ["outputMetadata"] = metadata,
+                },
+                VoiceTimeout,
+                "Listening to the recording took too long.",
+                data =>
+                {
+                    if ((string?)data["event"] == "voice")
+                    {
+                        result = new SingingVoiceMade(
+                            (double?)data["seconds"] ?? 0,
+                            (double?)data["recordedSeconds"] ?? 0,
+                            (int?)data["notes"] ?? 0,
+                            (int?)data["held"] ?? 0,
+                            (int?)data["unsung"] ?? 0,
+                            (int?)data["leftover"] ?? 0,
+                            (string?)data["text"] ?? "",
+                            (double?)data["peak"] ?? 0,
+                            (int?)data["low"] ?? 0,
+                            (int?)data["high"] ?? 0);
+                    }
+                },
+                () => result is not null && File.Exists(audio) && File.Exists(metadata),
+                "Making a voice",
+                // The script refuses a recording it hears no singing in, or words it cannot lay on it.
+                StatusCodes.Status422UnprocessableEntity,
+                cancellationToken);
+            return result!;
+        }
+        finally
+        {
+            File.Delete(prepared);
+        }
+    }
+
+    private void RequireInstalled()
+    {
         if (!Installed)
         {
             throw new SingingException(
-                $"SoulX-Singer is not installed ({settings.ResolvedRoot}); run deploy/install-singing.sh.", StatusCodes.Status501NotImplemented);
+                $"SoulX-Singer is not installed ({options.Value.ResolvedRoot}); run deploy/install-singing.sh.", StatusCodes.Status501NotImplemented);
         }
-        var request = new JsonObject
-        {
-            ["mode"] = "align",
-            ["notes"] = Notes(notes),
-            ["lyrics"] = lyrics,
-        };
-        using var process = Start(settings);
-        // Only g2p_en loads, a second or two; a dictionary that never answers must not hold the editor.
+    }
+
+    /// <summary>Runs the script for an answer that needs no model: one request in, its events handed to <paramref name="read"/>.</summary>
+    /// <param name="answered">Whether the script answered what was asked; otherwise its last lines become the error.</param>
+    /// <param name="failure">The status of that error.</param>
+    private async Task RunScriptAsync(
+        JsonObject request,
+        TimeSpan limit,
+        string tooLong,
+        Action<JsonNode> read,
+        Func<bool> answered,
+        string doing,
+        int failure,
+        CancellationToken cancellationToken)
+    {
+        using var process = Start(options.Value);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(AlignTimeout);
+        timeout.CancelAfter(limit);
         var tail = new Queue<string>();
-        SingingAligned? result = null;
         try
         {
             await process.StandardInput.WriteAsync(request.ToJsonString());
@@ -180,13 +275,9 @@ public sealed class SoulXSingerEngine(IOptions<SingingOptions> options, ILogger<
                     Keep(tail, line);
                     return;
                 }
-                var data = JsonNode.Parse(line[EventPrefix.Length..]);
-                if ((string?)data?["event"] == "assigned")
+                if (JsonNode.Parse(line[EventPrefix.Length..]) is { } data)
                 {
-                    var sung = (data["notes"] as JsonArray ?? [])
-                        .Select(n => new AlignedNote((string?)n?["word"], (int?)n?["type"] ?? 1, (string?)n?["phonemes"] ?? ""))
-                        .ToList();
-                    result = new SingingAligned(sung, (int?)data["leftover"] ?? 0);
+                    read(data);
                 }
             }, timeout.Token);
             await errors;
@@ -197,22 +288,24 @@ public sealed class SoulXSingerEngine(IOptions<SingingOptions> options, ILogger<
             process.Kill(entireProcessTree: true);
             if (!cancellationToken.IsCancellationRequested)
             {
-                throw new SingingException("The pronunciation dictionary did not answer.");
+                throw new SingingException(tooLong);
             }
             throw;
         }
-        if (process.ExitCode != 0 || result is null || result.Notes.Count != notes.Count)
+        if (process.ExitCode != 0 || !answered())
         {
             lock (tail)
             {
-                logger.LogWarning("Aligning failed:\n{Output}", string.Join('\n', tail));
-                throw new SingingException(MlxAudioEngine.FailureMessage(tail));
+                logger.LogWarning("{Doing} failed:\n{Output}", doing, string.Join('\n', tail));
+                throw new SingingException(MlxAudioEngine.FailureMessage(tail), failure);
             }
         }
-        return result;
     }
 
     private static readonly TimeSpan AlignTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>pYIN over 30 s of singing takes seconds on the Mac and half a minute in a slow container.</summary>
+    private static readonly TimeSpan VoiceTimeout = TimeSpan.FromMinutes(3);
 
     private static JsonNode? Notes(IReadOnlyList<SungNote> notes) =>
         JsonSerializer.SerializeToNode(notes.Select(n => new { start = n.Start, end = n.End, pitch = n.Pitch, lyric = n.Lyric }));

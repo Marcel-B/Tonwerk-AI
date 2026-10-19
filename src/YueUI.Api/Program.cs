@@ -146,6 +146,7 @@ builder.Services.AddHostedService(services => services.GetRequiredService<Speech
 // Singing: a melody with words sung by SoulX-Singer (its own checkout and Python environment), one take at a time.
 builder.Services.Configure<SingingOptions>(builder.Configuration.GetSection(SingingOptions.Section));
 builder.Services.AddSingleton<SqliteSingingStore>();
+builder.Services.AddSingleton<SingingVoices>();
 builder.Services.AddSingleton<ISingingEngine, SoulXSingerEngine>();
 builder.Services.AddSingleton<SingingStudio>();
 builder.Services.AddHostedService(services => services.GetRequiredService<SingingStudio>());

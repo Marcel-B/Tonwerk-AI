@@ -8,12 +8,15 @@ checkout on the path (the server sets PYTHONPATH). Reads one job as JSON on stdi
      "voice": {"audio": prompt audio, "metadata": its SoulX-Singer metadata JSON},
      "notes": [{"start": s, "end": s, "pitch": midi, "lyric": null | text}, ...],
      "lyrics": text or null, "pitchShift": semitones, "autoShift": bool, "output": wav,
-     "dryRun": false, "mode": null | "align"}
+     "dryRun": false, "mode": null | "align" | "voice"}
 
 and answers "YUEUI {json}" lines on stdout (stage, aligned, progress, note, done) between whatever the model prints.
 With dryRun it only aligns and writes the target metadata to "output", without loading the model, which is how the
 alignment is tested without the 2.8 GB of weights. With mode "align" it only answers an "assigned" event: the word,
-note type and phonemes of every note in the order sent, for the app's note editor; nothing is written.
+note type and phonemes of every note in the order sent, for the app's note editor; nothing is written. With mode
+"voice" it turns a recording of one's own singing ("audio", "lyrics" the words sung) into a voice to clone: the notes
+heard by pYIN, the words laid on them, the first phrase of a few seconds written as "outputAudio" (24 kHz WAV) and
+"outputMetadata" (SoulX-Singer's metadata, one segment), answered by a "voice" event; the model is not loaded.
 
 The words are laid on the notes the way SoulX-Singer's own MIDI editor reads a MIDI with lyrics
 (preprocess/tools/midi_parser.py, midi2notes and notes2meta): one word per note, a word sung over more notes repeats
@@ -165,8 +168,8 @@ def align(notes, lyrics, phonemes):
     return result, unsung, leftover
 
 
-def segments_of(sung, phonemes):
-    """SoulX-Singer metadata segments: rests between the notes, cut at long rests and before MAX_SEGMENT."""
+def segments_of(sung, phonemes, longest=MAX_SEGMENT):
+    """SoulX-Singer metadata segments: rests between the notes, cut at long rests and before the longest."""
     segments = []
     current = []
 
@@ -206,12 +209,172 @@ def segments_of(sung, phonemes):
             elif current and gap > 0:
                 # Legato: the note before lasts until this one starts.
                 current[-1][1] = start
-        if current and end - current[0][0] > MAX_SEGMENT:
+        if current and end - current[0][0] > longest:
             flush()
         current.append([start, end, word, pitch, kind])
         previous_end = end
     flush()
     return segments
+
+
+# A voice of one's own: the prompt SoulX-Singer clones. Its examples are 5 to 10 s, it was trained on segments of 2 to
+# 16 s and its paper prompts with the first sentence, so the first phrase of at least a few seconds is taken.
+PROMPT_LONGEST = 12.0
+PROMPT_SHORTEST = 3.0
+# pYIN every 10 ms, from C2 to C#6: any sung voice, and not the overtones above it.
+HOP_SECONDS = 0.01
+LOWEST_HZ = 65.0
+HIGHEST_HZ = 1100.0
+# A note is at least this long; shorter pieces are scoops or consonants and go to their neighbour.
+SHORTEST_NOTE = 0.07
+# Unvoiced frames bridged inside a note: a plosive, not the s or f between two syllables.
+BRIDGE_FRAMES = 2
+# A new note where the pitch stays this far from the note's for STEADY_FRAMES: wider than a vibrato, narrower than a step.
+STEP_SEMITONES = 0.8
+STEADY_FRAMES = 8
+# An onset on the same pitch splits a note where the level fell below this share of the note's within DIP_FRAMES.
+DIP_SHARE = 0.5
+DIP_FRAMES = 6
+
+
+def notes_heard(audio, rate):
+    """
+    The sung notes as {"start", "end", "pitch"} in seconds: voiced stretches heard by pYIN, split where the pitch
+    moves to another note and stays there, and at onsets (two syllables on one pitch joined by a voiced consonant).
+    """
+    import librosa
+    import numpy as np
+
+    hop = int(round(rate * HOP_SECONDS))
+    f0, voiced, _ = librosa.pyin(audio, fmin=LOWEST_HZ, fmax=HIGHEST_HZ, sr=rate, frame_length=1024, hop_length=hop)
+    midi = np.where(voiced, librosa.hz_to_midi(np.nan_to_num(f0, nan=LOWEST_HZ)), np.nan)
+    onsets = set(int(f) for f in librosa.onset.onset_detect(y=audio, sr=rate, hop_length=hop, units="frames"))
+    loudness = librosa.feature.rms(y=audio, frame_length=512, hop_length=hop)[0]
+    shortest = int(round(SHORTEST_NOTE / HOP_SECONDS))
+
+    pieces = []
+    current = []
+    unvoiced = 0
+
+    def close():
+        if current:
+            pieces.append(list(current))
+            current.clear()
+
+    for frame, value in enumerate(midi):
+        if np.isnan(value):
+            unvoiced += 1
+            if unvoiced > BRIDGE_FRAMES:
+                close()
+            continue
+        unvoiced = 0
+        if current:
+            here = float(np.median([v for _, v in current]))
+            ahead = [v for v in midi[frame : frame + STEADY_FRAMES] if not np.isnan(v)]
+            moved = len(ahead) >= STEADY_FRAMES // 2 and abs(float(np.median(ahead)) - here) > STEP_SEMITONES
+            # An onset starts a syllable only where the voice dipped before it (a voiced consonant); a vibrato or a
+            # swell is an onset too, inside one syllable.
+            struck = (
+                frame in onsets
+                and len(current) >= shortest
+                and float(np.min(loudness[max(0, frame - DIP_FRAMES) : frame + 1]))
+                < DIP_SHARE * float(np.median([loudness[f] for f, _ in current]))
+            )
+            if (moved and len(current) >= shortest // 2) or struck:
+                close()
+        current.append((frame, float(value)))
+    close()
+
+    notes = []
+    for piece in pieces:
+        start, end = piece[0][0] * HOP_SECONDS, (piece[-1][0] + 1) * HOP_SECONDS
+        # The middle of a note says its pitch; its ends scoop.
+        core = [v for _, v in piece[len(piece) // 5 : len(piece) - len(piece) // 5]] or [v for _, v in piece]
+        pitch = int(round(float(np.median(core))))
+        if len(piece) < shortest:
+            if notes and start - notes[-1]["end"] <= HOP_SECONDS * (BRIDGE_FRAMES + 1):
+                notes[-1]["end"] = end
+            continue
+        notes.append({"start": round(start, 3), "end": round(end, 3), "pitch": pitch})
+    return notes
+
+
+def fit_words(notes, lyrics, phonemes):
+    """
+    The heard notes with the words' syllables, as align() takes them: where more notes were heard than there are
+    syllables, the notes closest to the one before (legato, nearest pitch) hold its syllable, as a sung run does.
+    """
+    slots = slots_of(words_of(lyrics), phonemes)
+    extra = len(notes) - len(slots)
+    held = set()
+    if extra > 0:
+        candidates = []
+        for index in range(1, len(notes)):
+            gap = notes[index]["start"] - notes[index - 1]["end"]
+            if gap <= SILENCE:
+                candidates.append((gap > HOP_SECONDS * (BRIDGE_FRAMES + 1), abs(notes[index]["pitch"] - notes[index - 1]["pitch"]), index))
+        held = {index for _, _, index in sorted(candidates)[:extra]}
+    fitted = []
+    for index, note in enumerate(notes):
+        fitted.append(dict(note, lyric="-" if index in held else None))
+    words = iter(slots)
+    placed = 0
+    last = None
+    for note in fitted:
+        if note["lyric"] is not None:
+            continue
+        slot = next(words, None)
+        if slot is None:
+            break
+        word, kind = slot
+        # A syllable after the first of a word holds that word, as SoulX-Singer writes a word over several notes.
+        note["lyric"] = "-" if kind == 3 and word == last else word
+        last = word
+        placed += 1
+    return fitted, len(slots) - placed
+
+
+def make_voice(job, phonemes):
+    import librosa
+    import numpy as np
+    import soundfile as sf
+
+    rate = 24000
+    audio, _ = librosa.load(job["audio"], sr=rate, mono=True)
+    notes = notes_heard(audio, rate)
+    if not notes:
+        raise SystemExit("Error: no sung note was heard in the recording.")
+    fitted, leftover = fit_words(notes, job.get("lyrics"), phonemes)
+    sung, unsung, _ = align(fitted, None, phonemes)
+    if not sung:
+        raise SystemExit("Error: no word of the text could be laid on the notes.")
+    # A rest of a second already ends a phrase here, so the prompt is the first one, not the whole recording.
+    segments = segments_of(sung, phonemes, PROMPT_LONGEST)
+    seconds = [(s["time"][1] - s["time"][0]) / 1000 for s in segments]
+    chosen = next((i for i, length in enumerate(seconds) if length >= PROMPT_SHORTEST), int(np.argmax(seconds)))
+    segment = segments[chosen]
+    start = int(segment["time"][0] / 1000 * rate)
+    end = min(len(audio), int(segment["time"][1] / 1000 * rate))
+    clip = audio[start:end]
+    peak = float(np.max(np.abs(clip))) if len(clip) else 0
+    sf.write(job["outputAudio"], clip, rate, subtype="PCM_16")
+    segment = dict(segment, index="tonwerk_voice", time=[0, int(round(len(clip) / rate * 1000))])
+    with open(job["outputMetadata"], "w", encoding="utf-8") as file:
+        json.dump([segment], file, ensure_ascii=False, indent=1)
+    words = [w for w, t in zip(segment["text"].split(), segment["note_type"].split()) if w != "<SP>" and t == "2"]
+    emit(
+        "voice",
+        seconds=round(len(clip) / rate, 2),
+        recordedSeconds=round(len(audio) / rate, 2),
+        notes=len(notes),
+        held=sum(1 for n in fitted if n["lyric"] == "-"),
+        unsung=unsung,
+        leftover=leftover,
+        text=" ".join(words),
+        peak=round(peak, 3),
+        low=min(n["pitch"] for n in notes),
+        high=max(n["pitch"] for n in notes),
+    )
 
 
 def device_of(asked):
@@ -323,6 +486,9 @@ def main():
     phonemes = Phonemes()
     if job.get("mode") == "align":
         assign_only(job, phonemes)
+        return
+    if job.get("mode") == "voice":
+        make_voice(job, phonemes)
         return
     sung, unsung, leftover = align(job["notes"], job.get("lyrics"), phonemes)
     if not sung:

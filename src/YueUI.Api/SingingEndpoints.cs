@@ -24,7 +24,7 @@ public static class SingingEndpoints
 
     public static RouteGroupBuilder MapSingingEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/singing", async (SingingStudio studio, ISingingEngine engine, IOptions<SingingOptions> options) =>
+        api.MapGet("/singing", async (SingingStudio studio, ISingingEngine engine, SingingVoices voices, IOptions<SingingOptions> options) =>
         {
             await studio.Loaded;
             return new SingingInfo(
@@ -34,7 +34,7 @@ public static class SingingEndpoints
                 options.Value.ResolvedSource,
                 options.Value.ResolvedModel,
                 options.Value.ResolvedNltkData,
-                [.. options.Value.ResolvedVoices.Select(v => new SingingVoiceInfo(v.Id, v.Label, v.Language))],
+                voices.Infos(),
                 studio.Takes());
         })
             .WithName("GetSinging")
@@ -85,6 +85,41 @@ public static class SingingEndpoints
             .WithName("GetSingingAudio")
             .ProducesFile("audio/wav")
             .Produces(StatusCodes.Status404NotFound);
+        api.MapPost("/singing/voices", AddVoiceAsync)
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(SingingVoices.MaxFileBytes + 256 * 1024))
+            .WithFormOptions(multipartBodyLengthLimit: SingingVoices.MaxFileBytes + 128 * 1024)
+            .WithName("CreateSingingVoice")
+            .Produces<SingingVoiceCreated>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
+        api.MapGet("/singing/voices/{id}/audio", (string id, SqliteSingingStore store) =>
+            store.Voices().Any(v => v.Id == id) && File.Exists(store.VoiceAudioPath(id))
+                ? Results.File(store.VoiceAudioPath(id), "audio/wav", enableRangeProcessing: true)
+                : Results.NotFound())
+            .WithName("GetSingingVoiceAudio")
+            .ProducesFile("audio/wav")
+            .Produces(StatusCodes.Status404NotFound);
+        api.MapDelete("/singing/voices/{id}", async (string id, SingingStudio studio, SqliteSingingStore store) =>
+        {
+            await studio.Loaded;
+            if (!store.Voices().Any(v => v.Id == id))
+            {
+                return Results.NotFound();
+            }
+            // A waiting take would fail without it; finished ones keep their name and audio.
+            if (studio.Takes().Any(t => t.VoiceId == id && t.Stage is not ("done" or "failed" or "cancelled")))
+            {
+                return Results.Problem("A take waiting to be sung uses this voice.", statusCode: StatusCodes.Status409Conflict);
+            }
+            store.RemoveVoice(id);
+            return Results.NoContent();
+        })
+            .WithName("DeleteSingingVoice")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         api.MapDelete("/singing/{id}", async (string id, SingingStudio studio) =>
         {
             await studio.Loaded;
@@ -121,6 +156,7 @@ public static class SingingEndpoints
         [FromForm] string? title,
         [FromForm] string? machine,
         SingingStudio studio,
+        SingingVoices voices,
         ISingingEngine engine,
         Machines.Machines machines,
         SongLibrary library,
@@ -150,10 +186,11 @@ public static class SingingEndpoints
         {
             errors["lyrics"] = [$"At most {MaxLyricsCharacters} characters."];
         }
-        var chosen = settings.ResolvedVoices.FirstOrDefault(v => v.Id == voice) ?? (voice is null ? settings.ResolvedVoices.FirstOrDefault() : null);
+        var offered = voices.All();
+        var chosen = offered.FirstOrDefault(v => v.Id == voice) ?? (voice is null ? offered.FirstOrDefault() : null);
         if (chosen is null)
         {
-            errors["voice"] = [$"One of {string.Join(", ", settings.ResolvedVoices.Select(v => v.Id))}."];
+            errors["voice"] = [$"One of {string.Join(", ", offered.Select(v => v.Id))}."];
         }
         if (pitchShift is < -24 or > 24)
         {
@@ -252,6 +289,81 @@ public static class SingingEndpoints
         };
         studio.Enqueue(take, score.Notes);
         return Results.Accepted($"/api/singing/{take.Id}", take);
+    }
+
+    /// <param name="file">A recording of one's own singing, any format ffmpeg reads; 30 s are listened to.</param>
+    /// <param name="label">The voice's name.</param>
+    /// <param name="lyrics">The words sung in the recording, English, in order.</param>
+    private static async Task<IResult> AddVoiceAsync(
+        IFormFile? file,
+        [FromForm] string? label,
+        [FromForm] string? lyrics,
+        ISingingEngine engine,
+        SqliteSingingStore store,
+        TimeProvider time,
+        ILoggerFactory loggers,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (string.IsNullOrWhiteSpace(label) || label.Trim().Length > 100)
+        {
+            errors["label"] = ["A name for the voice, up to 100 characters."];
+        }
+        if (string.IsNullOrWhiteSpace(lyrics) || lyrics.Length > 2000)
+        {
+            errors["lyrics"] = ["The words sung in the recording, up to 2000 characters."];
+        }
+        if (file is not { Length: > 0 })
+        {
+            errors["file"] = ["A recording of the voice singing."];
+        }
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+        if (!engine.Installed)
+        {
+            return Results.Problem(
+                "SoulX-Singer is not installed on this Mac; run deploy/install-singing.sh.", statusCode: StatusCodes.Status501NotImplemented);
+        }
+
+        var id = Guid.NewGuid().ToString("N");
+        var audio = store.VoiceAudioPath(id);
+        var metadata = store.VoiceMetadataPath(id);
+        Directory.CreateDirectory(Path.GetDirectoryName(audio)!);
+        var upload = Path.Combine(Path.GetDirectoryName(audio)!, $"upload-{id}{Extension(file!.FileName)}");
+        try
+        {
+            await using (var stream = File.Create(upload))
+            {
+                await file.CopyToAsync(stream, cancellationToken);
+            }
+            var heard = await engine.MakeVoiceAsync(upload, lyrics!.Trim(), audio, metadata, cancellationToken);
+            var voice = new SingingOwnVoice(
+                id, label!.Trim(), lyrics.Trim(), heard.Text, heard.Seconds, heard.Notes, heard.Leftover, heard.Low, heard.High, time.GetUtcNow());
+            store.AddVoice(voice);
+            loggers.CreateLogger("YueUI.Api.Singing.SingingVoices").LogInformation(
+                "Voice {Label}: {Seconds} s of {Recorded} s, {Notes} notes, {Held} held, {Leftover} syllables left over",
+                voice.Label, heard.Seconds, heard.RecordedSeconds, heard.Notes, heard.Held, heard.Leftover);
+            return Results.Created($"/api/singing/voices/{id}/audio", new SingingVoiceCreated(voice.Info, heard));
+        }
+        catch (SingingException exception)
+        {
+            File.Delete(audio);
+            File.Delete(metadata);
+            return Results.Problem(exception.Message, statusCode: exception.Status);
+        }
+        finally
+        {
+            File.Delete(upload);
+        }
+    }
+
+    /// <summary>The upload's extension for ffmpeg, where it is a plain one.</summary>
+    private static string Extension(string name)
+    {
+        var extension = Path.GetExtension(name);
+        return extension.Length is > 1 and <= 6 && extension.Skip(1).All(char.IsAsciiLetterOrDigit) ? extension : "";
     }
 
     /// <param name="file">A MIDI file or a YuE2 score.</param>

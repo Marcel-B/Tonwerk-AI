@@ -1516,6 +1516,32 @@ public sealed class FakeSinging : Singing.ISingingEngine
         return new Singing.SingingResult(20.5, 6.25, 5.1);
     }
 
+    public List<(string Recording, string Lyrics)> Voices { get; } = [];
+
+    /// <summary>Set to make the next voice fail with it, as the script does when it hears no singing.</summary>
+    public string? VoiceFailure { get; set; }
+
+    /// <summary>Writes a second of prompt and one segment of metadata: the first two words over two notes.</summary>
+    public async Task<Singing.SingingVoiceMade> MakeVoiceAsync(string recording, string lyrics, string audio, string metadata, CancellationToken cancellationToken)
+    {
+        if (!Installed)
+        {
+            throw new Singing.SingingException("SoulX-Singer is not installed; run deploy/install-singing.sh.", Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+        lock (Voices)
+        {
+            Voices.Add((recording, lyrics));
+        }
+        if (VoiceFailure is { } failure)
+        {
+            throw new Singing.SingingException(failure, Microsoft.AspNetCore.Http.StatusCodes.Status422UnprocessableEntity);
+        }
+        var words = lyrics.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Take(2).ToArray();
+        await File.WriteAllBytesAsync(audio, FakeSpeech.Wav(1), cancellationToken);
+        await File.WriteAllTextAsync(metadata, $$"""[{"text": "{{string.Join(' ', words)}}", "note_pitch": "60 62"}]""", cancellationToken);
+        return new Singing.SingingVoiceMade(1, 6.5, 2, 0, 0, Math.Max(0, lyrics.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length - 2), string.Join(' ', words), 0.5, 60, 62);
+    }
+
     /// <summary>The script's rules in small: a note's own word, "-" holding the one before, else one word of the lyrics per note.</summary>
     public Task<Singing.SingingAligned> AlignAsync(IReadOnlyList<Singing.SungNote> notes, string? lyrics, CancellationToken cancellationToken)
     {

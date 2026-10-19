@@ -4065,6 +4065,137 @@
         }
       }
     },
+    "/api/singing/voices": {
+      "post": {
+        "operationId": "CreateSingingVoice",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "lyrics": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingingVoiceCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/singing/voices/{id}/audio": {
+      "get": {
+        "operationId": "GetSingingVoiceAudio",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/singing/voices/{id}": {
+      "delete": {
+        "operationId": "DeleteSingingVoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/singing/{id}": {
       "delete": {
         "operationId": "DeleteSingingTake",
@@ -8508,6 +8639,21 @@
           }
         }
       },
+      "SingingVoiceCreated": {
+        "required": [
+          "voice",
+          "heard"
+        ],
+        "type": "object",
+        "properties": {
+          "voice": {
+            "$ref": "#/components/schemas/SingingVoiceInfo"
+          },
+          "heard": {
+            "$ref": "#/components/schemas/SingingVoiceMade"
+          }
+        }
+      },
       "SingingVoiceInfo": {
         "required": [
           "id",
@@ -8524,6 +8670,100 @@
           },
           "language": {
             "type": "string"
+          },
+          "own": {
+            "type": "boolean",
+            "default": false
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "seconds": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "low": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "high": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "SingingVoiceMade": {
+        "required": [
+          "seconds",
+          "recordedSeconds",
+          "notes",
+          "held",
+          "unsung",
+          "leftover",
+          "text",
+          "peak",
+          "low",
+          "high"
+        ],
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "recordedSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "notes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "held": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unsung": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "leftover": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          },
+          "peak": {
+            "type": "number",
+            "format": "double"
+          },
+          "low": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "high": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

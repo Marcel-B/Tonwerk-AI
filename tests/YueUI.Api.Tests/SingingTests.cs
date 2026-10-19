@@ -118,6 +118,69 @@ public sealed class SingingTests : IDisposable
     }
 
     [Fact]
+    public async Task The_editor_reads_a_melody_with_its_tempo_and_a_songs_lyrics()
+    {
+        var directory = _app.AddSong(Run, "song1");
+        File.WriteAllText(Path.Combine(directory, "score.abc"), LogicEndpointTests.SampleScore);
+        var client = _app.CreateClient();
+
+        var file = await client.PostAsync("/api/singing/melody", Form(Midi(("Vocal", [(60, "Hel"), (62, "-")])), "melody.mid"));
+        var song = await client.PostAsync("/api/singing/melody", Form(null, null, ("song", $"{Run}/song1")));
+
+        Assert.Equal(HttpStatusCode.OK, file.StatusCode);
+        var melody = await file.Content.ReadFromJsonAsync<SingingMelody>(TestApp.Json);
+        Assert.Equal(("melody", 120.0, "", "Vocal"), (melody!.Title, melody.TempoBpm, melody.Lyrics, melody.Part));
+        Assert.Equal([("Hel", 0.0), ("-", 0.5)], melody.Notes.Select(n => (n.Lyric, n.Start)));
+        var sung = await song.Content.ReadFromJsonAsync<SingingMelody>(TestApp.Json);
+        Assert.Equal("[verse]\nLa la", sung!.Lyrics);
+        Assert.True(sung.Notes.Count > 10);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/singing/melody", Form(null, null))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.PostAsync("/api/singing/melody", Form("X:1\nK:C\n"u8.ToArray(), "a.abc"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_editor_learns_what_each_note_sings_in_the_order_it_sent_them()
+    {
+        var client = _app.CreateClient();
+        SungNote[] notes = [new(1, 1.5, 62), new(0, 0.5, 60), new(2, 2.5, 64)];
+
+        var spread = await client.PostAsJsonAsync("/api/singing/align", new SingingAlignRequest(notes, "Hello big world again"), TestApp.Json);
+        var own = await client.PostAsJsonAsync("/api/singing/align", new SingingAlignRequest([new(0, 1, 60, "la"), new(1, 2, 62, "-")], null), TestApp.Json);
+
+        var aligned = await spread.Content.ReadFromJsonAsync<SingingAligned>(TestApp.Json);
+        Assert.Equal([("big", 2), ("Hello", 2), ("world", 2)], aligned!.Notes.Select(n => (n.Word!, n.Type)));
+        Assert.Equal(1, aligned.Leftover);
+        Assert.Equal([2, 3], (await own.Content.ReadFromJsonAsync<SingingAligned>(TestApp.Json))!.Notes.Select(n => n.Type));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/singing/align", new SingingAlignRequest([new(1, 0.5, 60)], null), TestApp.Json)).StatusCode);
+
+        _app.Singing.Installed = false;
+        Assert.Equal(HttpStatusCode.NotImplemented, (await client.PostAsJsonAsync("/api/singing/align", new SingingAlignRequest(notes, "la"), TestApp.Json)).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_editors_notes_are_sung_and_open_again_with_their_tempo()
+    {
+        var client = _app.CreateClient();
+        var notes = """[{"start":0.5,"end":1,"pitch":64,"lyric":"-"},{"start":0,"end":0.5,"pitch":62,"lyric":"sun"}]""";
+
+        var response = await client.PostAsync("/api/singing", Form(null, null, ("notes", notes), ("tempoBpm", "96"), ("title", "Sonne")));
+
+        Assert.True(response.StatusCode == HttpStatusCode.Accepted, await response.Content.ReadAsStringAsync());
+        var take = await response.Content.ReadFromJsonAsync<SingTake>(TestApp.Json);
+        Assert.Equal(("Sonne", 2, 96.0, null, null), (take!.Title, take.NoteCount, take.TempoBpm, take.FileName, take.SongId));
+        await WaitFor(client, take.Id, t => t.Finished);
+        Assert.Equal([("sun", 0.0), ("-", 0.5)], Assert.Single(_app.Singing.Jobs).Notes.Select(n => (n.Lyric, n.Start)));
+
+        var reopened = await client.GetFromJsonAsync<SingingMelody>($"/api/singing/{take.Id}/notes", TestApp.Json);
+        Assert.Equal((96.0, "Sonne", 2), (reopened!.TempoBpm, reopened.Title, reopened.Notes.Count));
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/singing/nothing/notes")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/singing", Form(null, null, ("notes", "not json")))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/singing", Form(null, null, ("notes", """[{"start":1,"end":1,"pitch":60}]""")))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/singing", Form(null, null, ("notes", notes), ("song", $"{Run}/song1")))).StatusCode);
+    }
+
+    [Fact]
     public void The_sung_track_of_a_midi_file_is_the_one_named_like_a_voice_else_the_one_with_lyrics()
     {
         var named = SingingScores.FromMidi(Midi(("Piano", [(60, null), (62, null), (64, null)]), ("Gesang", [(70, null)])));

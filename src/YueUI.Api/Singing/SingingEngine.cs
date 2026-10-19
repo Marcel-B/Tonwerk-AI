@@ -25,6 +25,12 @@ public interface ISingingEngine
         Action<double> progress,
         Action<SingingAlignment> aligned,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What each note sings and how its word is spoken, for the app's note editor: the notes' own words, else the lyrics
+    /// spread over them. Needs the environment, not the weights.
+    /// </summary>
+    Task<SingingAligned> AlignAsync(IReadOnlyList<SungNote> notes, string? lyrics, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -74,34 +80,14 @@ public sealed class SoulXSingerEngine(IOptions<SingingOptions> options, ILogger<
                 ["audio"] = settings.VoiceFile(job.Voice.Audio),
                 ["metadata"] = settings.VoiceFile(job.Voice.Metadata),
             },
-            ["notes"] = JsonSerializer.SerializeToNode(job.Notes.Select(n => new { start = n.Start, end = n.End, pitch = n.Pitch, lyric = n.Lyric })),
+            ["notes"] = Notes(job.Notes),
             ["lyrics"] = job.Lyrics,
             ["pitchShift"] = job.PitchShift,
             ["autoShift"] = job.AutoShift,
             ["output"] = job.Output,
         };
 
-        var start = new ProcessStartInfo(settings.ResolvedPython)
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardInputEncoding = new UTF8Encoding(false),
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-            UseShellExecute = false,
-        };
-        start.ArgumentList.Add("-u");
-        start.ArgumentList.Add(Script);
-        start.Environment["PYTHONPATH"] = settings.ResolvedSource;
-        start.Environment["NLTK_DATA"] = settings.ResolvedNltkData;
-        // Operators Metal lacks run on the CPU instead of failing the take.
-        start.Environment["PYTORCH_ENABLE_MPS_FALLBACK"] = "1";
-        start.Environment["HF_HUB_OFFLINE"] = "1";
-        start.Environment["PYTHONUNBUFFERED"] = "1";
-        start.Environment["TQDM_DISABLE"] = "1";
-
-        using var process = Process.Start(start) ?? throw new SingingException($"Could not start {settings.ResolvedPython}.");
+        using var process = Start(settings);
         logger.LogInformation("Singing {Notes} notes with {Voice} (pid {Pid})", job.Notes.Count, job.Voice.Id, process.Id);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(settings.Timeout);
@@ -160,6 +146,99 @@ public sealed class SoulXSingerEngine(IOptions<SingingOptions> options, ILogger<
             }
         }
         return result;
+    }
+
+    public async Task<SingingAligned> AlignAsync(IReadOnlyList<SungNote> notes, string? lyrics, CancellationToken cancellationToken)
+    {
+        var settings = options.Value;
+        if (!Installed)
+        {
+            throw new SingingException(
+                $"SoulX-Singer is not installed ({settings.ResolvedRoot}); run deploy/install-singing.sh.", StatusCodes.Status501NotImplemented);
+        }
+        var request = new JsonObject
+        {
+            ["mode"] = "align",
+            ["notes"] = Notes(notes),
+            ["lyrics"] = lyrics,
+        };
+        using var process = Start(settings);
+        // Only g2p_en loads, a second or two; a dictionary that never answers must not hold the editor.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(AlignTimeout);
+        var tail = new Queue<string>();
+        SingingAligned? result = null;
+        try
+        {
+            await process.StandardInput.WriteAsync(request.ToJsonString());
+            process.StandardInput.Close();
+            var errors = PumpAsync(process.StandardError, line => Keep(tail, line), timeout.Token);
+            await PumpAsync(process.StandardOutput, line =>
+            {
+                if (!line.StartsWith(EventPrefix, StringComparison.Ordinal))
+                {
+                    Keep(tail, line);
+                    return;
+                }
+                var data = JsonNode.Parse(line[EventPrefix.Length..]);
+                if ((string?)data?["event"] == "assigned")
+                {
+                    var sung = (data["notes"] as JsonArray ?? [])
+                        .Select(n => new AlignedNote((string?)n?["word"], (int?)n?["type"] ?? 1, (string?)n?["phonemes"] ?? ""))
+                        .ToList();
+                    result = new SingingAligned(sung, (int?)data["leftover"] ?? 0);
+                }
+            }, timeout.Token);
+            await errors;
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                throw new SingingException("The pronunciation dictionary did not answer.");
+            }
+            throw;
+        }
+        if (process.ExitCode != 0 || result is null || result.Notes.Count != notes.Count)
+        {
+            lock (tail)
+            {
+                logger.LogWarning("Aligning failed:\n{Output}", string.Join('\n', tail));
+                throw new SingingException(MlxAudioEngine.FailureMessage(tail));
+            }
+        }
+        return result;
+    }
+
+    private static readonly TimeSpan AlignTimeout = TimeSpan.FromSeconds(60);
+
+    private static JsonNode? Notes(IReadOnlyList<SungNote> notes) =>
+        JsonSerializer.SerializeToNode(notes.Select(n => new { start = n.Start, end = n.End, pitch = n.Pitch, lyric = n.Lyric }));
+
+    private static Process Start(SingingOptions settings)
+    {
+        var start = new ProcessStartInfo(settings.ResolvedPython)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardInputEncoding = new UTF8Encoding(false),
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+            UseShellExecute = false,
+        };
+        start.ArgumentList.Add("-u");
+        start.ArgumentList.Add(Script);
+        start.Environment["PYTHONPATH"] = settings.ResolvedSource;
+        start.Environment["NLTK_DATA"] = settings.ResolvedNltkData;
+        // Operators Metal lacks run on the CPU instead of failing the take.
+        start.Environment["PYTORCH_ENABLE_MPS_FALLBACK"] = "1";
+        start.Environment["HF_HUB_OFFLINE"] = "1";
+        start.Environment["PYTHONUNBUFFERED"] = "1";
+        start.Environment["TQDM_DISABLE"] = "1";
+        return Process.Start(start) ?? throw new SingingException($"Could not start {settings.ResolvedPython}.");
     }
 
     private static void Keep(Queue<string> tail, string line)

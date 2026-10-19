@@ -22,7 +22,6 @@ struct SingView: View {
 private struct SingSessionView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: SingSession
-    @State private var fromLibrary = false
     @State private var importing = false
     @State private var saving: URL?
 
@@ -39,35 +38,28 @@ private struct SingSessionView: View {
                     if !info.installed || !info.modelDownloaded {
                         notInstalled(info)
                     }
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 14) {
-                            melodyCard.frame(minWidth: 340)
-                            wordsCard(info).frame(minWidth: 340)
-                        }
-                        VStack(alignment: .leading, spacing: 14) {
-                            melodyCard
-                            wordsCard(info)
-                        }
-                    }
+                    melodyCard
+                    wordsCard(info)
                     takesCard
                 } else if session.loading {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                 }
             }
             .padding()
-            .frame(maxWidth: 1000, alignment: .leading)
+            .frame(maxWidth: 1200, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .task { await session.load() }
+        .task(id: session.editor.revision) {
+            // A moment after the last change, so typing a word asks once.
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            await session.readPhonemes()
+        }
         .refreshable { await session.load() }
         .onChange(of: model.connection) {
             // A take may have finished while the stream was away.
             if model.connection == .live { Task { await session.load() } }
-        }
-        .onAppear {
-            if case .song = session.source {
-                fromLibrary = true
-            }
         }
         .fileImporter(
             isPresented: $importing,
@@ -97,47 +89,44 @@ private struct SingSessionView: View {
 
     private var melodyCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CardHeading("Melodie", systemImage: "music.note")
-            Picker("Quelle", selection: $fromLibrary) {
-                Text("Datei").tag(false)
-                Text("Aus der Bibliothek").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            if fromLibrary {
-                let songs = model.songs.filter(\.hasScore)
-                Picker("Song", selection: Binding<String?>(
-                    get: { session.source?.song?.id },
-                    set: { id in session.source = songs.first { $0.id == id }.map { .song($0) } }
-                )) {
-                    Text("Song wählen").tag(String?.none)
-                    ForEach(songs) { song in
-                        Text(song.displayTitle).tag(Optional(song.id))
-                    }
+            HStack(spacing: 8) {
+                CardHeading("Melodie", systemImage: "pianokeys")
+                Spacer(minLength: 4)
+                if session.busy {
+                    ProgressView().controlSize(.small)
                 }
-                Text(songs.isEmpty
-                    ? "Kein Song mit Partitur in der Bibliothek."
-                    : "Gesungen wird die Gesangsstimme der Partitur, ohne eigene Worte mit dem Songtext des Songs.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                HStack {
-                    if case .file(let file) = session.source {
-                        Label(file.name, systemImage: "doc").lineLimit(1)
-                        Spacer()
-                        Button("Entfernen", role: .destructive) { session.source = nil }
-                    } else {
-                        Text("MIDI-Datei oder score.abc").foregroundStyle(.secondary)
-                        Spacer()
+                Menu {
+                    Button("Neu (leer)", systemImage: "doc") { session.clear() }
+                    Button("MIDI-Datei oder score.abc …", systemImage: "folder") { importing = true }
+                    let songs = model.songs.filter(\.hasScore)
+                    Menu("Aus der Bibliothek") {
+                        if songs.isEmpty {
+                            Text("Kein Song mit Partitur")
+                        }
+                        ForEach(songs.prefix(60)) { song in
+                            Button(song.displayTitle) { Task { await session.open(.song(song)) } }
+                        }
                     }
-                    Button("Datei wählen …") { importing = true }
+                    Divider()
+                    Button("Als MIDI-Datei sichern …", systemImage: "square.and.arrow.down") {
+                        do {
+                            saving = try session.midiFile()
+                        } catch {
+                            session.problem = error.localizedDescription
+                        }
+                    }
+                    .disabled(session.editor.notes.isEmpty)
+                } label: {
+                    Label("Melodie", systemImage: "ellipsis.circle")
                 }
-                Text("Aus einer MIDI-Datei nimmt der Server die Spur, die nach Gesang heißt (Vocal, Lead, Melodie …), sonst die mit Liedtext, sonst die vollste. Liedtext-Ereignisse in der Datei ersetzen die Worte unten.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .fixedSize()
             }
             TextField("Titel", text: $session.title)
                 .textFieldStyle(.roundedBorder)
+            SingEditorView(editor: session.editor, play: { Task { await session.play() } })
+            Text("Tippen auf eine freie Stelle setzt eine Note, Ziehen verschiebt sie, ihr rechter Rand ändert die Länge. Eine gewählte Note bekommt unten ihre Silbe; mehrere Wörter verteilen sich auf die folgenden Noten. „Gezogen“ (–) singt die Silbe davor auf dieser Tonhöhe weiter, so läuft eine Silbe über mehrere Noten. Eine Note ohne Silbe bleibt still.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
@@ -149,11 +138,22 @@ private struct SingSessionView: View {
         VStack(alignment: .leading, spacing: 10) {
             CardHeading("Worte und Stimme", systemImage: "text.quote")
             TextEditor(text: $session.lyrics)
-                .frame(minHeight: 130)
+                .frame(minHeight: 100)
                 .scrollContentBackground(.hidden)
                 .padding(6)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text("Eine Silbe je Note, der Reihe nach; ein Wort bekommt so viele Noten, wie es Silben hat. [Verse] und andere Marken werden übersprungen, Bindestriche legen die Silben selbst fest (to-mor-row), ein allein stehendes „-“ hält das vorige Wort über die nächste Note.")
+            HStack(spacing: 10) {
+                Button {
+                    Task { await session.spread() }
+                } label: {
+                    Label("Auf die Noten verteilen", systemImage: "text.badge.plus")
+                }
+                .disabled(session.editor.notes.isEmpty || session.lyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !session.installed || session.busy)
+                if session.editor.leftover > 0 {
+                    Text("\(session.editor.leftover) Silben ohne Note").font(.caption).foregroundStyle(.orange)
+                }
+            }
+            Text("Verteilt den Text neu auf alle Noten: ein Wort auf so viele Noten, wie es Silben hat, Bindestriche legen die Silben selbst fest (to-mor-row), ein allein stehendes „-“ zieht das Wort davor über die nächste Note. [Verse] und andere Marken werden übersprungen.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Picker("Stimme", selection: $session.voiceId) {
@@ -184,8 +184,8 @@ private struct SingSessionView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!session.canSing)
-                if session.source == nil {
-                    Text("Erst eine Melodie wählen.").font(.caption).foregroundStyle(.secondary)
+                if session.editor.notes.isEmpty {
+                    Text("Erst Noten setzen oder eine Melodie laden.").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -217,8 +217,8 @@ private struct SingSessionView: View {
                     if take.stage == "failed", let message = take.message, !message.isEmpty {
                         Text(message).font(.caption).foregroundStyle(.red)
                     }
-                    if let lyrics = take.lyrics, !lyrics.isEmpty, lyrics != session.lyrics {
-                        Button("Worte übernehmen") { session.lyrics = lyrics }
+                    if SingSession.finished(take) {
+                        Button("In den Editor") { Task { await session.open(take) } }
                             .buttonStyle(.borderless)
                             .font(.caption)
                     }

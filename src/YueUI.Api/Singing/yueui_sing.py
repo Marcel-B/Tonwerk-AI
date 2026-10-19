@@ -8,11 +8,12 @@ checkout on the path (the server sets PYTHONPATH). Reads one job as JSON on stdi
      "voice": {"audio": prompt audio, "metadata": its SoulX-Singer metadata JSON},
      "notes": [{"start": s, "end": s, "pitch": midi, "lyric": null | text}, ...],
      "lyrics": text or null, "pitchShift": semitones, "autoShift": bool, "output": wav,
-     "dryRun": false}
+     "dryRun": false, "mode": null | "align"}
 
 and answers "YUEUI {json}" lines on stdout (stage, aligned, progress, note, done) between whatever the model prints.
 With dryRun it only aligns and writes the target metadata to "output", without loading the model, which is how the
-alignment is tested without the 2.8 GB of weights.
+alignment is tested without the 2.8 GB of weights. With mode "align" it only answers an "assigned" event: the word,
+note type and phonemes of every note in the order sent, for the app's note editor; nothing is written.
 
 The words are laid on the notes the way SoulX-Singer's own MIDI editor reads a MIDI with lyrics
 (preprocess/tools/midi_parser.py, midi2notes and notes2meta): one word per note, a word sung over more notes repeats
@@ -107,6 +108,33 @@ def slots_of(words, phonemes):
     return slots
 
 
+def assign(notes, lyrics, phonemes):
+    """
+    What each of the notes (in time) sings, as (word or None, type), plus the syllables left over. Notes with words of
+    their own keep them (a held mark or an empty note after a word holds it), else the lyrics are spread over them.
+    """
+    words = []
+    if any((n.get("lyric") or "").strip() for n in notes):
+        last = None
+        for note in notes:
+            lyric = (note.get("lyric") or "").strip()
+            if lyric in HOLD or (not lyric and last is not None):
+                words.append((last, 3) if last else (None, 1))
+                continue
+            found = words_of(lyric)
+            word = found[0][0] if found and found[0] else None
+            if word is None:
+                words.append((None, 1))
+                continue
+            last = word
+            words.append((word, 2))
+        return words, 0
+    slots = slots_of(words_of(lyrics), phonemes)
+    for index in range(len(notes)):
+        words.append(slots[index] if index < len(slots) else (None, 1))
+    return words, max(0, len(slots) - len(notes))
+
+
 def align(notes, lyrics, phonemes):
     """
     The notes as (start, end, word or None, pitch, type), in time and without overlaps, plus what was left over.
@@ -125,31 +153,8 @@ def align(notes, lyrics, phonemes):
             break
         flat.append(note)
 
-    own = any(n.get("lyric") for n in flat)
-    sung = []
-    if own:
-        last = None
-        for note in flat:
-            lyric = (note.get("lyric") or "").strip()
-            if lyric in HOLD or (not lyric and last is not None):
-                sung.append((note, last, 3) if last else (note, None, 1))
-                continue
-            found = words_of(lyric)
-            word = found[0][0] if found and found[0] else None
-            if word is None:
-                sung.append((note, None, 1))
-                continue
-            last = word
-            sung.append((note, word, 2))
-        leftover = 0
-    else:
-        slots = slots_of(words_of(lyrics), phonemes)
-        for index, note in enumerate(flat):
-            if index < len(slots):
-                sung.append((note, slots[index][0], slots[index][1]))
-            else:
-                sung.append((note, None, 1))
-        leftover = max(0, len(slots) - len(flat))
+    words, leftover = assign(flat, lyrics, phonemes)
+    sung = [(note, word, kind) for note, (word, kind) in zip(flat, words)]
 
     result = []
     for note, word, kind in sung:
@@ -299,9 +304,26 @@ def sing(job, segments):
     return loaded - started, time.monotonic() - loaded
 
 
+def assign_only(job, phonemes):
+    """
+    For the app's note editor: what each note sings and how its word is spoken, in the order the notes came, without
+    making them monophonic (the editor shows what the user drew).
+    """
+    notes = job["notes"]
+    order = sorted(range(len(notes)), key=lambda i: (notes[i]["start"], notes[i]["pitch"]))
+    words, leftover = assign([notes[i] for i in order], job.get("lyrics"), phonemes)
+    result = [None] * len(notes)
+    for index, (word, kind) in zip(order, words):
+        result[index] = {"word": word, "type": kind, "phonemes": " ".join(phonemes.of(word)) if word else ""}
+    emit("assigned", notes=result, leftover=leftover)
+
+
 def main():
     job = json.loads(sys.stdin.read())
     phonemes = Phonemes()
+    if job.get("mode") == "align":
+        assign_only(job, phonemes)
+        return
     sung, unsung, leftover = align(job["notes"], job.get("lyrics"), phonemes)
     if not sung:
         raise SystemExit("Error: no note has a word to sing; write lyrics for the melody.")

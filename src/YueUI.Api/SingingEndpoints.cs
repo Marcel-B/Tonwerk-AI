@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using YueToLogic.Core.Abc;
@@ -48,6 +49,31 @@ public static class SingingEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status501NotImplemented);
+        api.MapPost("/singing/melody", MelodyAsync)
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(MaxFileBytes + 256 * 1024))
+            .WithFormOptions(multipartBodyLengthLimit: MaxFileBytes + 128 * 1024)
+            .WithName("ReadSingingMelody")
+            .Produces<SingingMelody>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        api.MapPost("/singing/align", AlignAsync)
+            .WithName("AlignSingingNotes")
+            .Produces<SingingAligned>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
+        api.MapGet("/singing/{id}/notes", async (string id, SingingStudio studio, SqliteSingingStore store) =>
+        {
+            await studio.Loaded;
+            return studio.Get(id) is { } take
+                ? Results.Ok(new SingingMelody(store.Notes(id), take.TempoBpm ?? 120, take.Lyrics, take.Title, null))
+                : Results.NotFound();
+        })
+            .WithName("GetSingingNotes")
+            .Produces<SingingMelody>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
         // Range requests: Safari and AVPlayer play audio only from a source that answers them.
         api.MapGet("/singing/{id}/audio", async (string id, bool? download, SingingStudio studio, SqliteSingingStore store) =>
         {
@@ -78,11 +104,15 @@ public static class SingingEndpoints
     /// <param name="file">A MIDI file (its melody track, with its lyric events if it has them) or a YuE2 score.</param>
     /// <param name="song">Instead of a file: a library song (<c>run/songN</c>), whose <c>score.abc</c> is sung.</param>
     /// <param name="lyrics">The words; for a library song its own lyrics when left empty.</param>
+    /// <param name="notes">Instead of a file or song: the note editor's melody, a JSON list of <see cref="SungNote"/>.</param>
+    /// <param name="tempoBpm">The editor's tempo, kept with the take so it opens on the same grid.</param>
     /// <param name="pitchShift">Semitones the melody moves, -24 to 24.</param>
     /// <param name="autoShift">Moves the melody into the voice's range instead.</param>
     private static async Task<IResult> SingAsync(
         IFormFile? file,
         [FromForm] string? song,
+        [FromForm] string? notes,
+        [FromForm] double? tempoBpm,
         [FromForm] string? lyrics,
         [FromForm] string? voice,
         [FromForm] int? pitchShift,
@@ -99,9 +129,19 @@ public static class SingingEndpoints
         var settings = options.Value;
         var errors = new Dictionary<string, string[]>();
         var hasFile = file is { Length: > 0 };
-        if (hasFile == !string.IsNullOrWhiteSpace(song))
+        var hasNotes = !string.IsNullOrWhiteSpace(notes);
+        if ((hasFile ? 1 : 0) + (string.IsNullOrWhiteSpace(song) ? 0 : 1) + (hasNotes ? 1 : 0) != 1)
         {
-            errors["file"] = ["A MIDI file or score, or a library song."];
+            errors["file"] = ["A MIDI file or score, a library song, or the editor's notes."];
+        }
+        List<SungNote>? drawn = null;
+        if (hasNotes)
+        {
+            drawn = ReadNotes(notes!, errors);
+        }
+        if (tempoBpm is <= 0 or > 1000)
+        {
+            errors["tempoBpm"] = ["Between 0 and 1000."];
         }
         if (lyrics?.Length > MaxLyricsCharacters)
         {
@@ -135,7 +175,12 @@ public static class SingingEndpoints
         string name;
         string? songId = null;
         var words = lyrics?.Trim() ?? "";
-        if (hasFile)
+        if (drawn is not null)
+        {
+            score = new SingingScore(drawn, null, null, tempoBpm ?? 120);
+            name = "Tonwerk";
+        }
+        else if (hasFile)
         {
             await using var stream = file!.OpenReadStream();
             using var buffer = new MemoryStream();
@@ -196,10 +241,126 @@ public static class SingingEndpoints
             PitchShift = pitchShift ?? 0,
             AutoShift = autoShift ?? false,
             NoteCount = score.Notes.Count,
+            TempoBpm = drawn is not null ? tempoBpm ?? 120 : score.TempoBpm,
             CreatedAt = now,
             UpdatedAt = now,
         };
         studio.Enqueue(take, score.Notes);
         return Results.Accepted($"/api/singing/{take.Id}", take);
     }
+
+    /// <param name="file">A MIDI file or a YuE2 score.</param>
+    /// <param name="song">Instead of a file: a library song, with its lyrics.</param>
+    private static async Task<IResult> MelodyAsync(
+        IFormFile? file,
+        [FromForm] string? song,
+        SongLibrary library,
+        IAbcScoreParser parser,
+        CancellationToken cancellationToken)
+    {
+        var hasFile = file is { Length: > 0 };
+        if (hasFile == !string.IsNullOrWhiteSpace(song))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["file"] = ["A MIDI file or score, or a library song."] });
+        }
+        SingingScore score;
+        string title;
+        var lyrics = "";
+        if (hasFile)
+        {
+            await using var stream = file!.OpenReadStream();
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer, cancellationToken);
+            score = SingingScores.Read(buffer.ToArray(), parser);
+            title = Path.GetFileNameWithoutExtension(file.FileName);
+        }
+        else
+        {
+            var parts = song!.Split('/');
+            if (parts.Length != 2 || library.SongDirectory(parts[0], parts[1]) is not { } directory)
+            {
+                return Results.Problem($"There is no song {song}.", statusCode: StatusCodes.Status404NotFound);
+            }
+            var scorePath = Path.Combine(directory, "score.abc");
+            if (!File.Exists(scorePath))
+            {
+                return Results.Problem("The song has no score to sing.", statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+            score = SingingScores.FromAbc(await File.ReadAllTextAsync(scorePath, cancellationToken), parser);
+            var request = library.ReadRequest(parts[0], parts[1]);
+            lyrics = request?.Lyrics ?? "";
+            title = string.IsNullOrWhiteSpace(request?.Title) ? song : request.Title;
+        }
+        if (score.Problem is { } problem)
+        {
+            return Results.Problem(problem, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+        if (score.Notes.Count > MaxNotes)
+        {
+            return Results.Problem($"The melody has more than {MaxNotes} notes.", statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+        return Results.Ok(new SingingMelody(score.Notes, score.TempoBpm, lyrics, title, score.Part));
+    }
+
+    private static async Task<IResult> AlignAsync(SingingAlignRequest request, ISingingEngine engine, CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (request.Notes is null || request.Notes.Count > MaxNotes)
+        {
+            errors["notes"] = [$"Up to {MaxNotes} notes."];
+        }
+        else if (request.Notes.Any(n => !Valid(n)))
+        {
+            errors["notes"] = ["Every note needs a start, an end after it and a pitch from 0 to 127."];
+        }
+        if (request.Lyrics?.Length > MaxLyricsCharacters)
+        {
+            errors["lyrics"] = [$"At most {MaxLyricsCharacters} characters."];
+        }
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+        if (request.Notes!.Count == 0)
+        {
+            return Results.Ok(new SingingAligned([], 0));
+        }
+        try
+        {
+            return Results.Ok(await engine.AlignAsync(request.Notes, request.Lyrics, cancellationToken));
+        }
+        catch (SingingException exception)
+        {
+            return Results.Problem(exception.Message, statusCode: exception.Status);
+        }
+    }
+
+    /// <summary>The editor's notes from the form; null with an error where they cannot be read.</summary>
+    private static List<SungNote>? ReadNotes(string json, Dictionary<string, string[]> errors)
+    {
+        List<SungNote>? notes;
+        try
+        {
+            notes = JsonSerializer.Deserialize<List<SungNote>>(json, JsonSerializerOptions.Web);
+        }
+        catch (JsonException)
+        {
+            notes = null;
+        }
+        if (notes is null || notes.Any(n => !Valid(n)))
+        {
+            errors["notes"] = ["A JSON list of notes, each with a start, an end after it and a pitch from 0 to 127."];
+            return null;
+        }
+        if (notes.Any(n => n.Lyric?.Length > 100))
+        {
+            errors["notes"] = ["At most 100 characters of words per note."];
+            return null;
+        }
+        return [.. notes.OrderBy(n => n.Start).ThenByDescending(n => n.Pitch)];
+    }
+
+    private static bool Valid(SungNote note) =>
+        note is not null && double.IsFinite(note.Start) && double.IsFinite(note.End) && note.Start >= 0 && note.End > note.Start
+            && note.Pitch is >= 0 and <= 127;
 }

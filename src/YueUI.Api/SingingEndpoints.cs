@@ -30,6 +30,9 @@ public static class SingingEndpoints
                 engine.Installed,
                 engine.ModelDownloaded,
                 options.Value.ResolvedPython,
+                options.Value.ResolvedSource,
+                options.Value.ResolvedModel,
+                options.Value.ResolvedNltkData,
                 [.. options.Value.ResolvedVoices.Select(v => new SingingVoiceInfo(v.Id, v.Label, v.Language))],
                 studio.Takes());
         })

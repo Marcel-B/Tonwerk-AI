@@ -12,7 +12,8 @@
 #   deploy/setup-mac.sh --whisper          plus Whisper for lyrics timing (deploy/install-whisper.sh)
 #   deploy/setup-mac.sh --montage          plus photo videos cut to the beat (deploy/install-montage.sh)
 #   deploy/setup-mac.sh --ace              plus ACE-Step, the second song model (deploy/install-ace.sh, about 8 GB)
-#   deploy/setup-mac.sh --all              all eight
+#   deploy/setup-mac.sh --singing          plus SoulX-Singer for the singing page (deploy/install-singing.sh, about 5 GB)
+#   deploy/setup-mac.sh --all              all nine
 #   deploy/setup-mac.sh --engine-from-source
 #                                          replace an engine the YuE Studio app installed by a git checkout
 #   deploy/setup-mac.sh --update           again with the options of the last run, without asking (deploy/update.sh)
@@ -59,6 +60,7 @@ MIDI=false
 WHISPER=false
 MONTAGE=false
 ACE=false
+SINGING=false
 FROM_SOURCE=false
 UPDATE=false
 AUTO_UPDATE=true
@@ -79,11 +81,12 @@ for argument in "$@"; do
     --whisper) WHISPER=true ;;
     --montage) MONTAGE=true ;;
     --ace) ACE=true ;;
-    --all) TRANSCRIPTION=true; VOICES=true; SPEECH=true; IMAGES=true; MIDI=true; WHISPER=true; MONTAGE=true; ACE=true ;;
+    --singing) SINGING=true ;;
+    --all) TRANSCRIPTION=true; VOICES=true; SPEECH=true; IMAGES=true; MIDI=true; WHISPER=true; MONTAGE=true; ACE=true; SINGING=true ;;
     --engine-from-source) FROM_SOURCE=true ;;
     --no-auto-update) AUTO_UPDATE=false ;;
     --update) echo "--update comes first." >&2; exit 2 ;;
-    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown argument: $argument" >&2; exit 2 ;;
   esac
 done
@@ -366,6 +369,19 @@ if [ "$ACE" = true ]; then
     "$REPO/deploy/install-ace.sh"
     mkdir -p "$DATA/ace"
     echo "$ACE_RECIPE" > "$DATA/ace/recipe"
+  fi
+fi
+
+if [ "$SINGING" = true ]; then
+  step "Singing"
+  # install-singing.sh pins SoulX-Singer and its packages; an update runs it only when the script changed.
+  SINGING_RECIPE="$(cksum < "$REPO/deploy/install-singing.sh")"
+  if [ "$UPDATE" = true ] && [ "$(cat "$DATA/singing/recipe" 2>/dev/null)" = "$SINGING_RECIPE" ]; then
+    echo "Unchanged."
+  else
+    "$REPO/deploy/install-singing.sh"
+    mkdir -p "$DATA/singing"
+    echo "$SINGING_RECIPE" > "$DATA/singing/recipe"
   fi
 fi
 

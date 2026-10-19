@@ -43,10 +43,16 @@ public sealed record SingingVoiceInfo(string Id, string Label, string Language);
 /// <param name="Installed">The environment with SoulX-Singer is there.</param>
 /// <param name="ModelDownloaded">Its weights are there; deploy/install-singing.sh downloads them.</param>
 /// <param name="Python">Where the server looks for the environment, which the install script asks for.</param>
+/// <param name="Source">Where it looks for SoulX-Singer's checkout.</param>
+/// <param name="Model">Where it looks for the weights.</param>
+/// <param name="NltkData">Where it looks for the pronunciation dictionary.</param>
 public sealed record SingingInfo(
     bool Installed,
     bool ModelDownloaded,
     string Python,
+    string Source,
+    string Model,
+    string NltkData,
     IReadOnlyList<SingingVoiceInfo> Voices,
     IReadOnlyList<SingTake> Takes);
 

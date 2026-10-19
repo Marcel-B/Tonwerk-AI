@@ -8064,6 +8064,9 @@
           "installed",
           "modelDownloaded",
           "python",
+          "source",
+          "model",
+          "nltkData",
           "voices",
           "takes"
         ],
@@ -8076,6 +8079,15 @@
             "type": "boolean"
           },
           "python": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "nltkData": {
             "type": "string"
           },
           "voices": {

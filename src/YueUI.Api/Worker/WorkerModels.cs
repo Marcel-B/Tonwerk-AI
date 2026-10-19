@@ -117,13 +117,14 @@ public sealed record StatusSnapshot(
     IReadOnlyList<Video.VideoState>? Videos = null,
     IReadOnlyList<Images.ImageState>? Images = null,
     MemoryInfo? Memory = null,
-    IReadOnlyList<Ace.AceJob>? Ace = null);
+    IReadOnlyList<Ace.AceJob>? Ace = null,
+    IReadOnlyList<Singing.SingTake>? Singing = null);
 
 /// <summary>Which large model besides YuE2 holds the memory (Memory/ModelMemory.cs); null while none does.</summary>
 public sealed record MemoryInfo(Memory.LargeModel? Holder);
 
 /// <summary>Whether a restart would cut work off (<c>GET /api/busy</c>).</summary>
-/// <param name="Reasons">songs, transcription, lyrics, voices (a version or stems), speech, video, images or ace.</param>
+/// <param name="Reasons">songs, transcription, lyrics, voices (a version or stems), speech, video, images, ace or singing.</param>
 public sealed record BusyInfo(bool Busy, IReadOnlyList<string> Reasons);
 
 /// <summary>

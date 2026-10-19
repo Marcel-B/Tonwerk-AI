@@ -30,7 +30,8 @@ public sealed record ServerEvents(
     Video.VideoState Video,
     Images.ImageState Image,
     Ace.AceJob Ace,
-    Speech.SpeechTake Speech);
+    Speech.SpeechTake Speech,
+    Singing.SingTake Singing);
 
 /// <summary>The <c>{}</c> of events that only say something happened.</summary>
 public sealed record EmptyEvent;

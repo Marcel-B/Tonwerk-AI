@@ -63,6 +63,7 @@ export const logSources = [
   'lyrics',
   'voices',
   'speech',
+  'singing',
   'images',
   'ace',
   'video',
@@ -119,7 +120,7 @@ export interface StatusSnapshot {
 }
 
 /** The large models besides YuE2 that take turns in the memory. */
-export type LargeModel = 'lyrics' | 'voices' | 'speech' | 'images' | 'ace'
+export type LargeModel = 'lyrics' | 'voices' | 'speech' | 'singing' | 'images' | 'ace'
 
 export interface MemoryInfo {
   holder: LargeModel | null

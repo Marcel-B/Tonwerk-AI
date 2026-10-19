@@ -19,6 +19,9 @@ public enum LargeModel
 
     /// <summary>ACE-Step's LM and DiT making a song (Ace/AceComposer.cs).</summary>
     Ace,
+
+    /// <summary>SoulX-Singer singing a melody with words (Singing/SingingStudio.cs).</summary>
+    Singing,
 }
 
 /// <summary>

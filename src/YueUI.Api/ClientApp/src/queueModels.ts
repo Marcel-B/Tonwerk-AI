@@ -8,7 +8,7 @@ import type { LargeModel, QueuedJob, TranscriptionState, WorkerInfo } from './ty
  * paints covers in the same memory (Images/ImageMaker.cs), and so does ACE-Step, the second song model
  * (Ace/AceComposer.cs); a music video is ffmpeg on the CPU and runs beside them all.
  */
-export type Model = 'yue' | 'lyrics' | 'voice' | 'speech' | 'image' | 'ace' | 'transcription' | 'video'
+export type Model = 'yue' | 'lyrics' | 'voice' | 'speech' | 'singing' | 'image' | 'ace' | 'transcription' | 'video'
 
 export function modelOf(job: QueuedJob): Model {
   return job.kind === 'lyrics' ? 'lyrics' : job.kind === 'transcription' ? 'transcription' : 'yue'
@@ -34,6 +34,7 @@ const largeModels: Record<LargeModel, Model> = {
   lyrics: 'lyrics',
   voices: 'voice',
   speech: 'speech',
+  singing: 'singing',
   images: 'image',
   ace: 'ace',
 }
@@ -83,6 +84,9 @@ export function waitReason(
   }
   if (holder === 'ace') {
     return t('waitAce')
+  }
+  if (holder === 'singing') {
+    return t('waitSinging')
   }
   const left = (since: string) => (windowSeconds ?? 0) - (now - new Date(since).getTime()) / 1000
   const oldest = versions.filter((v) => v.stage === 'queued').sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
@@ -171,6 +175,8 @@ export function speechWaitReason(index: number, holder: Model | null, own: Model
       return t('waitImage')
     case 'ace':
       return t('waitAce')
+    case 'singing':
+      return t('waitSinging')
     case 'transcription':
       return t('waitTranscription')
     default:

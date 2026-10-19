@@ -299,6 +299,9 @@ function voiceReason(item: VoiceItem): string {
   if (holder.value === 'ace') {
     return t('waitAce')
   }
+  if (holder.value === 'singing') {
+    return t('waitSinging')
+  }
   if (holder.value === 'transcription') {
     return t('waitTranscription')
   }

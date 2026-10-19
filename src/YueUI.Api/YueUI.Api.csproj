@@ -28,6 +28,7 @@
     <None Update="Worker\yueui_lora.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Worker\yueui_lora_train.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Speech\yueui_speech.py" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Singing\yueui_sing.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Images\yueui_image.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="AudioMidi\yueui_basicpitch.py" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Timing\yueui_whisper.py" CopyToOutputDirectory="PreserveNewest" />

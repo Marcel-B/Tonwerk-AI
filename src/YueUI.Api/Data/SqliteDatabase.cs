@@ -34,6 +34,7 @@ namespace YueUI.Api.Data;
 /// Version 24: speech takes that clean an uploaded recording, and their progress (<see cref="SqliteSpeechStore"/>).
 /// Version 25: what was heard in songs, tempo, key and how clearly the lyrics are sung (<see cref="SqliteSongTraitStore"/>).
 /// Version 26: written song sketches and their plans (<see cref="SqliteSketchStore"/>).
+/// Version 27: melodies sung by SoulX-Singer, with their notes (<see cref="SqliteSingingStore"/>).
 /// </remarks>
 public sealed class SqliteDatabase(IOptions<DataOptions> options)
 {
@@ -569,6 +570,22 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                         created_at TEXT NOT NULL
                     );
                     PRAGMA user_version = 26;
+                    """);
+            }
+            if (current < 27)
+            {
+                // Melodies with words sung by SoulX-Singer (Singing/SingingStudio.cs), one JSON each, the notes beside it.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE sing_takes (
+                        id TEXT PRIMARY KEY,
+                        take TEXT NOT NULL,
+                        notes TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 27;
                     """);
             }
             _ready = true;

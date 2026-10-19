@@ -8,7 +8,7 @@ namespace YueUI.Api.Monitoring;
 /// keeps what is waiting or running for <c>/metrics</c>.
 /// </summary>
 /// <remarks>
-/// Kinds: song, render, transcription, lyrics, version, stems, swap, video, image, ace, speech. A job's working time
+/// Kinds: song, render, transcription, lyrics, version, stems, swap, video, image, ace, speech, singing. A job's working time
 /// runs from the first state that is no longer queued to the finished one, so the time spent waiting for the memory is
 /// left out; a song takes its stage times, which the worker reports itself. Only the change to finished counts, as for
 /// push notifications: a fresh snapshot after a dropped subscription marks what is already done.
@@ -28,7 +28,7 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
     private readonly Dictionary<string, Histogram> _durations = [];
 
     public static readonly IReadOnlyList<string> Kinds =
-        ["song", "render", "transcription", "lyrics", "version", "stems", "swap", "video", "image", "ace", "speech"];
+        ["song", "render", "transcription", "lyrics", "version", "stems", "swap", "video", "image", "ace", "speech", "singing"];
 
     public static readonly IReadOnlyList<string> Outcomes = ["done", "failed", "cancelled"];
 
@@ -96,6 +96,7 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
             .. snapshot.Images ?? [],
             .. snapshot.Ace ?? [],
             .. snapshot.Speech ?? [],
+            .. snapshot.Singing ?? [],
         ];
         if (snapshot.Lyrics is { } lyrics)
         {
@@ -182,6 +183,7 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
         Images.ImageState i => Queued($"image:{i.Id}", "image", i.Stage, i.Finished, i.UpdatedAt),
         Ace.AceJob a => Queued($"ace:{a.Id}", "ace", a.Stage, a.Finished, a.UpdatedAt),
         Speech.SpeechTake s => Queued($"speech:{s.Id}", "speech", s.Stage, s.Finished, s.UpdatedAt),
+        Singing.SingTake s => Queued($"singing:{s.Id}", "singing", s.Stage, s.Finished, s.UpdatedAt),
         _ => null,
     };
 

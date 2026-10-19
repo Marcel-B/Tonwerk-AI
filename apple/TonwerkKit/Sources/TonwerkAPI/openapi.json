@@ -3732,6 +3732,172 @@
         }
       }
     },
+    "/api/singing": {
+      "get": {
+        "operationId": "GetSinging",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingingInfo"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CreateSingingTake",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  },
+                  "song": {
+                    "type": "string"
+                  },
+                  "lyrics": {
+                    "type": "string"
+                  },
+                  "voice": {
+                    "type": "string"
+                  },
+                  "pitchShift": {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  "autoShift": {
+                    "type": "boolean"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingTake"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/singing/{id}/audio": {
+      "get": {
+        "operationId": "GetSingingAudio",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/singing/{id}": {
+      "delete": {
+        "operationId": "DeleteSingingTake",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/images": {
       "get": {
         "operationId": "GetImageInfo",
@@ -6786,7 +6952,8 @@
           "voices",
           "speech",
           "images",
-          "ace"
+          "ace",
+          "singing"
         ],
         "type": "string"
       },
@@ -7828,7 +7995,8 @@
           "video",
           "image",
           "ace",
-          "speech"
+          "speech",
+          "singing"
         ],
         "type": "object",
         "properties": {
@@ -7885,6 +8053,180 @@
           },
           "speech": {
             "$ref": "#/components/schemas/SpeechTake"
+          },
+          "singing": {
+            "$ref": "#/components/schemas/SingTake"
+          }
+        }
+      },
+      "SingingInfo": {
+        "required": [
+          "installed",
+          "modelDownloaded",
+          "python",
+          "voices",
+          "takes"
+        ],
+        "type": "object",
+        "properties": {
+          "installed": {
+            "type": "boolean"
+          },
+          "modelDownloaded": {
+            "type": "boolean"
+          },
+          "python": {
+            "type": "string"
+          },
+          "voices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SingingVoiceInfo"
+            }
+          },
+          "takes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SingTake"
+            }
+          }
+        }
+      },
+      "SingingVoiceInfo": {
+        "required": [
+          "id",
+          "label",
+          "language"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          }
+        }
+      },
+      "SingTake": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "progress": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "voiceId": {
+            "type": "string"
+          },
+          "voiceLabel": {
+            "type": "string"
+          },
+          "songId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fileName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lyrics": {
+            "type": "string"
+          },
+          "pitchShift": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "autoShift": {
+            "type": "boolean"
+          },
+          "noteCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sung": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "unsung": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "leftover": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "seconds": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "loadSeconds": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "singSeconds": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "peakMemoryGb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -8987,6 +9329,15 @@
             ],
             "items": {
               "$ref": "#/components/schemas/AceJob"
+            }
+          },
+          "singing": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SingTake"
             }
           }
         }

@@ -81,6 +81,15 @@ public static class PushTexts
             : (de ? "Ausarbeitung fehlgeschlagen" : "Sketch failed", WithMessage(job.Title, job.Message));
     }
 
+    public static (string Title, string Body) Singing(Singing.SingTake take, string language)
+    {
+        var de = IsGerman(language);
+        var which = $"{take.Title} · {take.VoiceLabel}";
+        return take.Stage == "done"
+            ? (de ? "Gesang fertig" : "Singing finished", which)
+            : (de ? "Gesang fehlgeschlagen" : "Singing failed", WithMessage(which, take.Message));
+    }
+
     public static (string Title, string Body) Lyrics(LyricsState lyrics, string language)
     {
         var de = IsGerman(language);

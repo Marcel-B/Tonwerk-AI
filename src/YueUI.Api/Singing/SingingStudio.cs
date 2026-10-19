@@ -21,6 +21,7 @@ namespace YueUI.Api.Singing;
 /// </remarks>
 public sealed class SingingStudio(
     SqliteSingingStore store,
+    SingingVoices voices,
     ISingingEngine engine,
     Machines.Machines machines,
     Machines.RemoteEngines remote,
@@ -155,7 +156,7 @@ public sealed class SingingStudio(
         var work = Path.Combine(Path.GetTempPath(), $"yueui-singing-{id}");
         try
         {
-            var voice = options.Value.ResolvedVoices.FirstOrDefault(v => v.Id == take.VoiceId)
+            var voice = voices.Find(take.VoiceId)
                 ?? throw new SingingException($"The voice {take.VoiceId} is no longer offered.");
             var notes = store.Notes(id);
 

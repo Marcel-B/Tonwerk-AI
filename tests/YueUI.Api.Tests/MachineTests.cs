@@ -95,6 +95,42 @@ public sealed class MachineTests : IDisposable
     }
 
     [Fact]
+    public async Task A_take_with_a_voice_of_ones_own_is_sung_on_the_helper_with_the_voice_sent_along()
+    {
+        var client = _app.CreateClient();
+        var form = new MultipartFormDataContent
+        {
+            { new StringContent("Marcel"), "label" },
+            { new StringContent("Amazing grace"), "lyrics" },
+            { new ByteArrayContent([1, 2, 3]), "file", "aufnahme.m4a" },
+        };
+        var voice = (await (await client.PostAsync("/api/singing/voices", form)).Content.ReadFromJsonAsync<Singing.SingingVoiceCreated>(TestApp.Json))!.Voice;
+
+        var sing = new MultipartFormDataContent
+        {
+            { new StringContent("""[{"start":0,"end":1,"pitch":62,"lyric":"sun"}]"""), "notes" },
+            { new StringContent(voice.Id), "voice" },
+            { new StringContent("alt"), "machine" },
+        };
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync("/api/singing", sing)).StatusCode);
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!(await client.GetFromJsonAsync<Singing.SingingInfo>("/api/singing", TestApp.Json))!.Takes.Single().Finished)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "The take never finished.");
+            await Task.Delay(20);
+        }
+        var take = (await client.GetFromJsonAsync<Singing.SingingInfo>("/api/singing", TestApp.Json))!.Takes.Single();
+        Assert.Equal(("done", "Alter Mac"), (take.Stage, take.RanOn));
+        Assert.Empty(_app.Singing.Jobs);
+        var sung = Assert.Single(_helper.Singing.Jobs).Voice;
+        Assert.True(sung.Own);
+        Assert.Equal(voice.Id, sung.Id);
+        // The helper's copies, read from its run's inputs (deleted with the run).
+        Assert.Equal(("voiceAudio.wav", "voiceMetadata.json"), (Path.GetFileName(sung.Audio), Path.GetFileName(sung.Metadata)));
+    }
+
+    [Fact]
     public async Task Whichever_is_free_is_the_helper_while_this_Macs_memory_is_taken()
     {
         var client = _app.CreateClient();

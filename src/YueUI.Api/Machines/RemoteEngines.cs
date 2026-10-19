@@ -177,7 +177,10 @@ public sealed class RemoteEngines(HelperClient client, Machines machines)
                 helper,
                 Engines.Singing,
                 new SingingHelperJob(job.Notes, job.Lyrics, job.Voice.Id, job.PitchShift, job.AutoShift),
-                new Dictionary<string, string>(),
+                // A voice of one's own lives only here; it goes along, the helper's configured ones are found by id.
+                job.Voice.Own
+                    ? new Dictionary<string, string> { ["voiceAudio"] = job.Voice.Audio, ["voiceMetadata"] = job.Voice.Metadata }
+                    : new Dictionary<string, string>(),
                 new Dictionary<string, string> { ["take.wav"] = job.Output },
                 null,
                 read =>
@@ -199,6 +202,10 @@ public sealed class RemoteEngines(HelperClient client, Machines machines)
         /// <summary>The editor's alignment loads only g2p_en and runs on this Mac (<c>POST /api/singing/align</c>), never here.</summary>
         public Task<SingingAligned> AlignAsync(IReadOnlyList<SungNote> notes, string? lyrics, CancellationToken cancellationToken) =>
             throw new SingingException("Alignment runs on this Mac.", StatusCodes.Status501NotImplemented);
+
+        /// <summary>Like the alignment, a voice is made on this Mac (<c>POST /api/singing/voices</c>).</summary>
+        public Task<SingingVoiceMade> MakeVoiceAsync(string recording, string lyrics, string audio, string metadata, CancellationToken cancellationToken) =>
+            throw new SingingException("Voices are made on this Mac.", StatusCodes.Status501NotImplemented);
     }
 
     private sealed class RemoteAce(HelperClient client, HelperMachine helper, Machines machines) : IAceEngine

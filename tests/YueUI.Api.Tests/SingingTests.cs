@@ -181,6 +181,84 @@ public sealed class SingingTests : IDisposable
     }
 
     [Fact]
+    public async Task A_recording_of_ones_own_singing_becomes_a_voice_that_sings_takes()
+    {
+        var client = _app.CreateClient();
+
+        var response = await client.PostAsync(
+            "/api/singing/voices", Form([1, 2, 3, 4], "aufnahme.m4a", ("label", "Marcel"), ("lyrics", "Amazing grace how sweet the sound")));
+
+        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var created = await response.Content.ReadFromJsonAsync<SingingVoiceCreated>(TestApp.Json);
+        var voice = created!.Voice;
+        Assert.Equal(("Marcel", true, "Amazing grace", 1.0, 60, 62), (voice.Label, voice.Own, voice.Text, voice.Seconds, voice.Low, voice.High));
+        Assert.Equal((2, 4), (created.Heard.Notes, created.Heard.Leftover));
+        var (recording, lyrics) = Assert.Single(_app.Singing.Voices);
+        Assert.EndsWith(".m4a", recording);
+        Assert.Equal("Amazing grace how sweet the sound", lyrics);
+        Assert.False(File.Exists(recording));
+
+        var info = await client.GetFromJsonAsync<SingingInfo>("/api/singing", TestApp.Json);
+        Assert.Equal(["en", "zh", voice.Id], info!.Voices.Select(v => v.Id));
+        var audio = await client.GetAsync($"/api/singing/voices/{voice.Id}/audio");
+        Assert.Equal("audio/wav", audio.Content.Headers.ContentType?.MediaType);
+
+        var take = await (await client.PostAsync(
+            "/api/singing", Form(null, null, ("notes", """[{"start":0,"end":1,"pitch":62,"lyric":"sun"}]"""), ("voice", voice.Id))))
+            .Content.ReadFromJsonAsync<SingTake>(TestApp.Json);
+        Assert.Equal(("done", "Marcel"), ((await WaitFor(client, take!.Id, t => t.Finished)).Stage, take.VoiceLabel));
+        var sung = Assert.Single(_app.Singing.Jobs).Voice;
+        Assert.True(sung.Own);
+        Assert.Contains("Amazing grace", await File.ReadAllTextAsync(sung.Metadata));
+        Assert.True(File.Exists(sung.Audio));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/singing/voices/{voice.Id}")).StatusCode);
+        Assert.False(File.Exists(sung.Audio));
+        Assert.Equal(["en", "zh"], (await client.GetFromJsonAsync<SingingInfo>("/api/singing", TestApp.Json))!.Voices.Select(v => v.Id));
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/singing/voices/{voice.Id}/audio")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/singing/voices/{voice.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_voice_is_kept_while_a_waiting_take_needs_it()
+    {
+        var client = _app.CreateClient();
+        var voice = (await (await client.PostAsync("/api/singing/voices", Form([1, 2], "a.wav", ("label", "Ich"), ("lyrics", "la la"))))
+            .Content.ReadFromJsonAsync<SingingVoiceCreated>(TestApp.Json))!.Voice;
+        _app.Singing.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var take = await (await client.PostAsync(
+            "/api/singing", Form(null, null, ("notes", """[{"start":0,"end":1,"pitch":62,"lyric":"la"}]"""), ("voice", voice.Id))))
+            .Content.ReadFromJsonAsync<SingTake>(TestApp.Json);
+
+        Assert.Equal(HttpStatusCode.Conflict, (await client.DeleteAsync($"/api/singing/voices/{voice.Id}")).StatusCode);
+
+        _app.Singing.Gate.SetResult();
+        await WaitFor(client, take!.Id, t => t.Finished);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/singing/voices/{voice.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_recording_without_singing_or_a_name_makes_no_voice()
+    {
+        var client = _app.CreateClient();
+
+        var nameless = await client.PostAsync("/api/singing/voices", Form([1], "a.wav", ("lyrics", "la")));
+        Assert.Equal(HttpStatusCode.BadRequest, nameless.StatusCode);
+        Assert.Contains("\"label\"", await nameless.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/singing/voices", Form([1], "a.wav", ("label", "Ich")))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/singing/voices", Form(null, null, ("label", "Ich"), ("lyrics", "la")))).StatusCode);
+
+        _app.Singing.VoiceFailure = "Error: no sung note was heard in the recording.";
+        var silent = await client.PostAsync("/api/singing/voices", Form([1], "a.wav", ("label", "Ich"), ("lyrics", "la")));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, silent.StatusCode);
+        Assert.Contains("no sung note", await silent.Content.ReadAsStringAsync());
+        Assert.Equal(["en", "zh"], (await client.GetFromJsonAsync<SingingInfo>("/api/singing", TestApp.Json))!.Voices.Select(v => v.Id));
+
+        _app.Singing.Installed = false;
+        Assert.Equal(HttpStatusCode.NotImplemented, (await client.PostAsync("/api/singing/voices", Form([1], "a.wav", ("label", "Ich"), ("lyrics", "la")))).StatusCode);
+    }
+
+    [Fact]
     public void The_sung_track_of_a_midi_file_is_the_one_named_like_a_voice_else_the_one_with_lyrics()
     {
         var named = SingingScores.FromMidi(Midi(("Piano", [(60, null), (62, null), (64, null)]), ("Gesang", [(70, null)])));

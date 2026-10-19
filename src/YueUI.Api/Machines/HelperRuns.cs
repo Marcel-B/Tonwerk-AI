@@ -213,7 +213,7 @@ public sealed class HelperRuns(
                 Engines.Speech => await SpeechAsync(Parse<SpeechHelperJob>(job), files, outputs, Send, cancellationToken),
                 Engines.Images => await ImagesAsync(Parse<ImageHelperJob>(job), outputs, Send, cancellationToken),
                 Engines.Ace => await AceAsync(Parse<AceHelperJob>(job), files, outputs, Send, cancellationToken),
-                Engines.Singing => await SingingAsync(Parse<SingingHelperJob>(job), outputs, Send, cancellationToken),
+                Engines.Singing => await SingingAsync(Parse<SingingHelperJob>(job), files, outputs, Send, cancellationToken),
                 Engines.Stems => await StemsAsync(Parse<StemsHelperJob>(job), files, outputs, cancellationToken),
                 _ => await VoicesAsync(Parse<VoiceHelperJob>(job), files, outputs, Send, cancellationToken),
             };
@@ -293,10 +293,18 @@ public sealed class HelperRuns(
         return new JsonObject { ["requests"] = requests };
     }
 
-    private async Task<JsonNode?> SingingAsync(SingingHelperJob job, string outputs, Action<HelperEvent> send, CancellationToken cancellationToken)
+    private async Task<JsonNode?> SingingAsync(
+        SingingHelperJob job,
+        IReadOnlyDictionary<string, string> files,
+        string outputs,
+        Action<HelperEvent> send,
+        CancellationToken cancellationToken)
     {
-        var voice = services.GetRequiredService<IOptions<SingingOptions>>().Value.ResolvedVoices.FirstOrDefault(v => v.Id == job.Voice)
-            ?? throw new HelperException($"The voice {job.Voice} is not offered on this Mac.", StatusCodes.Status400BadRequest);
+        // A voice of one's own comes with the job; a configured one is this Mac's.
+        var voice = files.GetValueOrDefault("voiceAudio") is { } audio && files.GetValueOrDefault("voiceMetadata") is { } metadata
+            ? new SingingVoice { Id = job.Voice, Label = job.Voice, Audio = audio, Metadata = metadata, Language = "English", Own = true }
+            : services.GetRequiredService<IOptions<SingingOptions>>().Value.ResolvedVoices.FirstOrDefault(v => v.Id == job.Voice)
+                ?? throw new HelperException($"The voice {job.Voice} is not offered on this Mac.", StatusCodes.Status400BadRequest);
         var result = await services.GetRequiredService<ISingingEngine>().SingAsync(
             new SingingJob(job.Notes, job.Lyrics, voice, job.PitchShift, job.AutoShift, Path.Combine(outputs, "take.wav")),
             stage => send(new HelperEvent("stage", Stage: stage)),

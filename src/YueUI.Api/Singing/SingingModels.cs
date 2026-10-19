@@ -27,9 +27,12 @@ public sealed class SingingVoice
     /// <summary>What the voice sings in; the model sings English words with every voice.</summary>
     public string Language { get; set; } = "";
 
+    /// <summary>Made on the singing page from a recording of one's own (<see cref="SingingVoices"/>), not configured.</summary>
+    public bool Own { get; set; }
+
     /// <summary>
     /// The two singers SoulX-Singer's checkout brings as examples (<c>example/audio</c>, Apache 2.0 with the code): one
-    /// English, one Mandarin. Voices of one's own need their notes and words written out first, which is a later step.
+    /// English, one Mandarin. Voices of one's own are made on the page from a recording (<see cref="SingingVoices"/>).
     /// </summary>
     public static IReadOnlyList<SingingVoice> Defaults { get; } =
     [
@@ -38,7 +41,64 @@ public sealed class SingingVoice
     ];
 }
 
-public sealed record SingingVoiceInfo(string Id, string Label, string Language);
+/// <param name="Own">Made from a recording on the singing page, so it can be listened to and deleted.</param>
+/// <param name="Text">What the voice sings in its recording, the words SoulX-Singer hears with it.</param>
+/// <param name="Seconds">How long the phrase is that SoulX-Singer clones.</param>
+/// <param name="Low">The lowest note heard (MIDI), so a melody can be put into the voice's range.</param>
+/// <param name="High">The highest note heard.</param>
+public sealed record SingingVoiceInfo(
+    string Id,
+    string Label,
+    string Language,
+    bool Own = false,
+    string? Text = null,
+    double? Seconds = null,
+    int? Low = null,
+    int? High = null,
+    DateTimeOffset? CreatedAt = null);
+
+/// <summary>A voice of one's own as stored (<see cref="Data.SqliteSingingStore"/>); its files lie in <c>singing/voices/</c>.</summary>
+/// <param name="Lyrics">The words the singer said they sang, of which <paramref name="Text"/> is the phrase kept.</param>
+/// <param name="Notes">The notes heard in the kept phrase's recording.</param>
+/// <param name="Leftover">Syllables of the words no note was heard for; many mean the words and the singing differ.</param>
+public sealed record SingingOwnVoice(
+    string Id,
+    string Label,
+    string Lyrics,
+    string Text,
+    double Seconds,
+    int Notes,
+    int Leftover,
+    int Low,
+    int High,
+    DateTimeOffset CreatedAt)
+{
+    public SingingVoiceInfo Info => new(Id, Label, "English", true, Text, Seconds, Low, High, CreatedAt);
+}
+
+/// <summary>The answer to a new voice: the voice and what was heard in the recording.</summary>
+public sealed record SingingVoiceCreated(SingingVoiceInfo Voice, SingingVoiceMade Heard);
+
+/// <summary>What the script made of a recording (its <c>voice</c> event).</summary>
+/// <param name="Seconds">The phrase kept as the prompt.</param>
+/// <param name="RecordedSeconds">The whole recording after silence was cut.</param>
+/// <param name="Notes">Notes heard in the whole recording.</param>
+/// <param name="Held">Notes that hold the syllable before, where more notes were heard than syllables written.</param>
+/// <param name="Unsung">Notes that got no syllable.</param>
+/// <param name="Leftover">Syllables that got no note.</param>
+/// <param name="Text">The words of the kept phrase.</param>
+/// <param name="Peak">The kept phrase's peak, 0 to 1; near 1 the recording clipped.</param>
+public sealed record SingingVoiceMade(
+    double Seconds,
+    double RecordedSeconds,
+    int Notes,
+    int Held,
+    int Unsung,
+    int Leftover,
+    string Text,
+    double Peak,
+    int Low,
+    int High);
 
 /// <param name="Installed">The environment with SoulX-Singer is there.</param>
 /// <param name="ModelDownloaded">Its weights are there; deploy/install-singing.sh downloads them.</param>

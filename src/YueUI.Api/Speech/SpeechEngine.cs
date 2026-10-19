@@ -85,7 +85,14 @@ public sealed class MlxAudioEngine(IOptions<SpeechOptions> options, ILogger<MlxA
     public bool Downloaded(SpeechModel model) =>
         Directory.Exists(Path.Combine(options.Value.ResolvedModelCache, "hub", $"models--{model.Repo.Replace("/", "--", StringComparison.Ordinal)}", "snapshots"));
 
-    public Task PrepareVoiceAsync(string input, string output, CancellationToken cancellationToken)
+    public Task PrepareVoiceAsync(string input, string output, CancellationToken cancellationToken) =>
+        TrimmedVoiceAsync(input, output, cancellationToken);
+
+    /// <summary>
+    /// A recording of a voice as a 24 kHz mono WAV of at most <see cref="MaxVoiceSeconds"/>, silence cut at both ends;
+    /// the singing page's own voices are made from the same (<c>SoulXSingerEngine.MakeVoiceAsync</c>).
+    /// </summary>
+    public static Task TrimmedVoiceAsync(string input, string output, CancellationToken cancellationToken)
     {
         // Silence is cut at both ends (the reversed pass does the end): a recording starts with the tap and ends with
         // the next one, and a model copies the pauses it hears into every sentence.

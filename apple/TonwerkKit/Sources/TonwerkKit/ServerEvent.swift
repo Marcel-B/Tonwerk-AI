@@ -25,6 +25,7 @@ public enum ServerEvent: Sendable {
     case image(Components.Schemas.ImageState)
     case ace(Components.Schemas.AceJob)
     case speech(Components.Schemas.SpeechTake)
+    case singing(Components.Schemas.SingTake)
     case unknown(String)
 
     public init(name: String, data: String) throws {
@@ -49,6 +50,7 @@ public enum ServerEvent: Sendable {
         case "image": self = .image(try decode())
         case "ace": self = .ace(try decode())
         case "speech": self = .speech(try decode())
+        case "singing": self = .singing(try decode())
         default: self = .unknown(name)
         }
     }

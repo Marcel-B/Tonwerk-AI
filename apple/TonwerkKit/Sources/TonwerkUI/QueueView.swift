@@ -8,7 +8,7 @@ struct QueueView: View {
 
     private var empty: Bool {
         model.inProgress.isEmpty && model.finishedSongs.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
-            && model.runningTranscriptions.isEmpty && model.speechJobs.isEmpty
+            && model.runningTranscriptions.isEmpty && model.speechJobs.isEmpty && model.singJobs.isEmpty
             && model.aceJobs.isEmpty
     }
 
@@ -98,6 +98,14 @@ struct QueueView: View {
                         .padding(.top, 8)
                     ForEach(model.speechJobs, id: \.id) { take in
                         SpeechJobCard(take: take)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.singJobs.isEmpty {
+                    heading("Singen")
+                        .padding(.top, 8)
+                    ForEach(model.singJobs, id: \.id) { take in
+                        SingJobCard(take: take)
                             .transition(.opacity)
                     }
                 }
@@ -555,6 +563,47 @@ private struct SpeechJobCard: View {
                     .help("Abbrechen")
                 }
                 if take.stage == "cleaning", let progress = take.progress {
+                    ProgressView(value: min(max(progress, 0), 1))
+                }
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// A take of the singing page in the works, with its stage and a cancel.
+private struct SingJobCard: View {
+    @Environment(AppModel.self) private var model
+    let take: Components.Schemas.SingTake
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "music.mic")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(take.title ?? "").lineLimit(1)
+                        Text(take.voiceLabel ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(SingSession.stageName(take))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { try? await model.deleteSingTake(take.id) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                if take.stage == "singing", let progress = take.progress {
                     ProgressView(value: min(max(progress, 0), 1))
                 }
             }

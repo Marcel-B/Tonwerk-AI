@@ -2,7 +2,8 @@ import SwiftUI
 import TonwerkKit
 
 /// The models that take turns in the Mac's 24 GB, as the web page's `QueueOverview.vue` shows them over the queue:
-/// which one holds the memory now and how much waits for each. The occasional ones (cover, video, speech, ACE-Step)
+/// which one holds the memory now and how much waits for each. The occasional ones (cover, video, speech, singing,
+/// ACE-Step)
 /// only get a tile while they have something in the works.
 enum QueueModel: String, CaseIterable, Identifiable {
     case yue
@@ -10,6 +11,7 @@ enum QueueModel: String, CaseIterable, Identifiable {
     case voice
     case image
     case speech
+    case singing
     case ace
     case video
     case transcription
@@ -23,6 +25,7 @@ enum QueueModel: String, CaseIterable, Identifiable {
         case .voice: String(localized: "Stimme")
         case .image: String(localized: "Bild")
         case .speech: String(localized: "Sprache")
+        case .singing: String(localized: "Gesang")
         case .ace: "ACE-Step"
         case .video: String(localized: "Video")
         case .transcription: String(localized: "Transkription")
@@ -36,6 +39,7 @@ enum QueueModel: String, CaseIterable, Identifiable {
         case .voice: "person.wave.2"
         case .image: "paintbrush.pointed"
         case .speech: "bubble.left.and.text.bubble.right"
+        case .singing: "music.mic"
         case .ace: "waveform.path"
         case .video: "film"
         case .transcription: "music.quarternote.3"
@@ -49,6 +53,7 @@ enum QueueModel: String, CaseIterable, Identifiable {
         case .voices: .voice
         case .images: .image
         case .speech: .speech
+        case .singing: .singing
         case .ace: .ace
         case nil: workerBusy ? .yue : nil
         }
@@ -69,6 +74,7 @@ extension AppModel {
         case .video: videoJobs.filter { $0.stage != nil && $0.stage != "queued" }.count
         case .transcription: runningTranscriptions.count
         case .speech: speechJobs.filter { ($0.stage ?? "queued") != "queued" }.count
+        case .singing: singJobs.filter { ($0.stage ?? "queued") != "queued" }.count
         case .ace: aceJobs.filter { ($0.stage ?? "queued") != "queued" }.count
         }
     }
@@ -82,6 +88,7 @@ extension AppModel {
         case .video: videoJobs.filter { ($0.stage ?? "queued") == "queued" }.count
         case .transcription: waitingTranscriptions.count
         case .speech: speechJobs.filter { ($0.stage ?? "queued") == "queued" }.count
+        case .singing: singJobs.filter { ($0.stage ?? "queued") == "queued" }.count
         case .ace: aceJobs.filter { ($0.stage ?? "queued") == "queued" }.count
         }
     }
@@ -95,7 +102,7 @@ extension AppModel {
     /// The queue's badge: everything waiting or in the works.
     var queueCount: Int {
         queue.count + inProgress.count + voiceJobs.count + videoJobs.count + runningTranscriptions.count
-            + speechJobs.count + aceJobs.count
+            + speechJobs.count + singJobs.count + aceJobs.count
     }
 
     /// The tiles to show: the three that always take turns, and the occasional ones while they have work.

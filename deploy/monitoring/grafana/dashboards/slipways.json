@@ -1,0 +1,798 @@
+{
+  "title": "Slipways",
+  "uid": "slipways",
+  "tags": ["slipways"],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-7d", "to": "now" },
+  "editable": true,
+  "templating": {
+    "list": [
+      {
+        "name": "level",
+        "label": "Stufe",
+        "type": "custom",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "query": "debug,info,warning,error",
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "source",
+        "label": "Quelle",
+        "type": "custom",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "query": "api,http,db,gauges,shapes,osm,http-client",
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "search",
+        "label": "Suche",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Jetzt",
+      "id": 1,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Erreichbar",
+      "id": 2,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "max(up{app=\"slipways\"})",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"value": null, "color": "red"}, {"value": 1, "color": "green"}]
+          },
+          "decimals": 0,
+          "noValue": "kein Ziel",
+          "mappings": [
+            {
+              "type": "value",
+              "options": { "0": {"text": "nein", "color": "red"}, "1": {"text": "ja", "color": "green"} }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Ob Prometheus /metrics von slipways-1 abrufen kann (über tailscale serve)."
+    },
+    {
+      "type": "stat",
+      "title": "Slipanlagen",
+      "id": 3,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(slipways_places{app=\"slipways\",kind=\"slipway\"})",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{"value": null, "color": "blue"}] },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Slipanlagen in der Datenbank, eigene und aus OpenStreetMap."
+    },
+    {
+      "type": "stat",
+      "title": "Marinas",
+      "id": 4,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(slipways_places{app=\"slipways\",kind=\"marina\"})",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{"value": null, "color": "blue"}] },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Marinas in der Datenbank, eigene und aus OpenStreetMap."
+    },
+    {
+      "type": "stat",
+      "title": "Pegel",
+      "id": 5,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(slipways_places{app=\"slipways\",kind=\"station\"})",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{"value": null, "color": "blue"}] },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Pegelstationen von PEGELONLINE."
+    },
+    {
+      "type": "stat",
+      "title": "Fehlläufe (24 h)",
+      "id": 6,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(increase(slipways_job_runs_total{app=\"slipways\",result=\"failure\"}[24h])) or vector(0)",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"value": null, "color": "green"}, {"value": 1, "color": "red"}]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Gescheiterte Läufe der Hintergrund-Jobs (Pegel, Gewässerverläufe, OSM-Import) in den letzten 24 Stunden."
+    },
+    {
+      "type": "stat",
+      "title": "Fehler (24 h)",
+      "id": 7,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(increase(http_requests_received_total{app=\"slipways\",code=~\"5..\"}[24h])) or vector(0)",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"value": null, "color": "green"}, {"value": 1, "color": "red"}]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Antworten mit Status 5xx in den letzten 24 Stunden."
+    },
+    {
+      "type": "row",
+      "title": "Hintergrund-Jobs",
+      "id": 8,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Letzter Erfolg vor",
+      "id": 9,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "time() - max by (task) (slipways_job_last_success_timestamp_seconds{app=\"slipways\"})",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{task}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{"value": null, "color": "green"}] },
+          "unit": "s",
+          "decimals": 0,
+          "noValue": "noch kein Erfolg seit dem Start"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "gauges" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [{"value": null, "color": "green"}, {"value": 3600, "color": "red"}]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "shapes" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [{"value": null, "color": "green"}, {"value": 10800, "color": "red"}]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "osm" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [{"value": null, "color": "green"}, {"value": 2678400, "color": "red"}]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Zeit seit dem letzten erfolgreichen Lauf je Job. Der Wert beginnt nach jedem Neustart der API neu; bis zum ersten Erfolg fehlt der Job. Rot ab 1 Stunde (gauges, alle 15 Minuten), 3 Stunden (shapes, stündlich) bzw. 31 Tagen (osm, alle 30 Tage)."
+    },
+    {
+      "type": "timeseries",
+      "title": "Läufe",
+      "id": 10,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 6 },
+      "targets": [
+        {
+          "expr": "sum by (task, result) (increase(slipways_job_runs_total{app=\"slipways\"}[1h])) > 0",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "{{task}} {{result}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 1, "fillOpacity": 60, "showPoints": "never", "drawStyle": "bars" },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "gauges failure" },
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          },
+          {
+            "matcher": { "id": "byName", "options": "shapes failure" },
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          },
+          {
+            "matcher": { "id": "byName", "options": "osm failure" },
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          }
+        ]
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Läufe je Job und Ergebnis pro Stunde."
+    },
+    {
+      "type": "timeseries",
+      "title": "Dauer",
+      "id": 11,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 6 },
+      "targets": [
+        {
+          "expr": "sum by (task) (increase(slipways_job_duration_seconds_sum{app=\"slipways\"}[6h])) / sum by (task) (increase(slipways_job_duration_seconds_count{app=\"slipways\"}[6h]))",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "{{task}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": {"lineWidth": 1, "fillOpacity": 10, "showPoints": "never"}, "unit": "s" },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Mittlere Dauer der Läufe der letzten 6 Stunden je Job."
+    },
+    {
+      "type": "timeseries",
+      "title": "OSM-Import",
+      "id": 12,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "expr": "sum by (kind, change) (increase(slipways_osm_import_changes_total{app=\"slipways\"}[1d])) > 0",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "{{kind}} {{change}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 1, "fillOpacity": 60, "showPoints": "never", "drawStyle": "bars" },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Vom OpenStreetMap-Import angelegte (added), aktualisierte (updated) und mit eigenen Einträgen verknüpfte (linked) Slipanlagen und Marinas pro Tag."
+    },
+    {
+      "type": "stat",
+      "title": "Aus OSM verschwunden",
+      "id": 13,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 13 },
+      "targets": [
+        {
+          "expr": "max(slipways_osm_missing_elements{app=\"slipways\"})",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"value": null, "color": "green"}, {"value": 1, "color": "orange"}]
+          },
+          "decimals": 0,
+          "noValue": "noch kein Import seit dem Start"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Einträge, deren OSM-Element der letzte Import nicht mehr fand. Sie bleiben erhalten; die Liste steht im Protokoll (Quelle osm)."
+    },
+    {
+      "type": "stat",
+      "title": "Overpass ausgelastet (24 h)",
+      "id": 14,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 13 },
+      "targets": [
+        {
+          "expr": "sum(increase(slipways_overpass_busy_responses_total{app=\"slipways\"}[24h])) or vector(0)",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"value": null, "color": "green"}, {"value": 1, "color": "orange"}]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Wie oft Overpass mit 429/502/503/504 antwortete; der Import versucht es dann mit wachsender Pause erneut."
+    },
+    {
+      "type": "row",
+      "title": "Bestand",
+      "id": 15,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 20 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Einträge nach Quelle",
+      "id": 16,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 21 },
+      "targets": [
+        {
+          "expr": "max by (kind, source) (slipways_places{app=\"slipways\"})",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "{{kind}} ({{source}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": {"lineWidth": 1, "fillOpacity": 10, "showPoints": "never"}, "decimals": 0 },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Slipanlagen und Marinas nach Quelle (manual: eigene, osm: OpenStreetMap) und Pegel; jede Minute gezählt."
+    },
+    {
+      "type": "timeseries",
+      "title": "Datenbank",
+      "id": 17,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 21 },
+      "targets": [
+        {
+          "expr": "max(slipways_database_size_bytes{app=\"slipways\"})",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "SQLite samt WAL"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": {"lineWidth": 1, "fillOpacity": 10, "showPoints": "never"}, "unit": "bytes" },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Größe der SQLite-Datei samt Write-Ahead-Log."
+    },
+    {
+      "type": "row",
+      "title": "Nutzung",
+      "id": 18,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Anfragen pro Minute",
+      "id": 19,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 29 },
+      "targets": [
+        {
+          "expr": "label_replace(sum by (endpoint) (rate(http_requests_received_total{app=\"slipways\",endpoint!=\"/metrics\"}[5m])) * 60 > 0, \"endpoint\", \"(ohne Route)\", \"endpoint\", \"\")",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "{{endpoint}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": {"lineWidth": 1, "fillOpacity": 10, "showPoints": "never"}, "decimals": 1 },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Ohne die Abrufe von Prometheus. (ohne Route): Anfragen, zu denen es keine Route gibt (404)."
+    },
+    {
+      "type": "timeseries",
+      "title": "Antwortzeit",
+      "id": 20,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 29 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"slipways\",endpoint!=\"/metrics\"}[5m])))",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "Median"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"slipways\",endpoint!=\"/metrics\"}[5m])))",
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "95 %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": {"lineWidth": 1, "fillOpacity": 10, "showPoints": "never"}, "unit": "s" },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Median und 95. Perzentil der Antwortzeit, ohne die Abrufe von Prometheus."
+    },
+    {
+      "type": "timeseries",
+      "title": "Antworten nach Status",
+      "id": 21,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 36 },
+      "targets": [
+        {
+          "expr": "sum by (code) (increase(http_requests_received_total{app=\"slipways\",endpoint!=\"/metrics\"}[1h])) > 0",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "{{code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": { "mode": "normal", "group": "A" }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Antworten pro Stunde nach Statuscode."
+    },
+    {
+      "type": "timeseries",
+      "title": "Fehlerhafte Anfragen",
+      "id": 22,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 36 },
+      "targets": [
+        {
+          "expr": "label_replace(sum by (endpoint, code) (increase(http_requests_received_total{app=\"slipways\",code=~\"5..\"}[1h])) > 0, \"endpoint\", \"(ohne Route)\", \"endpoint\", \"\")",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "{{code}} {{endpoint}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 1, "fillOpacity": 60, "showPoints": "never", "drawStyle": "bars" },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Antworten mit Status 5xx pro Stunde je Route."
+    },
+    {
+      "type": "row",
+      "title": "Server",
+      "id": 23,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Arbeitsspeicher",
+      "id": 24,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 44 },
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{app=\"slipways\"}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "API"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": {"lineWidth": 1, "fillOpacity": 10, "showPoints": "never"}, "unit": "bytes" },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Resident Memory des API-Prozesses."
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU",
+      "id": 25,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 44 },
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total{app=\"slipways\"}[5m])",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "API"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "CPU-Kerne, die der API-Prozess im Mittel belegt."
+    },
+    {
+      "type": "timeseries",
+      "title": "Logversand an Loki",
+      "id": 26,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 44 },
+      "targets": [
+        {
+          "expr": "sum(rate(slipways_loki_lines_pushed_total{app=\"slipways\"}[5m])) * 60",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "verschickt"
+        },
+        {
+          "expr": "sum by (reason) (rate(slipways_loki_lines_dropped_total{app=\"slipways\"}[5m])) * 60 > 0",
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "legendFormat": "verworfen ({{reason}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": {"lineWidth": 1, "fillOpacity": 10, "showPoints": "never"}, "decimals": 1 },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "verworfen (push_failed)" },
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          },
+          {
+            "matcher": { "id": "byName", "options": "verworfen (queue_full)" },
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]
+          }
+        ]
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Logzeilen pro Minute. Verworfen wird, wenn Loki nicht erreichbar ist (push_failed) oder die Warteschlange voll ist (queue_full)."
+    },
+    {
+      "type": "row",
+      "title": "Protokoll",
+      "id": 27,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 51 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Warnungen und Fehler",
+      "id": 28,
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 52 },
+      "targets": [
+        {
+          "expr": "sum by (level) (count_over_time({app=\"slipways\", level=~\"warning|error\"}[5m]))",
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "legendFormat": "{{level}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 1, "fillOpacity": 60, "showPoints": "never", "drawStyle": "bars" },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "warning" },
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]
+          },
+          {
+            "matcher": { "id": "byName", "options": "error" },
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          }
+        ]
+      },
+      "options": { "legend": {"displayMode": "list", "placement": "bottom"} },
+      "description": "Logzeilen mit Stufe warning oder error aus Loki."
+    },
+    {
+      "type": "logs",
+      "title": "Protokoll",
+      "id": 29,
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 58 },
+      "targets": [
+        {
+          "expr": "{app=\"slipways\", level=~\"$level\", source=~\"$source\"} |= `$search`",
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none"
+      }
+    }
+  ]
+}

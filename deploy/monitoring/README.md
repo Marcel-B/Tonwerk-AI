@@ -59,6 +59,8 @@ Das Dashboard **Finanz-O-Mat** (`grafana/dashboards/finanzomat.json`) zeigt Erre
 
 Das Dashboard **MyJourney** (`grafana/dashboards/myjourney.json`) zeigt Erreichbarkeit, den Bestand an Orten und Reisen, offene Live-Verbindungen, Anfragen und Antwortzeiten, Datenänderungen, Nextcloud-Backups, Speicher und CPU sowie das Protokoll. Die App bindet sich über ihre Env-Variablen an (`MYJOURNEY_METRICS_ENABLED`, `MYJOURNEY_LOKI_URL`; Ziel `prometheus/targets/myjourney.yml`, siehe DEPLOY.md §8 von [MyJourney](https://github.com/Marcel-B/MyJourney/blob/main/DEPLOY.md)).
 
+Das Dashboard **Slipways** (`grafana/dashboards/slipways.json`) zeigt Erreichbarkeit, den Bestand an Slipanlagen, Marinas und Pegeln (nach Quelle: eigene Daten oder OpenStreetMap), die Hintergrund-Jobs (Pegelstände, Gewässerverläufe, OSM-Import: letzter Erfolg, Läufe, Dauer, Änderungen, ausgelastetes Overpass), Anfragen und Antwortzeiten, Größe der Datenbank, Speicher, CPU und Logversand sowie das Protokoll mit Filtern für Stufe, Quelle und Text. Angebunden ist nur die Produktion slipways.de (`slipways-1`). Das Ziel legt `deploy/monitoring/add-prometheus-target.sh` an, die Logs richtet `deploy/lxc/setup-loki.sh` ein, beide im [Slipways-Repo](https://github.com/Marcel-B/Slipways/blob/master/deploy/README.md#überwachung).
+
 Prometheus behält 90 Tage (`PROMETHEUS_RETENTION`), Loki 30 Tage (`loki/loki.yml`).
 
 ## Wie viel ist das?

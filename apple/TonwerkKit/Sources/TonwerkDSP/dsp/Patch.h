@@ -5,7 +5,7 @@
 #include <cstddef>
 
 /**
- * A sound, as Tonwerk's browser synthesizers describe it (YuE-UI, ClientApp/src/logic/synth.ts, fm.ts, effects.ts).
+ * A sound, as Tonwerk's browser synthesizers describe it (Tonwerk-AI, ClientApp/src/logic/synth.ts, fm.ts, effects.ts).
  * The fields, units and ranges are theirs, so a patch saved in Tonwerk plays here unchanged; PatchJson.cpp reads and
  * writes the same JSON. The plugin keeps both engines' settings at once and plays the one `engine` names, so switching
  * back and forth loses nothing.

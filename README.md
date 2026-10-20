@@ -26,7 +26,7 @@ Auf einem Mac, auf dem außer macOS nichts installiert ist, richtet ein Skript a
 
 ```sh
 xcode-select --install                 # Command Line Tools (git, clang), einmal
-git clone https://github.com/Marcel-B/YuE-UI.git ~/repos/YueUI
+git clone https://github.com/Marcel-B/Tonwerk-AI.git ~/repos/YueUI
 ~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper, --singing oder --all für mehr
 ```
 
@@ -580,7 +580,7 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `Monitoring:Loki:Host` (`Monitoring__Loki__Host`) | Name des Rechners | Label `host` |
 | `Monitoring:Loki:MinLevel` (`Monitoring__Loki__MinLevel`) | `info` | Zeilen darunter bleiben auf dem Mac |
 | `Monitoring:Loki:Username` / `Monitoring:Loki:Password` | – | Basic Auth, falls Loki hinter einem Proxy das verlangt |
-| `Push:Subject` (`Push__Subject`) | `https://github.com/Marcel-B/YuE-UI` | Kontaktadresse (`mailto:` oder `https:`) für die Push-Dienste; Apple lehnt Adressen wie `mailto:ich@localhost` ab |
+| `Push:Subject` (`Push__Subject`) | `https://github.com/Marcel-B/Tonwerk-AI` | Kontaktadresse (`mailto:` oder `https:`) für die Push-Dienste; Apple lehnt Adressen wie `mailto:ich@localhost` ab |
 | `Backup:EnvFile` (`Backup__EnvFile`) | `~/.config/tonwerk/nextcloud.env` | `.env`-Datei mit `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME` und `NEXTCLOUD_APP_PASSWORD` für die Datensicherung; fehlt eins davon, ist sie aus |
 | `Backup:At` (`Backup__At`) | `03:00` | Uhrzeit der nächtlichen Sicherung; leer heißt nur von Hand |
 | `Backup:TimeZone` (`Backup__TimeZone`) | `Europe/Berlin` | Zeitzone dafür |

@@ -53,6 +53,39 @@ public sealed class StorageEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Sung_takes_and_own_voices_count_as_work_and_soulx_singer_as_models_and_programs()
+    {
+        var store = _app.Services.GetRequiredService<SqliteSingingStore>();
+        var now = DateTimeOffset.UtcNow;
+        store.Add(new Api.Singing.SingTake { Id = "take1", Title = "Twinkle", VoiceLabel = "Englisch", Stage = "done", CreatedAt = now }, []);
+        Directory.CreateDirectory(Path.GetDirectoryName(store.AudioPath("take1"))!);
+        File.WriteAllBytes(store.AudioPath("take1"), new byte[400]);
+        store.AddVoice(new Api.Singing.SingingOwnVoice("voice1", "Meine Stimme", "", "twinkle", 5, 7, 0, 60, 67, now));
+        Directory.CreateDirectory(Path.GetDirectoryName(store.VoiceAudioPath("voice1"))!);
+        File.WriteAllBytes(store.VoiceAudioPath("voice1"), new byte[100]);
+        File.WriteAllText(store.VoiceMetadataPath("voice1"), "{}");
+        // By default SoulX-Singer's environment and weights lie in the same folder as the takes.
+        var singing = Path.Combine(_app.Root, "singing");
+        Directory.CreateDirectory(Path.Combine(singing, "env", "bin"));
+        File.WriteAllBytes(Path.Combine(singing, "env", "bin", "python"), new byte[1000]);
+        Directory.CreateDirectory(Path.Combine(singing, "models", "SoulX-Singer"));
+        File.WriteAllBytes(Path.Combine(singing, "models", "SoulX-Singer", "model.pt"), new byte[3000]);
+
+        var overview = (await _client.GetFromJsonAsync<StorageOverview>("/api/storage/overview", TestApp.Json))!;
+
+        var work = Category(overview, "singing");
+        Assert.Equal(("work", 2, 502L), (work.Group, work.Count, work.Bytes));
+        Assert.Equal(new[] { ("singtake", "take1", 400L), ("singvoice", "voice1", 102L) },
+            work.Largest.Select(i => (i.Kind, i.Id, i.Bytes)));
+        Assert.Equal(3000, Category(overview, "singingModels").Bytes);
+        Assert.True(Category(overview, "programs").Bytes >= 1000);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync("/api/singing/voices/voice1")).StatusCode);
+        overview = (await _client.GetFromJsonAsync<StorageOverview>("/api/storage/overview", TestApp.Json))!;
+        Assert.Equal((1, 400L), (Category(overview, "singing").Count, Category(overview, "singing").Bytes));
+    }
+
+    [Fact]
     public async Task Cleaning_up_removes_old_files_without_entry_and_streaming_copies()
     {
         _app.AddSong(Run, "song1");

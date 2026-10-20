@@ -494,7 +494,17 @@ export interface StorageVolume {
 export type StorageGroup = 'work' | 'app' | 'models'
 
 export type StorageItemKind =
-  'song' | 'version' | 'stems' | 'swap' | 'video' | 'cover' | 'image' | 'transcription' | 'take'
+  | 'song'
+  | 'version'
+  | 'stems'
+  | 'swap'
+  | 'video'
+  | 'cover'
+  | 'image'
+  | 'transcription'
+  | 'take'
+  | 'singtake'
+  | 'singvoice'
 
 export interface StorageCategory {
   key: string

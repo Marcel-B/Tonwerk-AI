@@ -152,6 +152,7 @@ final class StorageSession {
         case "covers": String(localized: "Cover")
         case "images": String(localized: "Gemalte Bilder")
         case "speech": String(localized: "Sprachlabor")
+        case "singing": String(localized: "Singen")
         case "voices": String(localized: "Referenzstimmen")
         case "loras": "LoRAs"
         case "stream": String(localized: "Streaming-Kopien")
@@ -166,6 +167,7 @@ final class StorageSession {
         case "seedvcModels": "Seed-VC"
         case "montageModels": String(localized: "CLIP für Fotovideos")
         case "aceModels": String(localized: "ACE-Step-Modelle")
+        case "singingModels": "SoulX-Singer"
         case "programs": String(localized: "Python-Umgebungen und Quellen")
         default: key
         }
@@ -217,6 +219,8 @@ extension AppModel {
         case "image": "api/images/\(id)"
         case "transcription": "api/transcriptions/\(id)"
         case "take": "api/speech/takes/\(id)"
+        case "singtake": "api/singing/\(id)"
+        case "singvoice": "api/singing/voices/\(id)"
         default: nil
         }
     }

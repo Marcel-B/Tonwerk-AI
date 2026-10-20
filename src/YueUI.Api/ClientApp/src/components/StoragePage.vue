@@ -7,6 +7,8 @@ import {
   deleteImage,
   deleteSong,
   deleteSpeechTake,
+  deleteSingingTake,
+  deleteSingingVoice,
   deleteStems,
   deleteSwap,
   deleteTranscription,
@@ -243,6 +245,10 @@ function remove(item: StorageItem): Promise<void> {
       return deleteTranscription(item.id)
     case 'take':
       return deleteSpeechTake(item.id)
+    case 'singtake':
+      return deleteSingingTake(item.id)
+    case 'singvoice':
+      return deleteSingingVoice(item.id)
   }
 }
 

@@ -35,6 +35,8 @@ final class StorageTests: XCTestCase {
             AppModel.deletePath(kind: "version", id: "v1", songId: "r/song1"), "api/songs/r/song1/versions/v1")
         XCTAssertNil(AppModel.deletePath(kind: "version", id: "v1", songId: nil))
         XCTAssertEqual(AppModel.deletePath(kind: "take", id: "t1", songId: nil), "api/speech/takes/t1")
+        XCTAssertEqual(AppModel.deletePath(kind: "singtake", id: "s1", songId: nil), "api/singing/s1")
+        XCTAssertEqual(AppModel.deletePath(kind: "singvoice", id: "v1", songId: nil), "api/singing/voices/v1")
         XCTAssertNil(AppModel.deletePath(kind: "lora", id: "x", songId: nil), "a kind this app does not know")
     }
 

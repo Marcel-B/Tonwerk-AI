@@ -722,6 +722,16 @@ export async function deleteSpeechTake(id: string): Promise<void> {
   await send(`/api/speech/takes/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+/** Removes a sung take with its audio (the singing page itself is the app's). */
+export async function deleteSingingTake(id: string): Promise<void> {
+  await send(`/api/singing/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** Removes an own voice to sing with; refused (409) while a waiting take uses it. */
+export async function deleteSingingVoice(id: string): Promise<void> {
+  await send(`/api/singing/voices/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 /** A speech recording cleaned of noise by one model; it waits with the takes and reports as a `speech` event. */
 export async function cleanSpeech(file: Blob, fileName: string, model: string): Promise<SpeechTake> {
   const form = new FormData()

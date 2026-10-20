@@ -6,6 +6,7 @@ using YueUI.Api.Library;
 using YueUI.Api.Loras;
 using YueUI.Api.Logs;
 using YueUI.Api.Share;
+using YueUI.Api.Singing;
 using YueUI.Api.Speech;
 using YueUI.Api.Video;
 using YueUI.Api.Voices;
@@ -36,7 +37,7 @@ public sealed record StorageCategory(
     long Orphaned,
     IReadOnlyList<StorageItem> Largest);
 
-/// <param name="Kind">song, version, stems, swap, video, cover, image, transcription or take.</param>
+/// <param name="Kind">song, version, stems, swap, video, cover, image, transcription, take, singtake or singvoice.</param>
 /// <param name="Id">The entry's own id (for a song and a cover the song id <c>run/songN</c>).</param>
 /// <param name="SongId">The song it belongs to, where it belongs to one.</param>
 /// <param name="Detail">A word about it that is not translated: a voice, a format, a model, a file name.</param>
@@ -71,6 +72,7 @@ public sealed class StorageScanner(
     SqliteVideoStore videos,
     SqliteCoverStore covers,
     SqliteSpeechStore speech,
+    SqliteSingingStore singing,
     ImageMaker images,
     LoraLibrary loras,
     StreamCopies streams,
@@ -84,6 +86,7 @@ public sealed class StorageScanner(
     IOptions<AudioMidiOptions> midiOptions,
     IOptions<LogOptions> logOptions,
     IOptions<Ace.AceOptions> aceOptions,
+    IOptions<SingingOptions> singingOptions,
     TimeProvider time)
 {
     /// <summary>How many entries a category lists; the page shows the first few and the rest on request.</summary>
@@ -185,6 +188,18 @@ public sealed class StorageScanner(
             + Measure(Path.Combine(speechData, "sources")).Bytes, takes.Count,
             [Path.Combine(speechData, "takes")], items: takes);
 
+        // Sung takes lie loose in singing/, the own voices to sing with in its subfolder voices/. By default that
+        // folder is also SoulX-Singer's root with its environment and weights, so only these two are counted here.
+        var singingData = Path.Combine(Data, "singing");
+        var sungTakes = (Safe(singing.All) ?? [])
+            .Select(t => new StorageItem("singtake", t.Id, t.SongId, t.Title, t.VoiceLabel, Length(singing.AudioPath(t.Id)), t.CreatedAt));
+        var ownVoices = (Safe(singing.Voices) ?? [])
+            .Select(v => new StorageItem("singvoice", v.Id, null, v.Label, null,
+                Length(singing.VoiceAudioPath(v.Id)) + Length(singing.VoiceMetadataPath(v.Id)), v.CreatedAt));
+        var singingItems = sungTakes.Concat(ownVoices).ToList();
+        Add("singing", "work", Files(singingData, "*.wav").Sum(f => f.Length) + Measure(Path.Combine(singingData, "voices")).Bytes,
+            singingItems.Count, [singingData], items: singingItems);
+
         var voices = Measure(Path.Combine(Data, "voices"));
         Add("voices", "work", voices.Bytes, voices.Files, [Path.Combine(Data, "voices")]);
         var lora = Measure(loras.Folder);
@@ -206,6 +221,8 @@ public sealed class StorageScanner(
         var montage = montageOptions.Value;
         var ace = aceOptions.Value;
         var voice = voiceOptions.Value;
+        var sing = singingOptions.Value;
+        var singingModels = Path.GetDirectoryName(sing.ResolvedModel) ?? sing.ResolvedRoot;
         var lmStudio = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".lmstudio", "models");
         AddModel("yue2", paths.ModelCache);
         AddModel("ane", Path.Combine(paths.InstallRoot, "ane-cache"));
@@ -216,6 +233,7 @@ public sealed class StorageScanner(
         AddModel("seedvcModels", voice.ResolvedSeedVcModels);
         AddModel("montageModels", montage.ResolvedModelCache);
         AddModel("aceModels", ace.ResolvedModels);
+        AddModel("singingModels", singingModels);
 
         // The Python environments and sources: YuE Studio's installation without its models, the voice engines
         // without theirs, and each tool's env.
@@ -232,6 +250,10 @@ public sealed class StorageScanner(
             Measure(Path.Combine(montage.ResolvedRoot, "env")),
             Measure(midiOptions.Value.ResolvedRoot),
             Measure(ace.ResolvedRoot, skip: [ace.ResolvedModels]),
+            // SoulX-Singer's checkout, environment and CMUdict; its weights are singingModels.
+            Measure(Path.Combine(sing.ResolvedRoot, "env")),
+            Measure(sing.ResolvedSource),
+            Measure(sing.ResolvedNltkData),
         };
         Add("programs", "models", programs.Sum(p => p.Bytes), 0, [paths.InstallRoot]);
 

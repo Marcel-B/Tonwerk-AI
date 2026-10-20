@@ -26,8 +26,8 @@ Auf einem Mac, auf dem außer macOS nichts installiert ist, richtet ein Skript a
 
 ```sh
 xcode-select --install                 # Command Line Tools (git, clang), einmal
-git clone https://github.com/Marcel-B/Tonwerk-AI.git ~/repos/YueUI
-~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper, --singing oder --all für mehr
+git clone https://github.com/Marcel-B/Tonwerk-AI.git ~/repos/Tonwerk-AI
+~/repos/Tonwerk-AI/deploy/setup-mac.sh # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper, --singing oder --all für mehr
 ```
 
 Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell, mit `--singing` SoulX-Singer für die Seite **Singen**.

@@ -21,6 +21,7 @@ public sealed class LokiShipper(
     LogFeed feed,
     IOptions<MonitoringOptions> options,
     IHttpClientFactory clients,
+    TimeProvider time,
     ILogger<LokiShipper> logger) : BackgroundService
 {
     public const string HttpClientName = "loki";
@@ -37,11 +38,15 @@ public sealed class LokiShipper(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Said once at every start, since a settings file that lost its address switches shipping off without a
+        // trace (2026-10-15 to 10-20 went unnoticed that way).
         if (feed.Lines is not { } lines)
         {
+            logger.LogInformation("Loki is off: Monitoring:Loki:Url is not set, the log stays on this Mac");
             return;
         }
         var host = string.IsNullOrWhiteSpace(Loki.Host) ? Environment.MachineName : Loki.Host;
+        logger.LogInformation("Sending the log to Loki as host {Host}", host);
         try
         {
             while (await lines.WaitToReadAsync(stoppingToken))
@@ -107,6 +112,7 @@ public sealed class LokiShipper(
                 using var response = await clients.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
                 if (response.IsSuccessStatusCode)
                 {
+                    feed.Sent(time.GetUtcNow());
                     if (_failing)
                     {
                         _failing = false;
@@ -138,6 +144,7 @@ public sealed class LokiShipper(
 
     private void Failed(string problem)
     {
+        feed.Failed(time.GetUtcNow());
         if (!_failing)
         {
             _failing = true;

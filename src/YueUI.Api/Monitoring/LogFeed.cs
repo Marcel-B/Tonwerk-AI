@@ -39,6 +39,24 @@ public sealed class LogFeed
 
     public IReadOnlyDictionary<(string Source, string Level), long> Counts => _counts;
 
+    /// <summary>Whether shipping to Loki is configured at all; a missing address otherwise switches it off silently.</summary>
+    public bool Shipping => _lines is not null;
+
+    /// <summary>When Loki last took a batch; null before the first one.</summary>
+    public DateTimeOffset? LastSent { get; private set; }
+
+    /// <summary>Since when Loki has refused or not answered; null while it takes the log.</summary>
+    public DateTimeOffset? FailingSince { get; private set; }
+
+    /// <summary>Set by the <see cref="LokiShipper"/>, read by the log report.</summary>
+    public void Sent(DateTimeOffset time)
+    {
+        LastSent = time;
+        FailingSince = null;
+    }
+
+    public void Failed(DateTimeOffset time) => FailingSince ??= time;
+
     public void Add(LogLine line)
     {
         _counts.AddOrUpdate((line.Source, line.Level), 1, (_, count) => count + 1);

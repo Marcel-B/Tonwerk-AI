@@ -110,6 +110,7 @@ public sealed class LogEndpointTests : IDisposable
         Assert.Contains("Updater: deployed def5678", report);
         Assert.Contains("Engines: separator service, Seed-VC service", report);
         Assert.Contains("Busy: no", report);
+        Assert.Contains("Loki: off (no address set)", report);
         Assert.Matches(@"\n  \S+ \S+ INFO voices: Separating song1\n\S+ \S+ WARNING voices: The version v1 of song1 failed\n    System.IO.IOException: no space", report);
         Assert.DoesNotContain("Unrelated", report);
     }

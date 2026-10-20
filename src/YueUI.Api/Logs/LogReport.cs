@@ -26,6 +26,7 @@ public sealed class LogReport(
     IOptions<SpeechOptions> speechOptions,
     IOptions<Images.ImageOptions> imageOptions,
     IOptions<DataOptions> dataOptions,
+    Monitoring.LogFeed feed,
     TimeProvider time)
 {
     /// <summary>Warnings and errors listed; the newest are kept.</summary>
@@ -37,6 +38,15 @@ public sealed class LogReport(
     private const int MaxText = 3000;
 
     private static readonly TimeSpan ContextWindow = TimeSpan.FromMinutes(5);
+
+    /// <summary>Whether the log reaches Loki; the address stays out, as everything else of the settings.</summary>
+    private string Loki() => feed switch
+    {
+        { Shipping: false } => "off (no address set)",
+        { FailingSince: { } since } => $"failing since {Stamp(since)}",
+        { LastSent: { } sent } => $"on, last sent {Stamp(sent)}",
+        _ => "on, nothing sent yet",
+    };
 
     public string Build(TimeSpan span)
     {
@@ -62,6 +72,7 @@ public sealed class LogReport(
             + $"SheetSage2 {(paths.SheetSageInstalled ? "installed" : "missing")}, YuE2 worker {(File.Exists(paths.WorkerScript) ? "installed" : "missing")}");
         var busy = WorkerEndpoints.Busy(worker, memory, videos);
         text.AppendLine($"Busy: {(busy.Busy ? string.Join(", ", busy.Reasons) : "no")}");
+        text.AppendLine($"Loki: {Loki()}");
         text.AppendLine();
 
         var hours = span.TotalHours.ToString("0.#", CultureInfo.InvariantCulture);

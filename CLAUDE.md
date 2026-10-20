@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Tonwerk-AI (visible name since 2026-10-18, before that Tonwerk, originally YuE UI; plain "Tonwerk" is now the Synth repository's plugin app; only the visible name changed, the repo, projects, paths, data folder `YuE UI`, `yueui.db` and the LaunchAgent label keep the old one so deploys and data stay put) is a web interface for YuE Studio (a native macOS app around the YuE2 music model), meant to be used remotely through Tailscale. An ASP.NET Core Minimal API runs YuE Studio's own Python worker as a child process and serves a Vue frontend under `/ui`. README.md (German) is the user documentation. The structure follows `~/repos/YuE_To_Logic` (same SpaProxy/Vite setup, `ClientAppEndpoints`, test style).
+Tonwerk-AI (visible name since 2026-10-18, before that Tonwerk, originally YuE UI; plain "Tonwerk" is now the Synth repository's plugin app; the GitHub repository is `Marcel-B/Tonwerk-AI` since 2026-10-20, before that `Marcel-B/YuE-UI`; the Mac's checkout `~/repos/Tonwerk-AI` (before that `~/repos/YueUI`; the deploy scripts find their checkout from their own path); projects `YueUI.*`, paths, data folder `YuE UI`, `yueui.db`, browser storage keys `yue-ui.*` and the LaunchAgent label keep the old name so deploys, settings and data stay put) is a web interface for YuE Studio (a native macOS app around the YuE2 music model), meant to be used remotely through Tailscale. An ASP.NET Core Minimal API runs YuE Studio's own Python worker as a child process and serves a Vue frontend under `/ui`. README.md (German) is the user documentation. The structure follows `~/repos/YuE_To_Logic` (same SpaProxy/Vite setup, `ClientAppEndpoints`, test style).
 
 ## Commands
 

@@ -26,8 +26,8 @@ Auf einem Mac, auf dem außer macOS nichts installiert ist, richtet ein Skript a
 
 ```sh
 xcode-select --install                 # Command Line Tools (git, clang), einmal
-git clone https://github.com/Marcel-B/YuE-UI.git ~/repos/YueUI
-~/repos/YueUI/deploy/setup-mac.sh      # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper, --singing oder --all für mehr
+git clone https://github.com/Marcel-B/Tonwerk-AI.git ~/repos/Tonwerk-AI
+~/repos/Tonwerk-AI/deploy/setup-mac.sh # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper, --singing oder --all für mehr
 ```
 
 Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell, mit `--singing` SoulX-Singer für die Seite **Singen**.
@@ -580,7 +580,7 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `Monitoring:Loki:Host` (`Monitoring__Loki__Host`) | Name des Rechners | Label `host` |
 | `Monitoring:Loki:MinLevel` (`Monitoring__Loki__MinLevel`) | `info` | Zeilen darunter bleiben auf dem Mac |
 | `Monitoring:Loki:Username` / `Monitoring:Loki:Password` | – | Basic Auth, falls Loki hinter einem Proxy das verlangt |
-| `Push:Subject` (`Push__Subject`) | `https://github.com/Marcel-B/YuE-UI` | Kontaktadresse (`mailto:` oder `https:`) für die Push-Dienste; Apple lehnt Adressen wie `mailto:ich@localhost` ab |
+| `Push:Subject` (`Push__Subject`) | `https://github.com/Marcel-B/Tonwerk-AI` | Kontaktadresse (`mailto:` oder `https:`) für die Push-Dienste; Apple lehnt Adressen wie `mailto:ich@localhost` ab |
 | `Backup:EnvFile` (`Backup__EnvFile`) | `~/.config/tonwerk/nextcloud.env` | `.env`-Datei mit `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME` und `NEXTCLOUD_APP_PASSWORD` für die Datensicherung; fehlt eins davon, ist sie aus |
 | `Backup:At` (`Backup__At`) | `03:00` | Uhrzeit der nächtlichen Sicherung; leer heißt nur von Hand |
 | `Backup:TimeZone` (`Backup__TimeZone`) | `Europe/Berlin` | Zeitzone dafür |

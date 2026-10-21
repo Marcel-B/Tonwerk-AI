@@ -9,7 +9,7 @@ struct QueueView: View {
     private var empty: Bool {
         model.inProgress.isEmpty && model.finishedSongs.isEmpty && model.queue.isEmpty && model.voiceJobs.isEmpty && model.videoJobs.isEmpty
             && model.runningTranscriptions.isEmpty && model.speechJobs.isEmpty && model.singJobs.isEmpty
-            && model.aceJobs.isEmpty
+            && model.aceJobs.isEmpty && model.imageJobs.isEmpty
     }
 
     var body: some View {
@@ -82,6 +82,14 @@ struct QueueView: View {
                         .padding(.top, 8)
                     ForEach(model.videoJobs, id: \.id) { video in
                         VideoJobCard(video: video)
+                            .transition(.opacity)
+                    }
+                }
+                if !model.imageJobs.isEmpty {
+                    heading("Cover")
+                        .padding(.top, 8)
+                    ForEach(model.imageJobs, id: \.id) { image in
+                        ImageJobCard(image: image)
                             .transition(.opacity)
                     }
                 }
@@ -486,6 +494,50 @@ private struct VideoJobCard: View {
                 }
                 if video.stage == "rendering" {
                     ProgressView(value: min(max(video.fraction ?? 0, 0), 1))
+                }
+            }
+        }
+        .card(padding: 12)
+    }
+}
+
+/// A cover being painted (or waiting for the memory), with its progress; cancelling deletes it.
+private struct ImageJobCard: View {
+    @Environment(AppModel.self) private var model
+    let image: Components.Schemas.ImageState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "paintbrush.pointed")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 44, height: 44)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.song(image.songId)?.displayTitle ?? image.title ?? image.songId).lineLimit(1)
+                        Text(([image.modelLabel, model.ranOnNote(image.ranOn)] as [String?]).compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Text(PaintCoverView.stage(of: image))
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    Button(role: .destructive) {
+                        Task { await model.deleteImage(image) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
+                }
+                if image.stage == "painting" {
+                    ProgressView(value: min(max(image.fraction ?? 0, 0), 1))
                 }
             }
         }

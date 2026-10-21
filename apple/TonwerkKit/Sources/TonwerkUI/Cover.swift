@@ -168,6 +168,12 @@ extension AppModel {
         images[image.id] = nil
     }
 
+    /// Pictures waiting or being painted, for the queue page, oldest first.
+    var imageJobs: [Components.Schemas.ImageState] {
+        images.values.filter { $0.finished != true && $0.stage != "done" && $0.stage != "failed" && $0.stage != "cancelled" }
+            .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+    }
+
     func imageURL(_ image: Components.Schemas.ImageState) -> URL? {
         server?.appending(path: "api/images/\(image.id)")
     }

@@ -5,6 +5,7 @@ import {
   cancelQueued,
   cancelTranscription,
   deleteSpeechTake,
+  deleteSingingTake,
   deleteStems,
   deleteSwap,
   deleteVersion,
@@ -21,12 +22,14 @@ import SongTimeline from './SongTimeline.vue'
 import { holderOf, speechWaitReason, transcribing, waitReason } from '../queueModels'
 import { navigate, showSong, songHref } from '../view'
 import { loadMachines, ranOnNote } from '../machines'
+import { singFinished, singStage } from '../singing'
 import { addPlaylist } from '../playlist'
 import type {
   AceJob,
   LogEntry,
   LyricsState,
   QueuedJob,
+  SingTake,
   SongState,
   SpeechTake,
   StemSetState,
@@ -60,6 +63,8 @@ const props = defineProps<{
   images: ImageState[]
   /** ACE-Step's songs; they wait for the memory too, one job at a time. */
   ace: AceJob[]
+  /** Melodies being sung; they wait for the memory too, one at a time. */
+  singing: SingTake[]
   /** Queue:BundleWindow; null for a server from before it was sent. */
   bundleWindowSeconds: number | null
   /** The speech lab's takes; those in the works wait for the same memory. */
@@ -260,6 +265,10 @@ const imagesInWork = computed(() =>
   props.images.filter((i) => !i.finished).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
 )
 
+const singingInWork = computed(() =>
+  props.singing.filter((take) => !singFinished(take)).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+)
+
 const aceInWork = computed(() =>
   props.ace.filter((job) => !job.finished).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
 )
@@ -419,6 +428,7 @@ watch(
       :images="images"
       :videos="videos"
       :ace="ace"
+      :singing="singing"
     />
 
     <div v-if="runningTranscription" class="mb-4">
@@ -637,6 +647,39 @@ watch(
             severity="danger"
             :aria-label="t('queueCancel')"
             @click="run(() => deleteSpeechTake(take.id))"
+          />
+        </li>
+      </ul>
+    </div>
+
+    <div v-if="singingInWork.length > 0" class="mb-4">
+      <h3 class="m-0 text-sm font-medium text-muted-color">{{ t('queueSinging') }}</h3>
+      <ul class="m-0 p-0 list-none flex flex-col gap-1">
+        <li v-for="(take, i) in singingInWork" :key="take.id" class="flex gap-2 items-center">
+          <i class="pi pi-volume-up text-muted-color" />
+          <div class="min-w-0 flex-1">
+            <a
+              href="#/sing"
+              class="block truncate font-bold text-color no-underline hover:underline"
+              @click.prevent="navigate('sing')"
+              >{{ take.title }}</a
+            >
+            <span class="block text-sm text-muted-color truncate">{{ withRanOn([take.voiceLabel], take.ranOn) }}</span>
+            <span v-if="take.stage === 'queued'" class="block text-xs text-muted-color truncate"
+              ><i class="pi pi-clock text-xs" /> {{ speechWaitReason(i, holder, 'singing') }}</span
+            >
+          </div>
+          <Tag :severity="take.stage === 'queued' ? 'secondary' : undefined" class="shrink-0">
+            <i v-if="take.stage !== 'queued'" class="pi pi-spin pi-spinner text-xs" />
+            {{ singStage(take) }}
+          </Tag>
+          <Button
+            icon="pi pi-times"
+            text
+            rounded
+            severity="danger"
+            :aria-label="t('queueCancel')"
+            @click="run(() => deleteSingingTake(take.id))"
           />
         </li>
       </ul>

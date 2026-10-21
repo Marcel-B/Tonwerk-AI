@@ -22,6 +22,12 @@ import type {
   RunInfo,
   SongRequest,
   SongState,
+  SingingAligned,
+  SingingInfo,
+  SingingMelody,
+  SingingVoiceCreated,
+  SingTake,
+  SungNote,
   SpeechInfo,
   SpeechTake,
   SpeechVoice,
@@ -764,7 +770,93 @@ export async function deleteSpeechTake(id: string): Promise<void> {
   await send(`/api/speech/takes/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
-/** Removes a sung take with its audio (the singing page itself is the app's). */
+/** The singing page: whether SoulX-Singer is there, its voices and the takes. */
+export async function getSinging(): Promise<SingingInfo> {
+  return (await send('/api/singing')).json() as Promise<SingingInfo>
+}
+
+/** A MIDI file's or score.abc's melody (with its lyric events), or a library song's, for the note editor. */
+export async function readSingingMelody(source: { file: File } | { song: string }): Promise<SingingMelody> {
+  const form = new FormData()
+  if ('file' in source) {
+    form.append('file', source.file)
+  } else {
+    form.append('song', source.song)
+  }
+  return (await send('/api/singing/melody', { method: 'POST', body: form })).json() as Promise<SingingMelody>
+}
+
+/** A take's notes and words, to open it in the editor again. */
+export async function singTakeNotes(id: string): Promise<SingingMelody> {
+  return (await send(`/api/singing/${encodeURIComponent(id)}/notes`)).json() as Promise<SingingMelody>
+}
+
+/**
+ * What each note sings and how its word is spoken, in the order sent; with `lyrics` that text is laid on the notes by
+ * the server's rules instead of the notes' own words.
+ */
+export async function alignSinging(notes: SungNote[], lyrics: string | null = null): Promise<SingingAligned> {
+  return (await send('/api/singing/align', json('POST', { notes, lyrics }))).json() as Promise<SingingAligned>
+}
+
+export interface SingRequest {
+  /** The editor's notes; the server reads them as the melody. */
+  notes: SungNote[]
+  tempoBpm: number
+  voice: string
+  /** Only when no note carries words: the text to spread over them. */
+  lyrics?: string
+  pitchShift?: number
+  autoShift: boolean
+  title?: string
+  machine?: string | null
+}
+
+/** Queues the editor's melody to be sung; its progress arrives as `singing` events. */
+export async function sing(request: SingRequest): Promise<SingTake> {
+  const form = new FormData()
+  form.append('notes', JSON.stringify(request.notes))
+  form.append('tempoBpm', String(request.tempoBpm))
+  form.append('voice', request.voice)
+  form.append('autoShift', String(request.autoShift))
+  if (request.lyrics) {
+    form.append('lyrics', request.lyrics)
+  }
+  if (request.pitchShift) {
+    form.append('pitchShift', String(request.pitchShift))
+  }
+  if (request.title) {
+    form.append('title', request.title)
+  }
+  if (request.machine) {
+    form.append('machine', request.machine)
+  }
+  return (await send('/api/singing', { method: 'POST', body: form })).json() as Promise<SingTake>
+}
+
+export function singTakeAudioUrl(id: string, download = false): string {
+  return `${apiBase}/api/singing/${encodeURIComponent(id)}/audio${download ? '?download=true' : ''}`
+}
+
+/** A recording of one's own singing made into a voice, with the words sung in it; 422 when no singing is heard. */
+export async function addSingingVoice(
+  label: string,
+  lyrics: string,
+  recording: Blob,
+  fileName: string,
+): Promise<SingingVoiceCreated> {
+  const form = new FormData()
+  form.append('label', label)
+  form.append('lyrics', lyrics)
+  form.append('file', recording, fileName)
+  return (await send('/api/singing/voices', { method: 'POST', body: form })).json() as Promise<SingingVoiceCreated>
+}
+
+export function singingVoiceAudioUrl(id: string): string {
+  return `${apiBase}/api/singing/voices/${encodeURIComponent(id)}/audio`
+}
+
+/** Removes a sung take with its audio, or stops one still in the line. */
 export async function deleteSingingTake(id: string): Promise<void> {
   await send(`/api/singing/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
@@ -904,6 +996,8 @@ export interface EventHandlers {
   image(image: ImageState): void
   /** An ACE-Step job changed; a stopped one arrives as cancelled. */
   ace(job: AceJob): void
+  /** A take of the singing page changed; a deleted one arrives as cancelled. */
+  singing(take: SingTake): void
   queue(queue: QueuedJob[]): void
   /** Another large model took the memory, or gave it back. */
   memory(memory: MemoryInfo): void
@@ -935,6 +1029,7 @@ export function subscribe(handlers: EventHandlers): () => void {
   on<VideoState>('video', handlers.video)
   on<ImageState>('image', handlers.image)
   on<AceJob>('ace', handlers.ace)
+  on<SingTake>('singing', handlers.singing)
   on<MemoryInfo>('memory', handlers.memory)
   source.onerror = () => handlers.connection(false)
   return () => source.close()

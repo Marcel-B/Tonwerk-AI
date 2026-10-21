@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 import { t, type MessageKey } from '../i18n'
 import { holderOf, modelOf, type Model, type VoiceWork } from '../queueModels'
+import { singFinished } from '../singing'
 import type {
   AceJob,
   ImageState,
   LargeModel,
   LyricsState,
   QueuedJob,
+  SingTake,
   SongState,
   SpeechTake,
   TranscriptionState,
@@ -38,6 +40,8 @@ const props = defineProps<{
   videos: VideoState[]
   /** ACE-Step's songs; it takes the memory like the others. */
   ace: AceJob[]
+  /** Melodies sung by SoulX-Singer; it takes the memory like the others. */
+  singing: SingTake[]
 }>()
 
 const models: { model: Model; icon: string; label: MessageKey }[] = [
@@ -67,8 +71,7 @@ const shown = computed(() =>
       case 'video':
         return running(m.model) + waiting(m.model) > 0
       case 'singing':
-        // Its takes are only on the native app's page; the web shows it while it holds the memory.
-        return holder.value === 'singing'
+        return holder.value === 'singing' || props.singing.some((take) => !singFinished(take))
       default:
         return true
     }
@@ -96,7 +99,7 @@ function running(model: Model): number {
     case 'video':
       return props.videos.filter((v) => !v.finished && v.stage !== 'queued').length
     case 'singing':
-      return holder.value === 'singing' ? 1 : 0
+      return props.singing.filter((take) => !singFinished(take) && take.stage !== 'queued').length
   }
 }
 
@@ -112,6 +115,8 @@ function waiting(model: Model): number {
       return props.videos.filter((v) => v.stage === 'queued').length
     case 'ace':
       return props.ace.filter((job) => job.stage === 'queued').length
+    case 'singing':
+      return props.singing.filter((take) => take.stage === 'queued').length
     default:
       return props.jobs.filter((j) => modelOf(j) === model).length
   }

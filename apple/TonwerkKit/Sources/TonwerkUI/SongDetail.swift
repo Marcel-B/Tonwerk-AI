@@ -14,6 +14,9 @@ struct SongDetail: View {
     @State private var note: String
     @State private var problem: String?
     @State private var sharing: Song?
+    @State private var asking = false
+    /// Said once the server took the render, until the worker's own state shows it.
+    @State private var sent: String?
 
     init(song: Song, list: [Song]) {
         self.song = song
@@ -28,6 +31,9 @@ struct SongDetail: View {
                 header
                 VStack(spacing: 12) {
                     infos
+                    if song.rendersFull {
+                        renderCard
+                    }
                     if !song.versions.isEmpty {
                         versions
                     }
@@ -205,6 +211,42 @@ struct SongDetail: View {
         .card(onBackdrop: true)
     }
 
+    /// A draft synthesized again from its saved tokens at full quality, the same song, written over in place.
+    private var renderCard: some View {
+        let rendering = model.isRendering(song)
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                Task { await render() }
+            } label: {
+                Label(
+                    rendering ? "Wird in voller Qualität gerendert …" : "In voller Qualität rendern",
+                    systemImage: "waveform")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .disabled(asking || rendering)
+            Text(sent ?? String(localized: "Derselbe Song aus seinen gespeicherten Tokens, neu synthetisiert; die Datei wird ersetzt."))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .card(onBackdrop: true)
+    }
+
+    private func render() async {
+        asking = true
+        defer { asking = false }
+        do {
+            let job = try await model.renderFull(song)
+            sent = job == nil
+                ? String(localized: "Wird gerendert, der Fortschritt steht in der Warteschlange.")
+                : String(localized: "Wartet in der Warteschlange.")
+            problem = nil
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
     private func rename() async {
         guard title.trimmingCharacters(in: .whitespacesAndNewlines) != song.title else { return }
         do {
@@ -222,6 +264,30 @@ struct SongDetail: View {
         } catch {
             problem = error.localizedDescription
         }
+    }
+}
+
+extension AppModel {
+    /// Asks the worker to synthesize a draft again at full quality. Nil when it started at once: the server answers
+    /// 202 without a body then, which the generated client cannot decode, so this goes by hand like ``generate(_:)``.
+    func renderFull(_ song: Song) async throws -> Components.Schemas.QueuedJob? {
+        guard let server = tonwerk?.server else { throw ServerError(String(localized: "Kein Server verbunden.")) }
+        var request = URLRequest(url: server.appending(path: "api/songs/\(song.run)/\(song.name)/render"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["quality": "full"])
+        let (answer, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 202 else {
+            throw ServerError(problem: ServerError.text(of: answer) ?? String(localized: "Der Server antwortete \(status)."))
+        }
+        return answer.isEmpty ? nil : try JSONDecoder.tonwerk().decode(Components.Schemas.QueuedJob.self, from: answer)
+    }
+
+    /// Whether the worker renders the song now or the queue holds a render of it.
+    func isRendering(_ song: Song) -> Bool {
+        if let state = working[song.id], state.render == true, state.finished != true { return true }
+        return queue.contains { $0.kind == .render && $0.songId == song.id }
     }
 }
 

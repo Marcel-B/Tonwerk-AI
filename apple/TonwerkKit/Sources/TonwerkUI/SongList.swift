@@ -250,6 +250,14 @@ struct SongList: View {
         } label: {
             Label("Ins Formular übernehmen", systemImage: "square.and.pencil")
         }
+        if song.rendersFull {
+            Button {
+                Task { _ = try? await model.renderFull(song) }
+            } label: {
+                Label("In voller Qualität rendern", systemImage: "waveform")
+            }
+            .disabled(model.isRendering(song))
+        }
         Button {
             Task { await model.useScoreInForm(song) }
         } label: {

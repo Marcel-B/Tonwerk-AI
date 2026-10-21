@@ -27,6 +27,8 @@ final class SongTests: XCTestCase {
         XCTAssertEqual(songs[0].duration, "3:07")
         XCTAssertNil(songs[1].rating)
         XCTAssertFalse(songs[1].hasAudio)
+        XCTAssertTrue(songs[0].canRender)
+        XCTAssertFalse(songs[1].canRender)
         XCTAssertEqual(
             songs[0].streamURL(on: server).absoluteString,
             "https://tonwerk.test:8443/api/songs/20260921-165850-Neon-Night/song1/stream")
@@ -34,6 +36,17 @@ final class SongTests: XCTestCase {
             songs[0].coverURL(on: server)?.absoluteString,
             "https://tonwerk.test:8443/api/songs/20260921-165850-Neon-Night/song1/cover?v=1790848800")
         XCTAssertNil(songs[1].coverURL(on: server))
+    }
+
+    func testOnlyAYuE2DraftWithTokensRendersAtFullQuality() {
+        func song(canRender: Bool, quality: String?, engine: String? = nil) -> Song {
+            Song(run: "r", name: "song1", title: "T", number: nil, canRender: canRender, quality: quality, engine: engine)
+        }
+        XCTAssertTrue(song(canRender: true, quality: "draft").rendersFull)
+        XCTAssertTrue(song(canRender: true, quality: nil).rendersFull)
+        XCTAssertFalse(song(canRender: true, quality: "full").rendersFull)
+        XCTAssertFalse(song(canRender: false, quality: "draft").rendersFull)
+        XCTAssertFalse(song(canRender: true, quality: "draft", engine: "ace").rendersFull)
     }
 
     func testARunOfOneSongHasNoNumber() {

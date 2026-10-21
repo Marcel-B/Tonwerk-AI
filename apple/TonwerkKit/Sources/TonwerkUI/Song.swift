@@ -24,6 +24,8 @@ public struct Song: Identifiable, Hashable, Sendable {
     public let hasAudio: Bool
     /// Whether YuE2 wrote a score.abc for it (not with planning off).
     public let hasScore: Bool
+    /// Its tokens are saved, so the worker can synthesize it again (`SongInfo.canRender`).
+    public let canRender: Bool
     public let seed: Int64?
     public let quality: String?
     /// `ace` for ACE-Step's songs, nil for YuE2's.
@@ -60,7 +62,8 @@ public struct Song: Identifiable, Hashable, Sendable {
     public init(
         run: String, name: String, title: String, number: Int?, style: String = "", lyrics: String = "",
         createdAt: Date? = nil, seconds: Double? = nil, rating: Int? = nil, note: String? = nil,
-        coverUpdatedAt: Date? = nil, hasAudio: Bool = true, hasScore: Bool = false, originalTitle: String? = nil,
+        coverUpdatedAt: Date? = nil, hasAudio: Bool = true, hasScore: Bool = false, canRender: Bool = false,
+        originalTitle: String? = nil,
         seed: Int64? = nil, quality: String? = nil, engine: String? = nil, tempo: Double? = nil, key: String? = nil,
         bytes: Int64 = 0, versions: [Version] = [], version: Version? = nil
     ) {
@@ -78,6 +81,7 @@ public struct Song: Identifiable, Hashable, Sendable {
         self.coverUpdatedAt = coverUpdatedAt
         self.hasAudio = hasAudio
         self.hasScore = hasScore
+        self.canRender = canRender
         self.originalTitle = originalTitle ?? title
         self.seed = seed
         self.quality = quality
@@ -96,9 +100,16 @@ public struct Song: Identifiable, Hashable, Sendable {
         Song(
             run: run, name: name, title: title ?? self.title, number: number, style: style, lyrics: lyrics,
             createdAt: createdAt, seconds: seconds, rating: rating ?? self.rating, note: note ?? self.note,
-            coverUpdatedAt: coverUpdatedAt, hasAudio: hasAudio, hasScore: hasScore, originalTitle: originalTitle,
+            coverUpdatedAt: coverUpdatedAt, hasAudio: hasAudio, hasScore: hasScore, canRender: canRender,
+            originalTitle: originalTitle,
             seed: seed, quality: quality, engine: engine, tempo: tempo, key: key, bytes: bytes, versions: versions,
             version: version ?? self.version)
+    }
+
+    /// A YuE2 draft whose tokens are saved: synthesized again at full quality it stays the same song (same plan, same
+    /// tokens), unlike "Ins Formular" with its seed, which plans anew. As the web page's "Voll rendern" in `SongRow.vue`.
+    public var rendersFull: Bool {
+        canRender && quality != "full" && engine != "ace"
     }
 
     /// The run's title, with the song's number when the run made several, and the voice when a version plays.
@@ -145,6 +156,7 @@ public struct Song: Identifiable, Hashable, Sendable {
                     coverUpdatedAt: info.coverUpdatedAt,
                     hasAudio: info.hasAudio,
                     hasScore: info.hasScore,
+                    canRender: info.canRender,
                     originalTitle: run.originalTitle,
                     seed: info.seed,
                     quality: info.quality,

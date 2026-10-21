@@ -139,6 +139,15 @@ public sealed class Machines(
         return localInstalled || Helpers.Any(h => StatusOf(h) is not { } status || status.Engines.Contains(engine));
     }
 
+    /// <summary>
+    /// Whether <paramref name="machine"/> is a helper whose last poll says it lacks <paramref name="engine"/>: a choice
+    /// the pickers keep from earlier jobs would otherwise send a job there that can only fail (an image model too large
+    /// for it). A helper not polled yet is given the benefit of the doubt.
+    /// </summary>
+    public bool Lacks(string engine, string? machine) =>
+        machine is not null && machine != Local && Find(machine) is { } helper
+        && StatusOf(helper) is { } status && !status.Engines.Contains(engine);
+
     /// <summary>The name a job shows for where it runs.</summary>
     public string NameOf(HelperMachine? helper) => helper?.Label ?? LocalName;
 

@@ -214,6 +214,22 @@ public sealed class MachineTests : IDisposable
     }
 
     [Fact]
+    public async Task A_model_the_chosen_helper_cannot_paint_is_refused_rather_than_sent_there()
+    {
+        _helper.Images.Missing["flux3-klein"] = "FLUX 3 Klein needs a Mac with 32 GB; this one has 24.";
+        var client = _app.CreateClient();
+        _app.AddSong("20260922-101500-Neon-Night", "song1");
+        await WaitForMachines(client, all => all.Any(m => m.Id == "alt" && m.Reachable));
+
+        var refused = await client.PostAsJsonAsync("/api/songs/20260922-101500-Neon-Night/song1/images", new { prompt = "a neon city", model = "flux3-klein", machine = "alt" });
+        var accepted = await client.PostAsJsonAsync("/api/songs/20260922-101500-Neon-Night/song1/images", new { prompt = "a neon city", model = "klein-4b", machine = "alt" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Contains("cannot paint with FLUX 3 Klein", await refused.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+    }
+
+    [Fact]
     public async Task Lyrics_asked_for_the_helper_are_written_by_its_LM_Studio_beside_a_busy_Mac()
     {
         _helper.LmStudio.Answer = "[Verse]\nVom alten Mac";

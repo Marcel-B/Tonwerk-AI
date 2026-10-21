@@ -26,6 +26,8 @@ public enum ServerEvent: Sendable {
     case ace(Components.Schemas.AceJob)
     case speech(Components.Schemas.SpeechTake)
     case singing(Components.Schemas.SingTake)
+    /// The writing page's answer as it grows, the whole text so far each time.
+    case writing(Components.Schemas.WritingReply)
     case unknown(String)
 
     public init(name: String, data: String) throws {
@@ -51,6 +53,7 @@ public enum ServerEvent: Sendable {
         case "ace": self = .ace(try decode())
         case "speech": self = .speech(try decode())
         case "singing": self = .singing(try decode())
+        case "writing": self = .writing(try decode())
         default: self = .unknown(name)
         }
     }

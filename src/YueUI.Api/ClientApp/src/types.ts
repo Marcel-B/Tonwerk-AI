@@ -1084,3 +1084,58 @@ export interface MachineInfo {
   engines: string[]
   message?: string | null
 }
+
+/** A message on the writing page (Writing/WritingModels.cs). */
+export interface WritingMessage {
+  role: 'user' | 'assistant'
+  text: string
+  at: string
+  /** The model that wrote an answer. */
+  model?: string | null
+  /** An answer stopped before its end; what came is kept. */
+  stopped?: boolean
+}
+
+export type WritingStage = 'waiting' | 'loading' | 'writing' | 'done' | 'stopped' | 'failed'
+
+/** The answer being written; it arrives as `writing` events, the whole text so far each time. */
+export interface WritingReply {
+  id: string
+  chatId: string
+  stage: WritingStage
+  model: string
+  text: string
+  /** The model is thinking before (or between) its words. */
+  thinking: boolean
+  message?: string | null
+  updatedAt: string
+  finished: boolean
+}
+
+export interface WritingChat {
+  id: string
+  title: string
+  model?: string | null
+  messages: WritingMessage[]
+  createdAt: string
+  updatedAt: string
+  reply?: WritingReply | null
+}
+
+export interface WritingChatSummary {
+  id: string
+  title: string
+  model?: string | null
+  messages: number
+  updatedAt: string
+}
+
+export interface WritingOverview {
+  /** Newest first. */
+  chats: WritingChatSummary[]
+  reply?: WritingReply | null
+  /** The model a chat writes with when none is chosen. */
+  model: string
+  /** The model kept in memory between answers. */
+  loaded?: string | null
+}

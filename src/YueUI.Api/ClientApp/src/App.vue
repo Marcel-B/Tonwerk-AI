@@ -11,6 +11,7 @@ import {
   subscribe,
 } from './api'
 import { aceForm, fromAceRequest } from './ace'
+import { liveWriting } from './writing'
 import AdvancedParameters from './components/AdvancedParameters.vue'
 import GenerateForm from './components/GenerateForm.vue'
 import SettingsMenu from './components/SettingsMenu.vue'
@@ -86,6 +87,7 @@ const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.
 const TemplatesPage = defineAsyncComponent(() => import('./components/TemplatesPage.vue'))
 const InsightsPage = defineAsyncComponent(() => import('./components/InsightsPage.vue'))
 const SketchPage = defineAsyncComponent(() => import('./components/SketchPage.vue'))
+const WritingPage = defineAsyncComponent(() => import('./components/WritingPage.vue'))
 
 const logCapacity = 300
 const form = ref(loadFormState())
@@ -286,6 +288,9 @@ const unsubscribe = subscribe({
       aceJobs.value.push(job)
     }
   },
+  writing(reply) {
+    liveWriting.value = reply
+  },
   queue(queue) {
     jobs.value = queue
   },
@@ -314,6 +319,7 @@ const pages: Page[] = [
 const tools: Page[] = [
   { view: 'templates', label: 'menuTemplates', icon: 'pi pi-bookmark' },
   { view: 'insights', label: 'menuInsights', icon: 'pi pi-chart-bar' },
+  { view: 'write', label: 'menuWriting', icon: 'pi pi-comment' },
   { view: 'sketch', label: 'menuSketch', icon: 'pi pi-pencil' },
   { view: 'ace', label: 'menuAce', icon: 'pi pi-wave-pulse' },
   { view: 'transcribe', label: 'menuTranscribe', icon: 'pi pi-microphone' },
@@ -384,6 +390,7 @@ const storageOpened = ref(view.value === 'storage')
 const templatesOpened = ref(view.value === 'templates')
 const insightsOpened = ref(view.value === 'insights')
 const sketchOpened = ref(view.value === 'sketch')
+const writingOpened = ref(view.value === 'write')
 const instrumentsOpened = ref(view.value === 'instruments')
 const harmonyOpened = ref(view.value === 'harmony')
 const aceOpened = ref(view.value === 'ace')
@@ -417,6 +424,9 @@ watch(view, (value) => {
   }
   if (value === 'sketch') {
     sketchOpened.value = true
+  }
+  if (value === 'write') {
+    writingOpened.value = true
   }
 })
 
@@ -583,6 +593,13 @@ async function useSongScoreById(songId: string): Promise<void> {
   } catch (caught) {
     show(caught instanceof Error ? caught.message : String(caught), true)
   }
+}
+
+/** An answer from the writing page as the next song's lyrics, the rest of the form as it was. */
+function useWritten(lyrics: string): void {
+  form.value = { ...form.value, lyrics }
+  navigate('create')
+  show(t('writingApplied'))
 }
 
 /** A planned sketch as the next song: its lyrics, style and score, the rest of the form as it was. */
@@ -965,6 +982,18 @@ async function useAsNewSong(songId: string): Promise<void> {
       <template #content>
         <p class="muted mt-0">{{ t('insightsIntro') }}</p>
         <InsightsPage :active="view === 'insights'" />
+      </template>
+    </Card>
+  </main>
+
+  <main v-if="writingOpened" v-show="view === 'write'">
+    <Card>
+      <template #title>
+        <h2>{{ t('writing') }}</h2>
+      </template>
+      <template #content>
+        <p class="muted mt-0">{{ t('writingIntro') }}</p>
+        <WritingPage :active="view === 'write'" @use="useWritten" @error="show($event, true)" />
       </template>
     </Card>
   </main>

@@ -38,6 +38,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
         _fakeWorker = fakeWorker;
         // A job waiting for the memory starts within moments of it being free, not a second later.
         Queue.JobQueue.CheckInterval = TimeSpan.FromMilliseconds(20);
+        Api.Writing.WritingDesk.CheckInterval = TimeSpan.FromMilliseconds(20);
         Root = Directory.CreateTempSubdirectory("yueui-").FullName;
         OutputDir = Path.Combine(Root, "songs");
         Directory.CreateDirectory(OutputDir);
@@ -52,6 +53,9 @@ public sealed class TestApp : WebApplicationFactory<Program>
     public FakeStudio Studio { get; } = new();
 
     public FakeLmStudio LmStudio { get; } = new();
+
+    /// <summary>How long the writing page keeps its model loaded after an answer; set before the first request.</summary>
+    public TimeSpan WritingKeepLoaded { get; set; } = TimeSpan.FromMinutes(3);
 
     /// <summary>The Mac's memory as the lyrics models see it (<c>Lyrics:SystemMemoryGb</c>); set before the first request.</summary>
     public double LyricsMemoryGb { get; set; } = 32;
@@ -199,6 +203,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.MinContextLength = 2048;
                 options.SystemMemoryGb = LyricsMemoryGb;
             });
+            services.Configure<Api.Writing.WritingOptions>(options => options.KeepLoaded = WritingKeepLoaded);
             // A new handler each time: the factory disposes the ones it rotates out.
             services.AddHttpClient(LyricsWriter.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeLmStudio.Handler(LmStudio));
 

@@ -81,6 +81,10 @@ public final class AppModel {
     var aceForm = AceForm()
     /// The last report of what the rated songs were made with, for its page and the proven style blocks.
     var insights: Components.Schemas.InsightReport?
+    /// The writing page's answer being written (or the last one), from `writing` events.
+    var liveWriting: Components.Schemas.WritingReply?
+    /// The writing page's state, kept like the sketch page's.
+    var writingPage: WritingSession?
     /// The sketch page's state, kept like the ACE-Step page's.
     var sketchPage: SketchSession?
     /// The backing vocals page's state, so its melody and preview outlast a page change.
@@ -173,6 +177,8 @@ public final class AppModel {
         insights = nil
         sketchPage?.stop()
         sketchPage = nil
+        liveWriting = nil
+        writingPage = nil
         harmonyPage?.stop()
         harmonyPage = nil
         transcriptionPage = nil
@@ -287,6 +293,8 @@ public final class AppModel {
             liveSpeech[take.id] = take
         case .singing(let take):
             liveSinging[take.id] = take
+        case .writing(let reply):
+            liveWriting = reply
         case .ace(let job):
             let before = liveAce[job.id]?.stage
             liveAce[job.id] = job

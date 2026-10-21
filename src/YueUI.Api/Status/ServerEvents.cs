@@ -31,7 +31,8 @@ public sealed record ServerEvents(
     Images.ImageState Image,
     Ace.AceJob Ace,
     Speech.SpeechTake Speech,
-    Singing.SingTake Singing);
+    Singing.SingTake Singing,
+    Writing.WritingReply Writing);
 
 /// <summary>The <c>{}</c> of events that only say something happened.</summary>
 public sealed record EmptyEvent;

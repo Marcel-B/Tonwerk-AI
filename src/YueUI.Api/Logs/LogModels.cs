@@ -74,6 +74,8 @@ public static class LogSources
         ("YueUI.Api.Worker.", Worker),
         ("YueUI.Api.Queue.", "queue"),
         ("YueUI.Api.Lyrics.", "lyrics"),
+        // The writing page talks to the same LM Studio as the drafts.
+        ("YueUI.Api.Writing.", "lyrics"),
         ("YueUI.Api.Voices.", "voices"),
         ("YueUI.Api.Speech.", "speech"),
         ("YueUI.Api.Singing.", "singing"),

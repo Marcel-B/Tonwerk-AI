@@ -9,6 +9,7 @@ import type {
   LogSource,
   LoraList,
   LyricsLanguage,
+  LyricsReasoning,
   LyricsModels,
   LyricsState,
   MidiScore,
@@ -86,9 +87,10 @@ export async function draftLyrics(
   language: LyricsLanguage,
   model: string | null,
   image: string | null = null,
+  reasoning: LyricsReasoning | null = null,
 ): Promise<LyricsState> {
   return (
-    await send('/api/lyrics', json('POST', { keywords, style, language, model, image }))
+    await send('/api/lyrics', json('POST', { keywords, style, language, model, image, reasoning }))
   ).json() as Promise<LyricsState>
 }
 
@@ -103,9 +105,10 @@ export async function reviseLyrics(
   style: string,
   language: LyricsLanguage,
   model: string | null,
+  reasoning: LyricsReasoning | null = null,
 ): Promise<LyricsState> {
   return (
-    await send('/api/lyrics', json('POST', { lyrics, instruction, keywords, style, language, model }))
+    await send('/api/lyrics', json('POST', { lyrics, instruction, keywords, style, language, model, reasoning }))
   ).json() as Promise<LyricsState>
 }
 

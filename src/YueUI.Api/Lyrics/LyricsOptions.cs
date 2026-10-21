@@ -31,6 +31,13 @@ public sealed class LyricsOptions
     /// </summary>
     public int MinContextLength { get; set; } = 8192;
 
+    /// <summary>
+    /// How long a request to the server may take, a draft's whole answer included, since LM Studio answers only once
+    /// the lyrics are written. A thinking model at a high reasoning effort (Qwen 3.8 at xhigh) thought for over ten
+    /// minutes; lowering the effort in LM Studio's model settings is the quicker way out.
+    /// </summary>
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(20);
+
     /// <summary>Only if "Require Authentication" is switched on in LM Studio's server settings.</summary>
     public string? ApiToken { get; set; }
 

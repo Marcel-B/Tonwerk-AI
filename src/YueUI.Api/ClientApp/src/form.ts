@@ -1,4 +1,13 @@
-import type { Cot, Engines, GenerateRequest, LyricsLanguage, Quality, SamplingOverrides, SongRequest } from './types'
+import type {
+  Cot,
+  Engines,
+  GenerateRequest,
+  LyricsLanguage,
+  LyricsReasoning,
+  Quality,
+  SamplingOverrides,
+  SongRequest,
+} from './types'
 
 /** The web form as the browser keeps it; `seed` stays text so an empty field means "random". */
 export interface FormState {
@@ -11,6 +20,8 @@ export interface FormState {
   lyricsLanguage: LyricsLanguage
   /** The model for lyrics drafts; empty for the server's configured one, so a changed default reaches the form. */
   lyricsModel: string
+  /** How much a thinking model thinks before a draft; empty leaves it to LM Studio's setting for the model. */
+  lyricsReasoning: LyricsReasoning | ''
   /** The draft this browser asked for and still waits for; kept so that it lands even after a reload. */
   lyricsDraftId: string
   instrumental: boolean
@@ -110,6 +121,7 @@ export function defaultFormState(): FormState {
     lyricsIdea: '',
     lyricsLanguage: 'english',
     lyricsModel: '',
+    lyricsReasoning: '',
     lyricsDraftId: '',
     instrumental: false,
     quality: 'draft',

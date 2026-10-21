@@ -452,6 +452,9 @@ public sealed class FakeLmStudio : ILmStudioStarter
 
     public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
 
+    /// <summary>The native chat API refusing a <c>reasoning</c> the model does not support, as LM Studio does.</summary>
+    public bool RefusesReasoning { get; set; }
+
     /// <summary>Holds the completion until a test lets it go, to look at the server meanwhile.</summary>
     public TaskCompletionSource? Gate { get; set; }
 
@@ -527,6 +530,15 @@ public sealed class FakeLmStudio : ILmStudioStarter
                     return lm.Status == HttpStatusCode.OK
                         ? Json(HttpStatusCode.OK, lm.RawAnswer ?? new { choices = new[] { new { message = new { role = "assistant", content = lm.Answer } } } })
                         : Json(lm.Status, new { error = new { message = "Model not found" } });
+                case "/api/v1/chat":
+                    return lm.RefusesReasoning
+                        ? Json(HttpStatusCode.BadRequest, new { error = new { message = "This model does not support the reasoning setting" } })
+                        : Json(HttpStatusCode.OK, new
+                        {
+                            model_instance_id = (string?)body?["model"],
+                            output = new object[] { new { type = "reasoning", content = "Counting syllables" }, new { type = "message", content = lm.Answer } },
+                            stats = new { input_tokens = 900, total_output_tokens = 300, reasoning_output_tokens = 120 },
+                        });
                 case "/api/v1/models/unload":
                     if ((string?)body?["instance_id"] == lm.OtherLoadedInstance)
                     {

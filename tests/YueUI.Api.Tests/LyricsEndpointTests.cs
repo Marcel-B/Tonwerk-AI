@@ -39,6 +39,45 @@ public sealed class LyricsEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task A_reasoning_effort_goes_through_LM_Studios_native_chat_with_the_same_prompts()
+    {
+        var draft = await Finished(new { keywords = "night train", style = "folk", reasoning = "low" });
+
+        Assert.Equal("done", draft.Stage);
+        Assert.Equal("[Verse]\nLine one\n\n[Chorus]\nLine two", draft.Lyrics);
+        Assert.DoesNotContain(_app.LmStudio.Requests, r => r.Path == "/v1/chat/completions");
+        var chat = Assert.Single(_app.LmStudio.Requests, r => r.Path == "/api/v1/chat").Body!;
+        Assert.Equal("low", (string?)chat["reasoning"]);
+        Assert.Equal("google/gemma-4-e4b:1", (string?)chat["model"]);
+        Assert.Equal(8192 - 1024, (int?)chat["max_output_tokens"]);
+        Assert.False((bool?)chat["store"]);
+        Assert.Contains("[Verse]", (string?)chat["system_prompt"], StringComparison.Ordinal);
+        Assert.Contains("night train", (string?)chat["input"], StringComparison.Ordinal);
+        Assert.Equal("/api/v1/models/unload", _app.LmStudio.Requests[^1].Path);
+    }
+
+    [Fact]
+    public async Task A_model_refusing_the_reasoning_effort_drafts_without_it()
+    {
+        _app.LmStudio.RefusesReasoning = true;
+
+        var draft = await Finished(new { keywords = "night train", reasoning = "high" });
+
+        Assert.Equal("done", draft.Stage);
+        Assert.Single(_app.LmStudio.Requests, r => r.Path == "/api/v1/chat");
+        var completion = Assert.Single(_app.LmStudio.Requests, r => r.Path == "/v1/chat/completions").Body!;
+        Assert.Null(completion["reasoning"]);
+    }
+
+    [Fact]
+    public async Task An_unknown_reasoning_effort_is_refused()
+    {
+        var response = await _client.PostAsJsonAsync("/api/lyrics", new { keywords = "night train", reasoning = "xhigh" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task German_lyrics_are_asked_for_in_German_with_the_tags_kept_in_English()
     {
         var draft = await Finished(new { keywords = "Nachtzug, Abschied", style = "German, synthwave", language = "german" });

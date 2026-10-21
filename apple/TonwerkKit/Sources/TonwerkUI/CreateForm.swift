@@ -64,6 +64,8 @@ public struct CreateForm: Codable, Equatable, Sendable {
     public var lyricsModel = ""
     /// The Mac whose lyrics model drafts; empty lets the server choose.
     public var lyricsMachine = ""
+    /// How much a thinking model thinks before a draft (`LyricsReasoning`'s raw value); empty leaves it to LM Studio.
+    public var lyricsReasoning = ""
     /// The draft this form asked for and still waits for, kept so it lands after a restart too.
     public var draftId = ""
     public var instrumental = false
@@ -94,7 +96,7 @@ public struct CreateForm: Codable, Equatable, Sendable {
     public init() {}
 
     enum CodingKeys: String, CodingKey {
-        case title, style, lyrics, idea, german, lyricsModel, lyricsMachine, draftId, instrumental, full, batch, seed
+        case title, style, lyrics, idea, german, lyricsModel, lyricsMachine, lyricsReasoning, draftId, instrumental, full, batch, seed
         case useAbc, abc, useAdvanced, planning, draftSteps, fullSteps, engines, maxSeconds
         case abcSampling, semanticSampling, lora, loraStrength
     }
@@ -113,6 +115,7 @@ public struct CreateForm: Codable, Equatable, Sendable {
         german = value(.german, empty.german)
         lyricsModel = value(.lyricsModel, empty.lyricsModel)
         lyricsMachine = value(.lyricsMachine, empty.lyricsMachine)
+        lyricsReasoning = value(.lyricsReasoning, empty.lyricsReasoning)
         draftId = value(.draftId, empty.draftId)
         instrumental = value(.instrumental, empty.instrumental)
         full = value(.full, empty.full)

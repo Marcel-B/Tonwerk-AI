@@ -33,4 +33,5 @@ public sealed record LyricsHelperJob(
     string? Style,
     LyricsLanguage Language,
     string? Image = null,
-    LyricsRevision? Revision = null);
+    LyricsRevision? Revision = null,
+    LyricsReasoning? Reasoning = null);

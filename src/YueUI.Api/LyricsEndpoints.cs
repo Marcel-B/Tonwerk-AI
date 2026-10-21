@@ -19,6 +19,9 @@ namespace YueUI.Api;
 /// The Mac whose LM Studio writes it: <c>local</c>, a helper's id (<c>GET /api/machines</c>), or empty for whichever is
 /// free. Ignored for a Claude model.
 /// </param>
+/// <param name="Reasoning">
+/// How much a thinking model thinks first; as set in LM Studio when left out. Ignored for a Claude model.
+/// </param>
 public sealed record LyricsRequest(
     string? Keywords,
     string? Style,
@@ -27,7 +30,8 @@ public sealed record LyricsRequest(
     string? Image = null,
     string? Lyrics = null,
     string? Instruction = null,
-    string? Machine = null);
+    string? Machine = null,
+    LyricsReasoning? Reasoning = null);
 
 /// <summary>
 /// Drafting lyrics with a local language model (LM Studio), see <see cref="LyricsWriter"/>. Like the worker's

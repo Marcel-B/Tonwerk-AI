@@ -62,7 +62,8 @@ builder.Services.Configure<LyricsOptions>(builder.Configuration.GetSection(Lyric
 builder.Services.AddSingleton<ILmStudioStarter, LmsCli>();
 builder.Services.AddSingleton<LyricsWriter>();
 builder.Services.AddSingleton<ICloudLyricsModel, ClaudeLyricsModel>();
-builder.Services.AddHttpClient(LyricsWriter.HttpClientName, client => client.Timeout = TimeSpan.FromMinutes(10));
+builder.Services.AddHttpClient(LyricsWriter.HttpClientName, (services, client) =>
+    client.Timeout = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<LyricsOptions>>().Value.Timeout);
 // Logic Pro projects and MIDI read back into scores, by YueToLogic.Core in this process.
 builder.Services.Configure<LogicOptions>(builder.Configuration.GetSection(LogicOptions.Section));
 builder.Services.AddYueToLogic();

@@ -1180,7 +1180,16 @@ public sealed class FakeImages : Images.IImageEngine
 
     public List<Images.ImageJob> Jobs { get; } = [];
 
+    /// <summary>Models this Mac cannot paint with, and why; the rest it can.</summary>
+    public Dictionary<string, string> Missing { get; } = [];
+
+    /// <summary>What FLUX 3's upsampler would have written.</summary>
+    public string? Upsampled { get; set; }
+
     public bool Downloaded(Images.ImageModel model) => model.Id == "klein-4b";
+
+    public string? Unavailable(Images.ImageModel model) =>
+        !Installed ? "mflux is not installed; run deploy/install-images.sh." : Missing.GetValueOrDefault(model.Id);
 
     public async Task<Images.ImageResult> PaintAsync(Images.ImageJob job, Action<string, double> progress, CancellationToken cancellationToken)
     {
@@ -1196,7 +1205,7 @@ public sealed class FakeImages : Images.IImageEngine
             throw new Images.ImageException(failure);
         }
         await File.WriteAllBytesAsync(job.Output, Jpeg, cancellationToken);
-        return new Images.ImageResult(20.5, 31.25, 8.9);
+        return new Images.ImageResult(20.5, 31.25, 8.9, Upsampled);
     }
 
     private static TaskCompletionSource CompletedGate()

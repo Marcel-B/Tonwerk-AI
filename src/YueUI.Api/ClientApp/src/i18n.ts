@@ -482,22 +482,26 @@ const messages = {
     paintCover: 'Cover malen',
     imageDialogTitle: 'Cover malen: {title}',
     imageNotInstalled:
-      'Zum Malen braucht der Mac mflux mit FLUX.2 Klein. Auf dem Mac einmal ausführen: deploy/install-images.sh (oder setup-mac.sh mit --images).',
+      'Zum Malen braucht der Mac mflux oder flux3-mlx. Auf dem Mac einmal ausführen: deploy/install-images.sh (oder setup-mac.sh mit --images).',
     imagePrompt: 'Bildbeschreibung',
     imagePromptHintTranslated:
-      'Deutsch geht auch: Claude übersetzt die Beschreibung vor dem Malen ins Englische, das FLUX Klein am besten versteht. Nur beschreiben, was zu sehen sein soll: „kein Text“ oder „kein Logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennt FLUX Klein nicht.',
+      'Deutsch geht auch: Claude übersetzt die Beschreibung vor dem Malen ins Englische, das die Bildmodelle am besten verstehen. Nur beschreiben, was zu sehen sein soll: „kein Text“ oder „kein Logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennen die Modelle nicht.',
     imagePromptHint:
-      'Am besten auf Englisch. Nur beschreiben, was zu sehen sein soll: „no text“ oder „no logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennt FLUX Klein nicht.',
+      'Am besten auf Englisch. Nur beschreiben, was zu sehen sein soll: „no text“ oder „no logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennen die Modelle nicht.',
     imagePromptReset: 'Vorschlag',
     imageWithTitle: 'Titel ins Bild schreiben',
     imageModel: 'Modell',
     imageModelCommercial: '{license}, auch für veröffentlichte Songs',
     imageModelPrivate: '{license}, nur privat, nicht für veröffentlichte Songs',
     imageModelDownload: 'Lädt beim ersten Bild etwa {gb} GB herunter.',
+    imageModelNowhere: 'Kein Mac hier kann mit diesem Modell malen.',
+    imageModelHelper: 'Nicht auf diesem Mac ({reason}), aber auf einem Helfer.',
+    imageModelNoLettering:
+      'Dieses Modell kann keine Schrift; der Titel wird eher Gekritzel. Z-Image Turbo, Krea 2 und FLUX 3 können es.',
     imageModelToken:
       'Braucht einen Hugging-Face-Token: Lizenz auf huggingface.co annehmen, Token in ~/.config/tonwerk/huggingface.token auf dem Mac legen.',
     imageHint:
-      'Der Mac malt im Hintergrund, sobald kein anderes Modell den Speicher braucht (etwa {gb} GB, unter einer Minute pro Bild). Jedes Bild ist ein Vorschlag, erst „Als Cover“ macht es zum Cover.',
+      'Der Mac malt im Hintergrund, sobald kein anderes Modell den Speicher braucht (etwa {gb} GB; Klein unter einer Minute pro Bild, Krea 2 und FLUX 3 einige Minuten). Jedes Bild ist ein Vorschlag, erst „Als Cover“ macht es zum Cover.',
     imageStart: 'Malen',
     imageList: 'Vorschläge',
     imageTake: 'Als Cover',
@@ -640,7 +644,7 @@ const messages = {
     storage_ane: 'Neural-Engine-Cache',
     storage_lmstudio: 'LM-Studio-Modelle',
     storage_speechModels: 'Sprachmodelle',
-    storage_imageModels: 'Bildmodelle (FLUX.2)',
+    storage_imageModels: 'Bildmodelle',
     storage_separatorModels: 'Stem-Trennung',
     storage_seedvcModels: 'Seed-VC',
     storage_montageModels: 'CLIP für Fotovideos',
@@ -1622,22 +1626,26 @@ const messages = {
     paintCover: 'Paint cover',
     imageDialogTitle: 'Paint cover: {title}',
     imageNotInstalled:
-      'Painting needs mflux with FLUX.2 Klein on the Mac. Run once on the Mac: deploy/install-images.sh (or setup-mac.sh with --images).',
+      'Painting needs mflux or flux3-mlx on the Mac. Run once on the Mac: deploy/install-images.sh (or setup-mac.sh with --images).',
     imagePrompt: 'Description',
     imagePromptHintTranslated:
-      'Any language works: Claude translates the description into English, which FLUX Klein understands best, before painting. Describe only what should be seen: "no text" or "no logo" rather bring text and logos in, and FLUX Klein has no negative prompt.',
+      'Any language works: Claude translates the description into English, which the image models understand best, before painting. Describe only what should be seen: "no text" or "no logo" rather bring text and logos in, and the models have no negative prompt.',
     imagePromptHint:
-      'Best in English. Describe only what should be seen: "no text" or "no logo" rather bring text and logos in, and FLUX Klein has no negative prompt.',
+      'Best in English. Describe only what should be seen: "no text" or "no logo" rather bring text and logos in, and the models have no negative prompt.',
     imagePromptReset: 'Suggestion',
     imageWithTitle: 'Write the title into the picture',
     imageModel: 'Model',
     imageModelCommercial: '{license}, also for released songs',
     imageModelPrivate: '{license}, private use only, not for released songs',
     imageModelDownload: 'Downloads about {gb} GB with its first picture.',
+    imageModelNowhere: 'No Mac here can paint with this model.',
+    imageModelHelper: 'Not on this Mac ({reason}), but on a helper.',
+    imageModelNoLettering:
+      'This model cannot letter; the title tends to become scribble. Z-Image Turbo, Krea 2 and FLUX 3 can.',
     imageModelToken:
       'Needs a Hugging Face token: accept the licence on huggingface.co, put the token into ~/.config/tonwerk/huggingface.token on the Mac.',
     imageHint:
-      'The Mac paints in the background once no other model needs the memory (about {gb} GB, under a minute per picture). Each picture is a suggestion; only "Use as cover" makes it the cover.',
+      'The Mac paints in the background once no other model needs the memory (about {gb} GB; Klein under a minute per picture, Krea 2 and FLUX 3 a few minutes). Each picture is a suggestion; only "Use as cover" makes it the cover.',
     imageStart: 'Paint',
     imageList: 'Suggestions',
     imageTake: 'Use as cover',
@@ -1779,7 +1787,7 @@ const messages = {
     storage_ane: 'Neural Engine cache',
     storage_lmstudio: 'LM Studio models',
     storage_speechModels: 'Speech models',
-    storage_imageModels: 'Image models (FLUX.2)',
+    storage_imageModels: 'Image models',
     storage_separatorModels: 'Stem separation',
     storage_seedvcModels: 'Seed-VC',
     storage_montageModels: 'CLIP for photo videos',

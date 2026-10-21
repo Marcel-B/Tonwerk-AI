@@ -1,9 +1,9 @@
 namespace YueUI.Api.Images;
 
 /// <summary>
-/// Covers painted by a local text-to-image model (FLUX.2 Klein through mflux), configured under <c>Images</c>. It needs
-/// its own Python environment, which <c>deploy/install-images.sh</c> makes; without it the dialog explains how and the
-/// endpoint that paints answers 501.
+/// Covers painted by a local text-to-image model (FLUX.2 Klein, Z-Image Turbo and Krea 2 through mflux, FLUX 3 Klein
+/// through flux3-mlx), configured under <c>Images</c>. Each runner needs its own Python environment, which
+/// <c>deploy/install-images.sh</c> makes; without it the dialog explains how and the endpoint that paints answers 501.
 /// </summary>
 public sealed class ImageOptions
 {
@@ -18,17 +18,26 @@ public sealed class ImageOptions
     /// <summary>The Python with mflux; default <c>env/bin/python</c> under <see cref="Root"/>.</summary>
     public string? Python { get; set; }
 
+    /// <summary>The Python with flux3-mlx; default <c>flux3/bin/python</c> under <see cref="Root"/>.</summary>
+    public string? Flux3Python { get; set; }
+
+    /// <summary>
+    /// The Mac's memory in GB, which decides the models it offers (<see cref="ImageModel.MinSystemGb"/>); null reads it
+    /// from the system.
+    /// </summary>
+    public double? SystemMemoryGb { get; set; }
+
     /// <summary>The Hugging Face cache the models are downloaded to (<c>HF_HOME</c>); default <c>models</c> under <see cref="Root"/>.</summary>
     public string? ModelCache { get; set; }
 
     /// <summary>
     /// A file holding a Hugging Face access token, read for every picture; default
-    /// <c>~/.config/tonwerk/huggingface.token</c>. Only Klein 9B needs it: its repository is gated behind the
-    /// non-commercial licence, which has to be accepted on huggingface.co with that account first.
+    /// <c>~/.config/tonwerk/huggingface.token</c>. Klein 9B and Krea 2 need it: their repositories are gated behind
+    /// their licences, which have to be accepted on huggingface.co with that account first.
     /// </summary>
     public string? TokenFile { get; set; }
 
-    /// <summary>A picture gives up after this long; the first one of a model includes downloading it (15 to 32 GB).</summary>
+    /// <summary>A picture gives up after this long; the first one of a model includes downloading it (15 to 35 GB).</summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(90);
 
     /// <summary>How often a waiting picture looks whether YuE2, the lyrics model, a voice or the speech lab left the memory.</summary>
@@ -54,6 +63,19 @@ public sealed class ImageOptions
         : Expand(Root);
 
     public string ResolvedPython => string.IsNullOrWhiteSpace(Python) ? Path.Combine(ResolvedRoot, "env", "bin", "python") : Expand(Python);
+
+    public string ResolvedFlux3Python => string.IsNullOrWhiteSpace(Flux3Python) ? Path.Combine(ResolvedRoot, "flux3", "bin", "python") : Expand(Flux3Python);
+
+    /// <summary>The Python that runs <paramref name="runner"/>.</summary>
+    public string PythonFor(string runner) => runner == ImageRunners.Flux3 ? ResolvedFlux3Python : ResolvedPython;
+
+    /// <summary>
+    /// What the GC reports as the machine's memory, in GiB as Apple counts it (a 32 GB Mac says 32); null where it
+    /// cannot tell.
+    /// </summary>
+    public double? ResolvedSystemMemoryGb => SystemMemoryGb ?? (GC.GetGCMemoryInfo().TotalAvailableMemoryBytes is > 0 and var bytes
+        ? bytes / (double)(1L << 30)
+        : null);
 
     public string ResolvedModelCache => string.IsNullOrWhiteSpace(ModelCache) ? Path.Combine(ResolvedRoot, "models") : Expand(ModelCache);
 

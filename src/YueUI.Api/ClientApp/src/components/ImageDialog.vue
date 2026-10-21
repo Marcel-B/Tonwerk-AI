@@ -181,15 +181,14 @@ function close(): void {
         <span>{{ t('imageWithTitle') }}</span>
       </label>
       <div v-if="modelOptions.length > 1" class="flex flex-col gap-1">
-        <SelectButton
+        <!-- A list rather than buttons side by side: five models do not fit a phone's width. -->
+        <Select
           v-model="model"
           :options="modelOptions"
           option-label="label"
           option-value="value"
-          :allow-empty="false"
           :aria-label="t('imageModel')"
-          class="w-full"
-          :pt="{ pcToggleButton: { root: { class: 'flex-1' } } }"
+          fluid
         />
       </div>
       <div v-if="chosen" class="flex flex-col gap-1 text-sm">
@@ -198,6 +197,11 @@ function close(): void {
         }}</span>
         <span v-if="!chosen.downloaded" class="muted">{{ t('imageModelDownload', { gb: chosen.downloadGb }) }}</span>
         <span v-if="!chosen.tokenFound" class="danger">{{ t('imageModelToken') }}</span>
+        <span v-if="chosen.available === false" class="danger">{{ chosen.unavailable ?? t('imageModelNowhere') }}</span>
+        <span v-else-if="chosen.unavailable" class="muted">{{
+          t('imageModelHelper', { reason: chosen.unavailable })
+        }}</span>
+        <span v-if="withTitle && !chosen.lettering" class="muted">{{ t('imageModelNoLettering') }}</span>
       </div>
       <small class="muted">{{ t('imageHint', { gb: chosen?.memoryGb ?? 9 }) }}</small>
       <div class="flex justify-end">
@@ -206,7 +210,7 @@ function close(): void {
           :label="t('imageStart')"
           icon="pi pi-palette"
           :loading="sending"
-          :disabled="!info?.installed || !model || prompt.trim() === ''"
+          :disabled="!model || chosen?.available === false || prompt.trim() === ''"
         />
       </div>
     </form>

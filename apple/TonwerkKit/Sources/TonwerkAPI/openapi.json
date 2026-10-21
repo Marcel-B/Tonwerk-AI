@@ -6966,6 +6966,10 @@
           },
           "translates": {
             "type": "boolean"
+          },
+          "flux3Python": {
+            "type": "string",
+            "default": ""
           }
         }
       },
@@ -7011,6 +7015,27 @@
           },
           "tokenFound": {
             "type": "boolean"
+          },
+          "available": {
+            "type": "boolean",
+            "default": true
+          },
+          "unavailable": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lettering": {
+            "type": "boolean",
+            "default": false
+          },
+          "minSystemGb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
           }
         }
       },

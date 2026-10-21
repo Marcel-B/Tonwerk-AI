@@ -22,9 +22,13 @@ public sealed class EngineInventory(IServiceProvider services)
         {
             engines.Add(Engines.Speech);
         }
-        if (services.GetRequiredService<IImageEngine>().Installed)
+        var images = services.GetRequiredService<IImageEngine>();
+        if (images.Installed)
         {
             engines.Add(Engines.Images);
+            engines.AddRange(services.GetRequiredService<IOptions<ImageOptions>>().Value.ResolvedModels
+                .Where(m => images.Unavailable(m) is null)
+                .Select(m => Engines.ImageModel(m.Id)));
         }
         var ace = services.GetRequiredService<IAceEngine>();
         if (ace.Installed && ace.Files().Complete)

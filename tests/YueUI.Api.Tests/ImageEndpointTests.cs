@@ -21,17 +21,73 @@ public sealed class ImageEndpointTests : IDisposable
     public void Dispose() => _app.Dispose();
 
     [Fact]
-    public async Task Both_klein_models_are_offered_with_what_they_cost_and_allow()
+    public async Task Every_model_is_offered_with_what_it_costs_and_allows()
     {
         var info = await _client.GetFromJsonAsync<ImageInfo>("/api/images", TestApp.Json);
 
         Assert.True(info!.Installed);
         Assert.EndsWith(Path.Combine("images", "env", "bin", "python"), info.Python);
-        Assert.Equal(["klein-4b", "klein-9b"], info.Models.Select(m => m.Id));
-        Assert.Equal([true, false], info.Models.Select(m => m.Commercial));
-        Assert.Equal([true, false], info.Models.Select(m => m.Downloaded));
-        // 9B's repository is gated and no token is there.
-        Assert.Equal([true, false], info.Models.Select(m => m.TokenFound));
+        Assert.EndsWith(Path.Combine("images", "flux3", "bin", "python"), info.Flux3Python);
+        Assert.Equal(["klein-4b", "klein-9b", "z-image-turbo", "krea-2-turbo", "flux3-klein"], info.Models.Select(m => m.Id));
+        Assert.Equal([true, false, true, true, true], info.Models.Select(m => m.Commercial));
+        Assert.Equal([true, false, false, false, false], info.Models.Select(m => m.Downloaded));
+        // 9B's and Krea's repositories are gated and no token is there.
+        Assert.Equal([true, false, true, false, true], info.Models.Select(m => m.TokenFound));
+        Assert.Equal([false, false, true, true, true], info.Models.Select(m => m.Lettering));
+        Assert.All(info.Models, m => Assert.True(m.Available));
+    }
+
+    [Fact]
+    public void The_new_models_need_a_Mac_with_32_GB_and_their_runner()
+    {
+        var root = Path.Combine(_app.Root, "runners");
+        var settings = new ImageOptions { Root = root, SystemMemoryGb = 24 };
+        var krea = ImageModel.Defaults.Single(m => m.Id == "krea-2-turbo");
+        var flux3 = ImageModel.Defaults.Single(m => m.Id == "flux3-klein");
+        var klein = ImageModel.Defaults[0];
+        Directory.CreateDirectory(Path.Combine(root, "env", "bin"));
+        File.WriteAllText(Path.Combine(root, "env", "bin", "python"), "");
+
+        Assert.Null(MfluxEngine.UnavailableOn(klein, settings));
+        Assert.Equal("Krea 2 Turbo needs a Mac with 32 GB; this one has 24.", MfluxEngine.UnavailableOn(krea, settings));
+
+        settings.SystemMemoryGb = 32;
+        Assert.Null(MfluxEngine.UnavailableOn(krea, settings));
+        // FLUX 3 runs in flux3-mlx's own environment, which is not there.
+        Assert.Contains("flux3-mlx is not installed", MfluxEngine.UnavailableOn(flux3, settings));
+        Assert.True(krea.ContentFilter);
+        Assert.Equal("4bit", flux3.Upsampler);
+    }
+
+    [Fact]
+    public async Task A_model_no_Mac_here_can_paint_is_refused_with_why()
+    {
+        _app.AddSong(Run, "song1");
+        _app.Images.Missing["krea-2-turbo"] = "Krea 2 Turbo needs a Mac with 32 GB; this one has 24.";
+
+        var info = await _client.GetFromJsonAsync<ImageInfo>("/api/images", TestApp.Json);
+        var response = await _client.PostAsJsonAsync($"/api/songs/{Run}/song1/images", new { prompt = "x", model = "krea-2-turbo" });
+
+        var krea = info!.Models.Single(m => m.Id == "krea-2-turbo");
+        Assert.Equal((false, "Krea 2 Turbo needs a Mac with 32 GB; this one has 24."), (krea.Available, krea.Unavailable));
+        Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
+        Assert.Contains("needs a Mac with 32 GB", await response.Content.ReadAsStringAsync());
+        Assert.Empty(_app.Images.Jobs);
+    }
+
+    [Fact]
+    public async Task What_the_upsampler_wrote_is_shown_as_the_painted_prompt()
+    {
+        _app.AddSong(Run, "song1");
+        _app.Images.Upsampled = "A wide nocturnal cityscape drenched in neon, wet asphalt reflecting magenta signs.";
+
+        await _client.PostAsJsonAsync($"/api/songs/{Run}/song1/images", new { prompt = "Neon city at night", model = "flux3-klein" });
+
+        var done = await WaitForImages("song1", all => all.Single().Finished);
+        Assert.Equal(("done", "FLUX 3 Klein"), (done[0].Stage, done[0].ModelLabel));
+        Assert.Equal(_app.Images.Upsampled, done[0].PaintedPrompt);
+        var job = Assert.Single(_app.Images.Jobs);
+        Assert.Equal((ImageRunners.Flux3, "8bit", 16), (job.Model.Runner, job.Model.Model, job.Model.Steps));
     }
 
     [Fact]

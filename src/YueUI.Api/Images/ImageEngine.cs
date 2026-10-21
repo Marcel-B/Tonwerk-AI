@@ -9,18 +9,22 @@ namespace YueUI.Api.Images;
 public sealed record ImageJob(ImageModel Model, string Prompt, long Seed, int Width, int Height, string Output);
 
 /// <summary>The script's measurements; null where it could not tell.</summary>
-public sealed record ImageResult(double? LoadSeconds, double? PaintSeconds, double? PeakMemoryGb);
+/// <param name="PaintedPrompt">What FLUX 3's upsampler made of the prompt, which the model painted.</param>
+public sealed record ImageResult(double? LoadSeconds, double? PaintSeconds, double? PeakMemoryGb, string? PaintedPrompt = null);
 
 public sealed class ImageException(string message, int status = StatusCodes.Status500InternalServerError) : Exception(message)
 {
     public int Status { get; } = status;
 }
 
-/// <summary>Paints pictures. Tests replace it; the real one runs mflux.</summary>
+/// <summary>Paints pictures. Tests replace it; the real one runs mflux or flux3-mlx.</summary>
 public interface IImageEngine
 {
-    /// <summary>The Python environment with mflux is there.</summary>
+    /// <summary>The Python environment of some runner is there.</summary>
     bool Installed { get; }
+
+    /// <summary>Why this Mac cannot paint with the model (its runner missing, too little memory); null when it can.</summary>
+    string? Unavailable(ImageModel model);
 
     /// <summary>Whether the model's repository is already in the cache.</summary>
     bool Downloaded(ImageModel model);
@@ -33,8 +37,9 @@ public interface IImageEngine
 }
 
 /// <summary>
-/// Runs <c>Images/yueui_image.py</c> with mflux's Python, one process per picture, like the speech lab: the model is
-/// loaded for the picture and its memory freed with the process, since on 24 GB it must not stay beside YuE2.
+/// Runs <c>Images/yueui_image.py</c> with the model's runner's Python (mflux or flux3-mlx), one process per picture,
+/// like the speech lab: the model is loaded for the picture and its memory freed with the process, since MLX's Metal
+/// cache only goes with it and nothing may stay beside YuE2.
 /// </summary>
 public sealed class MfluxEngine(IOptions<ImageOptions> options, ILogger<MfluxEngine> logger) : IImageEngine
 {
@@ -45,21 +50,36 @@ public sealed class MfluxEngine(IOptions<ImageOptions> options, ILogger<MfluxEng
 
     public static string Script => Path.Combine(AppContext.BaseDirectory, "Images", "yueui_image.py");
 
-    public bool Installed => File.Exists(options.Value.ResolvedPython);
+    public bool Installed => File.Exists(options.Value.ResolvedPython) || File.Exists(options.Value.ResolvedFlux3Python);
+
+    public string? Unavailable(ImageModel model) => UnavailableOn(model, options.Value);
+
+    /// <summary>The rules of <see cref="IImageEngine.Unavailable"/>, shared with the endpoint's message.</summary>
+    public static string? UnavailableOn(ImageModel model, ImageOptions settings)
+    {
+        // Half a GB of slack: what the system reports can fall a little short of what the Mac is sold with.
+        if (model.MinSystemGb is { } needed && settings.ResolvedSystemMemoryGb is { } has && has < needed - 0.5)
+        {
+            return $"{model.Label} needs a Mac with {needed:0} GB; this one has {has:0}.";
+        }
+        var python = settings.PythonFor(model.Runner);
+        return File.Exists(python) ? null : $"{model.Runner} is not installed ({python}); run deploy/install-images.sh.";
+    }
 
     public bool TokenFound => Token() is not null;
 
-    public bool Downloaded(ImageModel model) =>
-        Directory.Exists(Path.Combine(options.Value.ResolvedModelCache, "hub", $"models--{model.Repo.Replace("/", "--", StringComparison.Ordinal)}", "snapshots"));
+    public bool Downloaded(ImageModel model) => model.MoreRepos.Prepend(model.Repo).All(repo =>
+        Directory.Exists(Path.Combine(options.Value.ResolvedModelCache, "hub", $"models--{repo.Replace("/", "--", StringComparison.Ordinal)}", "snapshots")));
 
     public async Task<ImageResult> PaintAsync(ImageJob job, Action<string, double> progress, CancellationToken cancellationToken)
     {
         var settings = options.Value;
-        if (!Installed)
+        if (Unavailable(job.Model) is { } reason)
         {
-            throw new ImageException($"mflux is not installed ({settings.ResolvedPython}); run deploy/install-images.sh.", StatusCodes.Status501NotImplemented);
+            throw new ImageException(reason, StatusCodes.Status501NotImplemented);
         }
-        var start = new ProcessStartInfo(settings.ResolvedPython)
+        var python = settings.PythonFor(job.Model.Runner);
+        var start = new ProcessStartInfo(python)
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -82,9 +102,12 @@ public sealed class MfluxEngine(IOptions<ImageOptions> options, ILogger<MfluxEng
 
         var request = new JsonObject
         {
+            ["runner"] = job.Model.Runner,
             ["model"] = job.Model.Model,
             ["quantize"] = job.Model.Quantize,
             ["steps"] = job.Model.Steps,
+            ["upsampler"] = job.Model.Upsampler,
+            ["contentFilter"] = job.Model.ContentFilter,
             ["prompt"] = job.Prompt,
             ["seed"] = job.Seed,
             ["width"] = job.Width,
@@ -92,7 +115,7 @@ public sealed class MfluxEngine(IOptions<ImageOptions> options, ILogger<MfluxEng
             ["output"] = job.Output,
         };
 
-        using var process = Process.Start(start) ?? throw new ImageException($"Could not start {settings.ResolvedPython}.");
+        using var process = Process.Start(start) ?? throw new ImageException($"Could not start {python}.");
         logger.LogInformation("Painting with {Model} (pid {Pid})", job.Model.Model, process.Id);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(settings.Timeout);
@@ -117,7 +140,8 @@ public sealed class MfluxEngine(IOptions<ImageOptions> options, ILogger<MfluxEng
                         progress((string?)data["stage"] ?? "painting", (double?)data["fraction"] ?? 0);
                         break;
                     case "done":
-                        result = new ImageResult((double?)data["loadSeconds"], (double?)data["paintSeconds"], (double?)data["peakMemoryGb"]);
+                        result = new ImageResult(
+                            (double?)data["loadSeconds"], (double?)data["paintSeconds"], (double?)data["peakMemoryGb"], (string?)data["paintedPrompt"]);
                         break;
                 }
             }, timeout.Token);
@@ -145,7 +169,8 @@ public sealed class MfluxEngine(IOptions<ImageOptions> options, ILogger<MfluxEng
     }
 
     /// <summary>
-    /// The script prints its own "Error: …" line where it knows better (a gated repository, a missing package); else the
+    /// The script prints its own "Error: …" line where it knows better (a gated repository, a missing package, Krea's
+    /// content filter); else the
     /// traceback's last line says what broke.
     /// </summary>
     public static string FailureMessage(IEnumerable<string> output)

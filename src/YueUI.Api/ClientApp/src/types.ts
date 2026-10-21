@@ -851,6 +851,14 @@ export interface ImageModelInfo {
   gated: boolean
   downloaded: boolean
   tokenFound: boolean
+  /** Some Mac here can paint with it: this one, or a helper that says so. */
+  available?: boolean
+  /** Why this Mac cannot (runner missing, too little memory), even where a helper can. */
+  unavailable?: string | null
+  /** It can write a short title into the picture. */
+  lettering?: boolean
+  /** The least memory a Mac needs to be offered it, in GB. */
+  minSystemGb?: number | null
 }
 
 /** `GET /api/audio-midi`: whether Basic Pitch is set up, and where the server looks for it. */
@@ -877,6 +885,8 @@ export interface ImageInfo {
   models: ImageModelInfo[]
   /** Whether Claude translates a description into English before painting. */
   translates: boolean
+  /** flux3-mlx's Python, for FLUX 3 Klein. */
+  flux3Python?: string
 }
 
 /** ACE-Step's tasks: a new song, a new style over a library song, or a stretch of one made again. */

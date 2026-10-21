@@ -78,7 +78,7 @@ describe() {
     songs) echo "songs and transcriptions (also YuE Studio's)" ;;
     lmstudio) echo "LM Studio's models" ;;
     speech) echo "speech lab models" ;;
-    images) echo "FLUX.2 Klein models for painted covers" ;;
+    images) echo "image models for painted covers (Klein, Z-Image, Krea 2, FLUX 3)" ;;
     montage) echo "CLIP models for photo videos with a motif" ;;
     acestep) echo "ACE-Step models" ;;
     acesongs) echo "songs made with ACE-Step" ;;

@@ -4,8 +4,8 @@ import SwiftUI
 import TonwerkKit
 import UniformTypeIdentifiers
 
-/// A song's own cover, what the web page's library offers: a photo of one's own, cut square, or a picture FLUX.2 Klein
-/// paints on the Mac (`ImageDialog.vue`), or none again, which brings the drawn cover back.
+/// A song's own cover, what the web page's library offers: a photo of one's own, cut square, or a picture a local
+/// image model paints on the Mac (`ImageDialog.vue`), or none again, which brings the drawn cover back.
 enum CoverPhoto {
     /// The photo as the web page's `export.ts` sends it: cut square around its middle, at most `side` pixels, a JPEG.
     /// ImageIO reads HEIC and turns the picture as its EXIF says.
@@ -313,8 +313,9 @@ struct CoverEditor: View {
 
 // MARK: Painting
 
-/// A description goes to the Mac, which paints with FLUX.2 Klein once the memory is free; the candidates are listed
-/// here (and in the queue while in the works), and "Als Cover" makes one the song's cover.
+/// A description goes to the Mac, which paints with the chosen model (FLUX.2 Klein, Z-Image Turbo, Krea 2, FLUX 3
+/// Klein) once the memory is free; the candidates are listed here (and in the queue while in the works), and
+/// "Als Cover" makes one the song's cover.
 struct PaintCoverView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -338,7 +339,7 @@ struct PaintCoverView: View {
             Form {
                 if let info, !info.installed {
                     Section {
-                        Text("Zum Malen braucht der Mac mflux mit FLUX.2 Klein. Auf dem Mac einmal ausführen: deploy/install-images.sh (oder setup-mac.sh mit --images).")
+                        Text("Zum Malen braucht der Mac mflux oder flux3-mlx. Auf dem Mac einmal ausführen: deploy/install-images.sh (oder setup-mac.sh mit --images).")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -423,8 +424,8 @@ struct PaintCoverView: View {
             }
         } footer: {
             Text(info?.translates == true
-                ? "Deutsch geht auch: Claude übersetzt die Beschreibung vor dem Malen ins Englische, das FLUX Klein am besten versteht. Nur beschreiben, was zu sehen sein soll: „kein Text“ oder „kein Logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennt FLUX Klein nicht."
-                : "Am besten auf Englisch. Nur beschreiben, was zu sehen sein soll: „no text“ oder „no logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennt FLUX Klein nicht.")
+                ? "Deutsch geht auch: Claude übersetzt die Beschreibung vor dem Malen ins Englische, das die Bildmodelle am besten verstehen. Nur beschreiben, was zu sehen sein soll: „kein Text“ oder „kein Logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennen die Modelle nicht."
+                : "Am besten auf Englisch. Nur beschreiben, was zu sehen sein soll: „no text“ oder „no logo“ bringen Text und Logos eher ins Bild, einen Negativ-Prompt kennen die Modelle nicht.")
         }
     }
 
@@ -433,16 +434,28 @@ struct PaintCoverView: View {
         if let info, !info.models.isEmpty {
             Section {
                 if info.models.count > 1 {
+                    // Five models no longer fit side by side on a phone.
                     Picker("Modell", selection: $modelId) {
                         ForEach(info.models, id: \.id) { model in
                             Text(model.label).tag(model.id)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    .pickerStyle(.menu)
                 }
-                MachinePicker(selection: $machine, engine: "images")
+                MachinePicker(selection: $machine, engine: modelId.isEmpty ? "images" : "images:\(modelId)")
                 if let chosen {
+                    if chosen.available == false {
+                        Text(chosen.unavailable ?? "Kein Mac hier kann mit diesem Modell malen.")
+                            .foregroundStyle(.red)
+                    } else if let reason = chosen.unavailable {
+                        // This Mac cannot, a helper can: automatic sends it there.
+                        Text("Nicht auf diesem Mac (\(reason)), aber auf einem Helfer.")
+                            .foregroundStyle(.secondary)
+                    }
+                    if withTitle && chosen.lettering != true {
+                        Text("Dieses Modell kann keine Schrift; der Titel wird eher Gekritzel. Z-Image Turbo, Krea 2 und FLUX 3 können es.")
+                            .foregroundStyle(.secondary)
+                    }
                     Text(chosen.commercial
                         ? "\(chosen.license), auch für veröffentlichte Songs"
                         : "\(chosen.license), nur privat, nicht für veröffentlichte Songs")
@@ -459,7 +472,7 @@ struct PaintCoverView: View {
             } header: {
                 CardHeading("Modell", systemImage: "cpu")
             } footer: {
-                Text("Der Mac malt im Hintergrund, sobald kein anderes Modell den Speicher braucht (etwa \((chosen?.memoryGb ?? 9).formatted(.number.precision(.fractionLength(0...1)))) GB, unter einer Minute pro Bild). Jedes Bild ist ein Vorschlag, erst „Als Cover“ macht es zum Cover.")
+                Text("Der Mac malt im Hintergrund, sobald kein anderes Modell den Speicher braucht (etwa \((chosen?.memoryGb ?? 9).formatted(.number.precision(.fractionLength(0...1)))) GB; Klein unter einer Minute pro Bild, Krea 2 und FLUX 3 einige Minuten). Jedes Bild ist ein Vorschlag, erst „Als Cover“ macht es zum Cover.")
             }
             .font(.callout)
         }
@@ -479,7 +492,7 @@ struct PaintCoverView: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(sending || info?.installed != true || chosen == nil
+        .disabled(sending || chosen == nil || chosen?.available == false
             || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         if let message {
             Label(message, systemImage: failed ? "exclamationmark.triangle" : "checkmark.circle")
@@ -499,7 +512,8 @@ struct PaintCoverView: View {
                 .lineLimit(1)
                 .help(image.paintedPrompt ?? image.prompt)
             if let english = image.paintedPrompt {
-                // What Klein was given, so a picture that missed can be traced to the translation.
+                // What the model was given (Claude's translation, FLUX 3's upsampler), so a picture that missed can be
+                // traced to it.
                 Text("Gemalt nach: \(english)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

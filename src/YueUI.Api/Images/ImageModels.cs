@@ -1,8 +1,8 @@
 namespace YueUI.Api.Images;
 
 /// <summary>
-/// A text-to-image model mflux can run. A class with setters, since the list can be replaced in the configuration
-/// (<see cref="ImageOptions.Models"/>).
+/// A text-to-image model one of the runners can paint with (<see cref="ImageRunners"/>). A class with setters, since the
+/// list can be replaced in the configuration (<see cref="ImageOptions.Models"/>).
 /// </summary>
 public sealed class ImageModel
 {
@@ -11,20 +11,50 @@ public sealed class ImageModel
 
     public string Label { get; set; } = "";
 
-    /// <summary>mflux's name for it (<c>flux2-klein-4b</c>), which picks its configuration and its repository.</summary>
-    public string Model { get; set; } = "";
-
-    /// <summary>The Hugging Face repository mflux downloads, to tell whether it is in the cache already.</summary>
-    public string Repo { get; set; } = "";
+    /// <summary>Which runner paints it: <c>mflux</c> (the default) or <c>flux3-mlx</c> (<see cref="ImageRunners"/>).</summary>
+    public string Runner { get; set; } = ImageRunners.Mflux;
 
     /// <summary>
-    /// Bits the weights are quantized to when loaded (3, 4, 5, 6 or 8), null for the full bfloat16 weights. The download
-    /// is the full one either way; what shrinks is the memory while it paints.
+    /// The runner's name for it: mflux's model name (<c>flux2-klein-4b</c>, <c>z-image-turbo</c>, <c>krea-2</c>), which
+    /// picks its configuration and its repository, or flux3-mlx's build (<c>8bit</c>).
+    /// </summary>
+    public string Model { get; set; } = "";
+
+    /// <summary>The Hugging Face repository downloaded, to tell whether it is in the cache already.</summary>
+    public string Repo { get; set; } = "";
+
+    /// <summary>Further repositories its first picture downloads (FLUX 3's prompt upsampler), for the same question.</summary>
+    public List<string> MoreRepos { get; set; } = [];
+
+    /// <summary>
+    /// Bits mflux quantizes the weights to when it loads them (3, 4, 5, 6 or 8), null for the full bfloat16 weights. The
+    /// download is the full one either way; what shrinks is the memory while it paints. flux3-mlx's builds come quantized.
     /// </summary>
     public int? Quantize { get; set; }
 
-    /// <summary>Klein is distilled to four steps; more make it slower, not better.</summary>
+    /// <summary>The steps the model is distilled to; more make it slower, not better.</summary>
     public int Steps { get; set; } = 4;
+
+    /// <summary>
+    /// The prompt upsampler flux3-mlx expands the description with (<c>4bit</c>), null for none. FLUX 3 Klein was trained
+    /// on the upsampler's long captions, and Black Forest Labs say never to use it without.
+    /// </summary>
+    public string? Upsampler { get; set; }
+
+    /// <summary>
+    /// Every picture passes an NSFW classifier before it is kept, and a flagged one is not: Krea 2's licence (§4.2)
+    /// requires a content filter wherever the model is used.
+    /// </summary>
+    public bool ContentFilter { get; set; }
+
+    /// <summary>
+    /// The least memory a Mac needs to be offered it, in GB; null for any. A Mac with less never paints it, here or as a
+    /// helper, so automatic placement passes it over.
+    /// </summary>
+    public double? MinSystemGb { get; set; }
+
+    /// <summary>It can write short words into the picture (a title on a wall), which Klein 4B cannot.</summary>
+    public bool Lettering { get; set; }
 
     /// <summary>Roughly what it downloads, in GB, so the dialog can say what the first picture costs.</summary>
     public double DownloadGb { get; set; }
@@ -42,9 +72,12 @@ public sealed class ImageModel
     public bool Gated { get; set; }
 
     /// <summary>
-    /// Both distilled Klein models of Black Forest Labs' FLUX.2 (January 2026), the ones mflux 0.21 runs. Sizes are the
-    /// downloads mflux's README names; the memory is an estimate (transformer plus Qwen3 text encoder at the bits
-    /// given), not measured on the Mac. 4B is the default because its pictures may go on a released song.
+    /// Both distilled Klein models of Black Forest Labs' FLUX.2 (January 2026), Z-Image Turbo (Tongyi, the baseline of
+    /// Marcel's tests on oi-o-mat), Krea 2 Turbo (June 2026) and FLUX 3 Image Klein (October 2026). mflux 0.23 runs the
+    /// first four, flux3-mlx the last with its upsampler. Sizes are the downloads the model cards and READMEs name; the
+    /// memory is an estimate (transformer plus text encoder at the bits given), not measured on the Mac. 4B stays the
+    /// default because it is the smallest whose pictures may go on a released song. Krea 2 and FLUX 3 are offered only
+    /// on Macs with 32 GB (Marcel's wish, 2026-10-21): on 24 GB they would leave too little beside macOS.
     /// </summary>
     public static IReadOnlyList<ImageModel> Defaults { get; } =
     [
@@ -74,7 +107,66 @@ public sealed class ImageModel
             Commercial = false,
             Gated = true,
         },
+        new()
+        {
+            Id = "z-image-turbo",
+            Label = "Z-Image Turbo",
+            Model = "z-image-turbo",
+            Repo = "Tongyi-MAI/Z-Image-Turbo",
+            Quantize = 8,
+            // Distilled to eight denoising steps, which take nine scheduler steps; mflux's README uses nine.
+            Steps = 9,
+            Lettering = true,
+            DownloadGb = 21,
+            MemoryGb = 11,
+            License = "Apache 2.0",
+            Commercial = true,
+        },
+        new()
+        {
+            Id = "krea-2-turbo",
+            Label = "Krea 2 Turbo",
+            Model = "krea-2",
+            Repo = "krea/Krea-2-Turbo",
+            Quantize = 8,
+            Steps = 8,
+            ContentFilter = true,
+            MinSystemGb = 32,
+            Lettering = true,
+            DownloadGb = 35,
+            MemoryGb = 22,
+            License = "Krea 2 Community (kommerziell bis 1 Mio. $ Umsatz)",
+            Commercial = true,
+            Gated = true,
+        },
+        new()
+        {
+            Id = "flux3-klein",
+            Label = "FLUX 3 Klein",
+            Runner = ImageRunners.Flux3,
+            Model = "8bit",
+            Repo = "VisualInference/FLUX-3-Image-Klein-MLX-8bit",
+            MoreRepos = ["VisualInference/FLUX-3-Image-Klein-pup-MLX-4bit"],
+            Steps = 16,
+            Upsampler = "4bit",
+            MinSystemGb = 32,
+            Lettering = true,
+            DownloadGb = 15,
+            MemoryGb = 12,
+            License = "FLUX Kommunity (kommerziell bis 5 Mio. $ Umsatz)",
+            Commercial = true,
+        },
     ];
+}
+
+/// <summary>The programs that paint, each in a Python environment of its own (<c>deploy/install-images.sh</c>).</summary>
+public static class ImageRunners
+{
+    /// <summary>mflux: FLUX.2 Klein, Z-Image Turbo and Krea 2.</summary>
+    public const string Mflux = "mflux";
+
+    /// <summary>flux3-mlx: FLUX 3 Image Klein with Black Forest Labs' prompt upsampler, which mflux does not have.</summary>
+    public const string Flux3 = "flux3-mlx";
 }
 
 /// <summary>
@@ -98,12 +190,12 @@ public sealed record ImageState
     public required string Prompt { get; init; }
 
     /// <summary>
-    /// The English the model was given, where Claude translated <see cref="Prompt"/>; null while it waits for that, when
-    /// the prompt went as written, or for pictures from before.
+    /// The English the model was given, where Claude translated <see cref="Prompt"/> or FLUX 3's upsampler wrote it out;
+    /// null while it waits for that, when the prompt went as written, or for pictures from before.
     /// </summary>
     public string? PaintedPrompt { get; init; }
 
-    /// <summary>The same prompt, model and seed paint the same picture again.</summary>
+    /// <summary>The same prompt, model and seed paint the same picture again (FLUX 3's upsampler decodes greedily, so it too).</summary>
     public long Seed { get; init; }
 
     /// <summary>queued, loading (the model, including a download), painting, done, failed or cancelled.</summary>
@@ -143,10 +235,16 @@ public sealed record ImageRequest(string? Prompt, string? Model, long? Seed, str
     public const int MaxPromptLength = 2000;
 }
 
+/// <param name="Installed">Some runner is installed on this Mac.</param>
+/// <param name="Python">mflux's Python, where <c>deploy/install-images.sh</c> puts it.</param>
 /// <param name="Translates">Whether a description is translated into English before painting (a Claude key is there).</param>
-public sealed record ImageInfo(bool Installed, string Python, IReadOnlyList<ImageModelInfo> Models, bool Translates);
+/// <param name="Flux3Python">flux3-mlx's Python, the same.</param>
+public sealed record ImageInfo(bool Installed, string Python, IReadOnlyList<ImageModelInfo> Models, bool Translates, string Flux3Python = "");
 
 /// <param name="TokenFound">For a gated model: whether a Hugging Face token is there to download it with.</param>
+/// <param name="Available">Whether a Mac here can paint it: this one, or a helper that says so.</param>
+/// <param name="Unavailable">Why this Mac cannot (its runner missing, too little memory), even where a helper can.</param>
+/// <param name="Lettering">It can write a short title into the picture.</param>
 public sealed record ImageModelInfo(
     string Id,
     string Label,
@@ -156,4 +254,8 @@ public sealed record ImageModelInfo(
     bool Commercial,
     bool Gated,
     bool Downloaded,
-    bool TokenFound);
+    bool TokenFound,
+    bool Available = true,
+    string? Unavailable = null,
+    bool Lettering = false,
+    double? MinSystemGb = null);

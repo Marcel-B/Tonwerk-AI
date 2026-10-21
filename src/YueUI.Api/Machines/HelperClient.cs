@@ -17,6 +17,12 @@ public static class Engines
     public const string Voices = "voices";
     public const string Stems = "stems";
     public const string Singing = "singing";
+
+    /// <summary>
+    /// One image model this Mac can paint with, beside <see cref="Images"/>: models differ in runner and in the memory
+    /// they need (<see cref="Images.ImageModel.MinSystemGb"/>), so a helper is only picked for the ones it lists.
+    /// </summary>
+    public static string ImageModel(string id) => $"{Images}:{id}";
 }
 
 /// <summary>What a helper says about itself, polled by <see cref="MachineMonitor"/>.</summary>

@@ -69,6 +69,7 @@ public sealed class LogReport(
         text.AppendLine($"Engines: separator {Engine(voice.LocalStems, voice.StemServiceConfigured)}, Seed-VC {Engine(voice.LocalVoices, voice.VoiceServiceConfigured)}, "
             + $"speech lab {(File.Exists(speechOptions.Value.ResolvedPython) ? "installed" : "missing")}, "
             + $"images {(File.Exists(imageOptions.Value.ResolvedPython) ? "installed" : "missing")}, "
+            + $"FLUX 3 {(File.Exists(imageOptions.Value.ResolvedFlux3Python) ? "installed" : "missing")}, "
             + $"SheetSage2 {(paths.SheetSageInstalled ? "installed" : "missing")}, YuE2 worker {(File.Exists(paths.WorkerScript) ? "installed" : "missing")}");
         var busy = WorkerEndpoints.Busy(worker, memory, videos);
         text.AppendLine($"Busy: {(busy.Busy ? string.Join(", ", busy.Reasons) : "no")}");

@@ -30,7 +30,8 @@ echo "Environment: $ENV"
 # PyTorch only for Higgs Audio v3: its checkpoint keeps the audio codec in bfloat16, which mlx-audio reads through
 # PyTorch (safetensors' numpy path has no bfloat16). The other models run on MLX alone. 0.5.9 at least for the speech
 # enhancement models that clean a recording (MossFormer2 SE, DeepFilterNet, under mlx_audio.sts).
-PACKAGES="mlx-audio[tts]>=0.5.9 torch"
+# pillow<13: Pillow 13 imports numbers._IntegralLike at run time, which no released Python has (see install-images.sh).
+PACKAGES="mlx-audio[tts]>=0.5.9 torch pillow<13"
 
 # mlx-audio needs Python 3.10 or newer; macOS's own python3 is 3.9. uv brings a suitable one along.
 if command -v uv >/dev/null 2>&1; then

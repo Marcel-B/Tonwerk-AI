@@ -601,7 +601,7 @@ async function useAsNewSong(songId: string): Promise<void> {
   try {
     if (found.song.engine === 'ace') {
       // ACE-Step's own settings go back into its page; YuE2's form knows none of them.
-      aceForm.value = fromAceRequest(await aceSongRequest(songId))
+      aceForm.value = fromAceRequest(await aceSongRequest(songId), aceForm.value.machine)
       navigate('ace')
       show(t('newSongApplied', { title: found.run.title || t('untitled'), song: t('songN', { n: found.song.index }) }))
       return

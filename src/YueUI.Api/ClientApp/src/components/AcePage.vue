@@ -9,7 +9,9 @@ import { formatDateTime, formatDuration, t } from '../i18n'
 import { insertSectionTag } from '../lyricsTags'
 import type { AceInfo, AceJob, AceStage, AceTask, RunInfo } from '../types'
 import { showSong, songHref } from '../view'
+import { ranOnNote } from '../machines'
 import FieldHelp from './FieldHelp.vue'
+import MachinePicker from './MachinePicker.vue'
 import OptionalNumberField from './OptionalNumberField.vue'
 import SectionTags from './SectionTags.vue'
 import StyleBlocks from './StyleBlocks.vue'
@@ -199,7 +201,8 @@ function resetAdvanced(): void {
 }
 
 function resetForm(): void {
-  form.value = defaultAceForm()
+  // The Mac is a choice of the page, not of the song.
+  form.value = { ...defaultAceForm(), machine: form.value.machine }
   fieldErrors.value = {}
 }
 
@@ -251,7 +254,7 @@ async function removeJob(job: AceJob): Promise<void> {
 
 /** The job's request back in the form, with the seed it was made with, to vary one thing. */
 function reuse(job: AceJob): void {
-  form.value = fromAceRequest({ ...job.request, seed: job.seed })
+  form.value = fromAceRequest({ ...job.request, seed: job.seed }, form.value.machine)
   fieldErrors.value = {}
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -565,6 +568,7 @@ function message(caught: unknown): string {
                   :loading="sending"
                   :disabled="!canSend"
                 />
+                <MachinePicker v-model="form.machine" engine="ace" :disabled="sending" />
                 <span v-if="!lm && !form.source" class="muted text-sm">{{ t('aceSourcePick') }}</span>
               </div>
             </div>
@@ -762,7 +766,8 @@ function message(caught: unknown): string {
               <div class="truncate font-semibold">{{ job.title }}</div>
               <div class="muted truncate text-sm">
                 {{ t(`aceTask_${job.request.task ?? 'text2music'}`) }} · {{ formatDateTime(job.createdAt)
-                }}<template v-if="job.seconds !== null"> · {{ formatDuration(job.seconds) }}</template>
+                }}<template v-if="job.seconds !== null"> · {{ formatDuration(job.seconds) }}</template
+                ><template v-if="ranOnNote(job.ranOn)"> · {{ ranOnNote(job.ranOn) }}</template>
               </div>
             </div>
             <Tag :severity="stageSeverity[job.stage]">

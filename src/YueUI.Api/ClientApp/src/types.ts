@@ -736,6 +736,8 @@ export interface VersionRequest {
   diffusionSteps: number
   /** Mixes the original's reverb back in. */
   keepReverb: boolean
+  /** The Mac to convert on: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
 }
 
 /** A text-to-speech model the speech lab offers (SpeechModelInfo in Speech/SpeechModels.cs). */
@@ -928,6 +930,8 @@ export interface AceSongRequest {
   coverStrength?: number | null
   repaintStart?: number | null
   repaintEnd?: number | null
+  /** The Mac to compose on: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
 }
 
 export type AceStage =

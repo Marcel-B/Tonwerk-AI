@@ -20,6 +20,7 @@ import QueueOverview from './QueueOverview.vue'
 import SongTimeline from './SongTimeline.vue'
 import { holderOf, speechWaitReason, transcribing, waitReason } from '../queueModels'
 import { navigate, showSong, songHref } from '../view'
+import { loadMachines, ranOnNote } from '../machines'
 import { addPlaylist } from '../playlist'
 import type {
   AceJob,
@@ -174,13 +175,21 @@ const takesInWork = computed(() => props.takes.filter((take) => !take.finished))
 function takeDetail(take: SpeechTake): string {
   if (take.source !== null) {
     // A recording being cleaned: its name, and how far it is.
-    return [
-      take.source,
-      ...(take.progress !== null && !take.finished ? [`${Math.round(take.progress * 100)} %`] : []),
-    ].join(' · ')
+    return withRanOn(
+      [take.source, ...(take.progress !== null && !take.finished ? [`${Math.round(take.progress * 100)} %`] : [])],
+      take.ranOn,
+    )
   }
-  return [take.voiceLabel ?? t('labOwnVoice'), take.text.replace(/\s+/g, ' ').trim()].join(' · ')
+  return withRanOn([take.voiceLabel ?? t('labOwnVoice'), take.text.replace(/\s+/g, ' ').trim()], take.ranOn)
 }
+
+/** A job's detail with "on <Mac>" where the server has helpers (machines.ts). */
+function withRanOn(parts: string[], ranOn: string | null | undefined): string {
+  const note = ranOnNote(ranOn)
+  return (note ? [...parts, note] : parts).join(' · ')
+}
+
+void loadMachines()
 
 /**
  * Voice versions and stem separations in the works, oldest first, as VoiceConverter makes them one at a time. They
@@ -207,7 +216,7 @@ const voiceItems = computed<VoiceItem[]>(() =>
         key: `version:${v.id}`,
         songId: v.songId,
         title: v.title,
-        detail: t('queueVersion', { voice: v.voiceLabel }),
+        detail: withRanOn([t('queueVersion', { voice: v.voiceLabel })], v.ranOn),
         stage: v.stage,
         stageLabel: [t(`versionStage_${v.stage}`), versionProgress(v)].filter(Boolean).join(' '),
         createdAt: v.createdAt,
@@ -220,7 +229,7 @@ const voiceItems = computed<VoiceItem[]>(() =>
         key: `stems:${s.id}`,
         songId: s.upload ? null : s.songId,
         title: s.title,
-        detail: t('queueStems', { model: s.model }),
+        detail: withRanOn([t('queueStems', { model: s.model })], s.ranOn),
         stage: s.stage,
         stageLabel: t(`stemsStage_${s.stage}`),
         createdAt: s.createdAt,
@@ -233,7 +242,7 @@ const voiceItems = computed<VoiceItem[]>(() =>
         key: `swap:${s.id}`,
         songId: null,
         title: s.fileName,
-        detail: t('queueSwap', { voice: s.voiceLabel }),
+        detail: withRanOn([t('queueSwap', { voice: s.voiceLabel })], s.ranOn),
         stage: s.stage,
         stageLabel: [t(`versionStage_${s.stage}`), versionProgress(s)].filter(Boolean).join(' '),
         createdAt: s.createdAt,
@@ -505,7 +514,9 @@ watch(
             <strong v-else class="block truncate"
               >{{ image.title || t('untitled') }} · {{ songNumber(image.songId) }}</strong
             >
-            <span class="block text-sm text-muted-color truncate">{{ image.modelLabel }}</span>
+            <span class="block text-sm text-muted-color truncate">{{
+              withRanOn([image.modelLabel], image.ranOn)
+            }}</span>
           </div>
           <Tag :severity="image.stage === 'queued' ? 'secondary' : undefined" class="shrink-0">
             <i v-if="image.stage !== 'queued'" class="pi pi-spin pi-spinner text-xs" />
@@ -535,7 +546,9 @@ watch(
               @click.prevent="navigate('ace')"
               >{{ job.title }}</a
             >
-            <span class="block text-sm text-muted-color truncate">{{ job.request.caption }}</span>
+            <span class="block text-sm text-muted-color truncate">{{
+              withRanOn([job.request.caption], job.ranOn)
+            }}</span>
             <span v-if="job.stage === 'queued'" class="block text-xs text-muted-color truncate"
               ><i class="pi pi-clock text-xs" /> {{ aceReason(index) }}</span
             >

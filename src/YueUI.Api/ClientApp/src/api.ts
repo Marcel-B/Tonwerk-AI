@@ -12,6 +12,7 @@ import type {
   LyricsReasoning,
   LyricsModels,
   LyricsState,
+  MachineInfo,
   MidiScore,
   PlaylistInfo,
   InsightReport,
@@ -88,9 +89,10 @@ export async function draftLyrics(
   model: string | null,
   image: string | null = null,
   reasoning: LyricsReasoning | null = null,
+  machine: string | null = null,
 ): Promise<LyricsState> {
   return (
-    await send('/api/lyrics', json('POST', { keywords, style, language, model, image, reasoning }))
+    await send('/api/lyrics', json('POST', { keywords, style, language, model, image, reasoning, machine }))
   ).json() as Promise<LyricsState>
 }
 
@@ -106,15 +108,28 @@ export async function reviseLyrics(
   language: LyricsLanguage,
   model: string | null,
   reasoning: LyricsReasoning | null = null,
+  machine: string | null = null,
 ): Promise<LyricsState> {
   return (
-    await send('/api/lyrics', json('POST', { lyrics, instruction, keywords, style, language, model, reasoning }))
+    await send(
+      '/api/lyrics',
+      json('POST', { lyrics, instruction, keywords, style, language, model, reasoning, machine }),
+    )
   ).json() as Promise<LyricsState>
 }
 
-/** The models LM Studio has downloaded, for the picker; starts LM Studio's server if needed (503 if it cannot). */
-export async function getLyricsModels(): Promise<LyricsModels> {
-  return (await send('/api/lyrics/models')).json() as Promise<LyricsModels>
+/**
+ * The models LM Studio has downloaded, for the picker; starts LM Studio's server if needed (503 if it cannot). With a
+ * machine, that Mac's LM Studio.
+ */
+export async function getLyricsModels(machine: string | null = null): Promise<LyricsModels> {
+  const query = machine ? `?machine=${encodeURIComponent(machine)}` : ''
+  return (await send(`/api/lyrics/models${query}`)).json() as Promise<LyricsModels>
+}
+
+/** This Mac and the helpers a job may run on, for the pickers. */
+export async function listMachines(): Promise<MachineInfo[]> {
+  return (await send('/api/machines')).json() as Promise<MachineInfo[]>
 }
 
 /** The LoRAs a song can be made with. */
@@ -518,6 +533,8 @@ export interface SwapRequest {
   /** The file is a whole song: separate it first and mix the new vocals back. */
   separate: boolean
   keepReverb: boolean
+  /** The Mac to sing on; null for whichever is free. */
+  machine?: string | null
 }
 
 /** Uploads the recording and queues it; its progress arrives as `swap` events. */
@@ -525,7 +542,7 @@ export async function addSwap(file: File, request: SwapRequest): Promise<SwapSta
   const form = new FormData()
   form.append('file', file)
   for (const [key, value] of Object.entries(request)) {
-    if (value !== undefined) {
+    if (value !== undefined && value !== null) {
       form.append(key, String(value))
     }
   }
@@ -664,16 +681,31 @@ export async function listStems(): Promise<StemSetState[]> {
 }
 
 /** Queues the song to be split into stems; its progress arrives as `stems` events. */
-export async function separateSong(songId: string, model: string | null, dereverb: boolean): Promise<StemSetState> {
-  return (await send(`/api/songs/${songId}/stems`, json('POST', { model, dereverb }))).json() as Promise<StemSetState>
+export async function separateSong(
+  songId: string,
+  model: string | null,
+  dereverb: boolean,
+  machine: string | null = null,
+): Promise<StemSetState> {
+  return (
+    await send(`/api/songs/${songId}/stems`, json('POST', { model, dereverb, machine }))
+  ).json() as Promise<StemSetState>
 }
 
 /** Queues an uploaded recording to be split into stems like a song. */
-export async function separateFile(file: File, model: string | null, dereverb: boolean): Promise<StemSetState> {
+export async function separateFile(
+  file: File,
+  model: string | null,
+  dereverb: boolean,
+  machine: string | null = null,
+): Promise<StemSetState> {
   const form = new FormData()
   form.append('file', file)
   if (model) {
     form.append('model', model)
+  }
+  if (machine) {
+    form.append('machine', machine)
   }
   form.append('dereverb', String(dereverb))
   return (await send('/api/stems', { method: 'POST', body: form })).json() as Promise<StemSetState>
@@ -716,8 +748,15 @@ export function speechVoiceAudioUrl(id: string): string {
 }
 
 /** One take per model, spoken one after the other; their progress arrives as `speech` events. */
-export async function speak(text: string, voiceId: string | null, models: string[]): Promise<SpeechTake[]> {
-  return (await send('/api/speech/takes', json('POST', { text, voiceId, models }))).json() as Promise<SpeechTake[]>
+export async function speak(
+  text: string,
+  voiceId: string | null,
+  models: string[],
+  machine: string | null = null,
+): Promise<SpeechTake[]> {
+  return (await send('/api/speech/takes', json('POST', { text, voiceId, models, machine }))).json() as Promise<
+    SpeechTake[]
+  >
 }
 
 /** Stops a take that is being spoken, or removes a finished one with its audio. */
@@ -736,9 +775,17 @@ export async function deleteSingingVoice(id: string): Promise<void> {
 }
 
 /** A speech recording cleaned of noise by one model; it waits with the takes and reports as a `speech` event. */
-export async function cleanSpeech(file: Blob, fileName: string, model: string): Promise<SpeechTake> {
+export async function cleanSpeech(
+  file: Blob,
+  fileName: string,
+  model: string,
+  machine: string | null = null,
+): Promise<SpeechTake> {
   const form = new FormData()
   form.append('model', model)
+  if (machine) {
+    form.append('machine', machine)
+  }
   form.append('file', file, fileName)
   return (await send('/api/speech/cleanups', { method: 'POST', body: form })).json() as Promise<SpeechTake>
 }
@@ -765,7 +812,7 @@ export async function listImages(songId: string): Promise<ImageState[]> {
 /** Queues a picture; its progress arrives as `image` events. Without a seed the server picks one. */
 export async function paintImage(
   songId: string,
-  request: { prompt: string; model: string; seed?: number },
+  request: { prompt: string; model: string; seed?: number; machine?: string | null },
 ): Promise<ImageState> {
   return (await send(`/api/songs/${songId}/images`, json('POST', request))).json() as Promise<ImageState>
 }

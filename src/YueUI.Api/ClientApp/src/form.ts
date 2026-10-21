@@ -22,6 +22,8 @@ export interface FormState {
   lyricsModel: string
   /** How much a thinking model thinks before a draft; empty leaves it to LM Studio's setting for the model. */
   lyricsReasoning: LyricsReasoning | ''
+  /** The Mac whose lyrics model drafts; empty lets the server choose. */
+  lyricsMachine: string
   /** The draft this browser asked for and still waits for; kept so that it lands even after a reload. */
   lyricsDraftId: string
   instrumental: boolean
@@ -122,6 +124,7 @@ export function defaultFormState(): FormState {
     lyricsLanguage: 'english',
     lyricsModel: '',
     lyricsReasoning: '',
+    lyricsMachine: '',
     lyricsDraftId: '',
     instrumental: false,
     quality: 'draft',

@@ -118,6 +118,10 @@ public sealed class MonitoringTests : IDisposable
         Assert.Equal("error", labels["level"]!.GetValue<string>());
         Assert.Contains("disk full", text);
         Assert.DoesNotContain(_app.Loki.Lines(), line => line.Line.Contains("Too chatty", StringComparison.Ordinal));
+        Assert.Contains(_app.Loki.Lines(), line => line.Line == "Sending the log to Loki as host mini");
+        var report = await Client.GetStringAsync("/api/logs/report");
+        Assert.Contains("Loki: on, last sent ", report);
+        Assert.DoesNotContain("loki.test", report);
     }
 
     [Fact]
@@ -141,6 +145,8 @@ public sealed class MonitoringTests : IDisposable
         await Task.Delay(100);
 
         Assert.Empty(_app.Loki.Pushes());
+        var logged = await Client.GetStringAsync("/api/logs?q=Loki");
+        Assert.Contains("Loki is off: Monitoring:Loki:Url is not set", logged);
     }
 
     private Task<string> Metrics() => Client.GetStringAsync("/metrics");

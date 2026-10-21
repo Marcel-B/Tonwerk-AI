@@ -522,7 +522,8 @@ public sealed class JobQueue(
             request.Image,
             revision,
             id,
-            request.Machine);
+            request.Machine,
+            request.Reasoning);
     }
 
     /// <summary>A job that could not start leaves the queue; the log says why, and a draft's form hears it too.</summary>

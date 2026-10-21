@@ -100,6 +100,7 @@ public sealed partial class LyricsWriter(
     /// The Mac whose LM Studio writes it (<see cref="Machines.Machines.Normalize"/>): null for this one if its memory is
     /// free, else a free helper. Ignored for a Claude model.
     /// </param>
+    /// <param name="reasoning">How much a thinking model thinks first; null leaves it to LM Studio. Ignored for Claude.</param>
     /// <exception cref="LyricsBusyException">Another draft is in progress, YuE2 is generating, or another model holds the memory.</exception>
     public LyricsState Start(
         string? keywords,
@@ -109,7 +110,8 @@ public sealed partial class LyricsWriter(
         string? image = null,
         LyricsRevision? revision = null,
         string? id = null,
-        string? machine = null)
+        string? machine = null,
+        LyricsReasoning? reasoning = null)
     {
         var asked = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
         model = asked ?? options.Value.Model;
@@ -124,7 +126,7 @@ public sealed partial class LyricsWriter(
             UpdatedAt = time.GetUtcNow(),
         };
         hub.UpdateLyrics(state);
-        var brief = new Brief(keywords?.Trim() ?? "", style, language, image, revision);
+        var brief = new Brief(keywords?.Trim() ?? "", style, language, image, revision, reasoning);
         // A helper drafts with its own default when none was chosen: this Mac's may not be loaded there.
         _ = Task.Run(() => RunAsync(state, brief, placement?.Helper is null ? model : asked, placement));
         return state;
@@ -161,13 +163,13 @@ public sealed partial class LyricsWriter(
     /// </summary>
     /// <exception cref="LyricsUnavailableException">LM Studio could not be reached or refused.</exception>
     public Task<string> WriteForAsync(Machines.LyricsHelperJob job, CancellationToken cancellationToken) =>
-        WriteAsync(string.IsNullOrWhiteSpace(job.Model) ? options.Value.Model : job.Model.Trim(), new Brief(job.Keywords.Trim(), job.Style, job.Language, job.Image, job.Revision), cancellationToken);
+        WriteAsync(string.IsNullOrWhiteSpace(job.Model) ? options.Value.Model : job.Model.Trim(), new Brief(job.Keywords.Trim(), job.Style, job.Language, job.Image, job.Revision, job.Reasoning), cancellationToken);
 
     /// <summary>The id of a <see cref="LyricsState"/>, which the form keeps to take the result.</summary>
     public static string NewId() => Guid.NewGuid().ToString("N")[..12];
 
     /// <summary>What the song is to be about, as the form sent it.</summary>
-    private sealed record Brief(string Keywords, string? Style, LyricsLanguage Language, string? Image, LyricsRevision? Revision);
+    private sealed record Brief(string Keywords, string? Style, LyricsLanguage Language, string? Image, LyricsRevision? Revision, LyricsReasoning? Reasoning = null);
 
     /// <param name="placement">Null for Claude.</param>
     /// <param name="model">Null only on a helper, which then writes with its own default.</param>
@@ -178,7 +180,7 @@ public sealed partial class LyricsWriter(
         {
             var lyrics = placement is null ? await WriteInCloudAsync(model!, brief, CancellationToken.None)
                 : placement.Helper is { } helper ? await remote.WriteLyricsAsync(
-                    helper, new Machines.LyricsHelperJob(model, brief.Keywords, brief.Style, brief.Language, brief.Image, brief.Revision), CancellationToken.None)
+                    helper, new Machines.LyricsHelperJob(model, brief.Keywords, brief.Style, brief.Language, brief.Image, brief.Revision, brief.Reasoning), CancellationToken.None)
                 : await WriteAsync(model!, brief, CancellationToken.None);
             result = state with { Stage = "done", Lyrics = lyrics };
         }
@@ -505,6 +507,15 @@ public sealed partial class LyricsWriter(
     private static async Task<string> CompleteAsync(
         HttpClient http, LyricsOptions settings, string model, int context, Brief brief, ILogger logger, CancellationToken cancellationToken)
     {
+        // Thinking models reason before the lyrics, and at length: Gemma 4 26B counts every line's syllables,
+        // well over 4000 tokens. So the answer gets the whole context it was loaded with except the prompt,
+        // which may be less than configured (see LoadAsync).
+        var maxTokens = Math.Max(1024, context - PromptTokens - (brief.Image is null ? 0 : ImageTokens) - RevisionTokens(brief.Revision));
+        if (brief.Reasoning is { } effort
+            && await CompleteNativeAsync(http, settings, model, maxTokens, brief, effort, logger, cancellationToken) is { } steered)
+        {
+            return steered;
+        }
         var text = PromptOf(brief);
         // The OpenAI form for images, which LM Studio passes to a vision model; a model without vision refuses it.
         JsonNode prompt = brief.Image is null
@@ -519,11 +530,8 @@ public sealed partial class LyricsWriter(
                 new JsonObject { ["role"] = "system", ["content"] = SystemPrompt(brief.Language) },
                 new JsonObject { ["role"] = "user", ["content"] = prompt }),
             ["temperature"] = settings.Temperature,
-            // Thinking models reason before the lyrics, and at length: Gemma 4 26B counts every line's syllables,
-            // well over 4000 tokens. So the answer gets the whole context it was loaded with except the prompt,
-            // which may be less than configured (see LoadAsync).
             // LM Studio's reasoning "off" is no way out for Gemma 4: it thinks anyway, unmarked in the answer.
-            ["max_tokens"] = Math.Max(1024, context - PromptTokens - (brief.Image is null ? 0 : ImageTokens) - RevisionTokens(brief.Revision)),
+            ["max_tokens"] = maxTokens,
             ["stream"] = false,
             // LM Studio's own field: unload after this many idle seconds, should the model be loaded just in time.
             ["ttl"] = settings.IdleTtlSeconds,
@@ -562,6 +570,76 @@ public sealed partial class LyricsWriter(
             throw new LyricsUnavailableException(finish == "length" && (reasoning.Length > 0 || content.Contains("<think>", StringComparison.Ordinal))
                 ? $"The model spent all its {request["max_tokens"]} tokens thinking and wrote no lyrics. Raise Lyrics:ContextLength, or pick a model that thinks less."
                 : $"The model returned no lyrics (finish_reason: {finish ?? "none"}{(reasoning.Length > 0 ? ", only reasoning" : "")}).");
+        }
+    }
+
+    /// <summary>
+    /// A draft through LM Studio's native chat API, the only one of its APIs that takes <c>reasoning</c> (the
+    /// OpenAI-compatible one has no such field). Same prompts, same token budget.
+    /// </summary>
+    /// <returns>The lyrics, or null if the model refused the setting, so that the draft is written without it.</returns>
+    /// <exception cref="LyricsUnavailableException">LM Studio could not be reached, failed, or wrote no lyrics.</exception>
+    private static async Task<string?> CompleteNativeAsync(
+        HttpClient http, LyricsOptions settings, string model, int maxTokens, Brief brief, LyricsReasoning reasoning, ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var text = PromptOf(brief);
+        JsonNode input = brief.Image is null
+            ? text
+            : new JsonArray(
+                new JsonObject { ["type"] = "text", ["content"] = text },
+                new JsonObject { ["type"] = "image", ["data_url"] = brief.Image });
+        var request = new JsonObject
+        {
+            ["model"] = model,
+            ["system_prompt"] = SystemPrompt(brief.Language),
+            ["input"] = input,
+            ["temperature"] = settings.Temperature,
+            ["max_output_tokens"] = maxTokens,
+            ["reasoning"] = reasoning.ToString().ToLowerInvariant(),
+            // Without it LM Studio keeps every draft as a chat of its own.
+            ["store"] = false,
+            ["stream"] = false,
+        };
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.PostAsync("api/v1/chat", Body(request), cancellationToken);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new LyricsUnavailableException($"LM Studio stopped answering: {exception.Message}");
+        }
+        using (response)
+        {
+            var json = await ReadAsync(response, cancellationToken);
+            // LM Studio answers a setting the model does not support with an error; so does a version without this API.
+            if ((int)response.StatusCode is >= 400 and < 500)
+            {
+                logger.LogWarning("LM Studio refused reasoning {Reasoning} for {Model} ({Status}: {Error}); drafting without it",
+                    request["reasoning"], model, (int)response.StatusCode, ErrorOf(json));
+                return null;
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new LyricsUnavailableException($"LM Studio refused ({(int)response.StatusCode}): {ErrorOf(json)}");
+            }
+            var output = json?["output"] as JsonArray ?? [];
+            var content = string.Concat(output
+                .Where(item => item?["type"]?.ToString() == "message")
+                .Select(item => item?["content"]?.ToString() ?? ""));
+            var lyrics = Clean(content);
+            if (lyrics.Length > 0)
+            {
+                return lyrics;
+            }
+            var thought = output.Any(item => item?["type"]?.ToString() == "reasoning");
+            logger.LogWarning("No lyrics in the answer of {Model} (reasoning {Reasoning}): {Answer}",
+                model, request["reasoning"], Truncate(json?.ToJsonString() ?? "", 2000));
+            throw new LyricsUnavailableException(thought
+                ? $"The model wrote only its reasoning, no lyrics (at most {maxTokens} tokens). Think less, or raise Lyrics:ContextLength."
+                : "The model returned no lyrics.");
         }
     }
 

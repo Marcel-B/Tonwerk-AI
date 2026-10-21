@@ -83,6 +83,7 @@ struct CreateView: View {
                     model.form.german = keep.german
                     model.form.lyricsModel = keep.lyricsModel
                     model.form.lyricsMachine = keep.lyricsMachine
+                    model.form.lyricsReasoning = keep.lyricsReasoning
                 } label: {
                     Label("Formular leeren", systemImage: "trash")
                 }
@@ -196,6 +197,16 @@ struct CreateView: View {
                 }
             }
         }
+        if !cloudModel {
+            Picker("Nachdenken", selection: $model.form.lyricsReasoning) {
+                Text("Wie in LM Studio").tag("")
+                Text("Aus").tag(Components.Schemas.LyricsReasoning.off.rawValue)
+                Text("Wenig").tag(Components.Schemas.LyricsReasoning.low.rawValue)
+                Text("Mittel").tag(Components.Schemas.LyricsReasoning.medium.rawValue)
+                Text("Viel").tag(Components.Schemas.LyricsReasoning.high.rawValue)
+                Text("An").tag(Components.Schemas.LyricsReasoning.on.rawValue)
+            }
+        }
         HStack {
             Spacer()
             if drafting {
@@ -226,6 +237,13 @@ struct CreateView: View {
             name += String(localized: " · sieht Fotos")
         }
         return name
+    }
+
+    /// Claude has its own effort on the server, so the thinking picker is LM Studio's only.
+    private var cloudModel: Bool {
+        guard let models else { return false }
+        let id = model.form.lyricsModel.isEmpty ? models._default : model.form.lyricsModel
+        return models.models.first { $0.id == id }?.cloud == true
     }
 
     /// The chosen model, or the default, cannot see: LM Studio says so through its capabilities.
@@ -360,7 +378,8 @@ extension AppModel {
             language: form.german ? .german : .english,
             model: form.lyricsModel.isEmpty ? nil : form.lyricsModel,
             image: photo.map { "data:image/jpeg;base64,\($0.base64EncodedString())" },
-            machine: form.lyricsMachine.isEmpty ? nil : form.lyricsMachine)
+            machine: form.lyricsMachine.isEmpty ? nil : form.lyricsMachine,
+            reasoning: Components.Schemas.LyricsReasoning(rawValue: form.lyricsReasoning))
         switch try await tonwerk.api.writeLyrics(body: .json(request)) {
         case .accepted(let accepted):
             let state = try accepted.body.json

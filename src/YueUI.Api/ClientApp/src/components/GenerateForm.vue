@@ -7,7 +7,7 @@ import { formatBytes, t } from '../i18n'
 import { photoDataUrl } from '../photo'
 import { insertSectionTag } from '../lyricsTags'
 import { hasTag } from '../styleTags'
-import type { LyricsModels, LyricsState, ReferenceVoice } from '../types'
+import type { LyricsModels, LyricsReasoning, LyricsState, ReferenceVoice } from '../types'
 import { octaveOptions, stepOptions, strengthOptions } from '../voiceChoices'
 import FieldHelp from './FieldHelp.vue'
 import SectionTags from './SectionTags.vue'
@@ -156,6 +156,7 @@ async function revise(): Promise<void> {
       form.value.style.trim(),
       form.value.lyricsLanguage,
       form.value.lyricsModel || null,
+      reasoning(),
     )
     form.value.lyricsDraftId = started.id
     take(props.lyricsDraft)
@@ -203,6 +204,7 @@ async function draft(): Promise<void> {
       form.value.lyricsLanguage,
       form.value.lyricsModel || null,
       photo.value,
+      reasoning(),
     )
     form.value.lyricsDraftId = started.id
     // A quick failure (LM Studio missing) can arrive as an event before this answer.
@@ -317,6 +319,21 @@ const lyricsModelOptions = computed(() =>
 )
 
 /** Claude writes beside a running song, so the form need not say the draft waits for it. */
+const reasoningOptions = computed(() => [
+  { value: '', label: t('lyricsReasoningDefault') },
+  { value: 'off', label: t('lyricsReasoningOff') },
+  { value: 'low', label: t('lyricsReasoningLow') },
+  { value: 'medium', label: t('lyricsReasoningMedium') },
+  { value: 'high', label: t('lyricsReasoningHigh') },
+  { value: 'on', label: t('lyricsReasoningOn') },
+])
+
+/** Claude has its own effort on the server; a value kept from before an option was dropped goes out as none. */
+function reasoning(): LyricsReasoning | null {
+  const value = form.value.lyricsReasoning
+  return !cloudModel.value && value !== '' && reasoningOptions.value.some((o) => o.value === value) ? value : null
+}
+
 const cloudModel = computed(() => lyricsModels.value?.models.find((m) => m.id === lyricsModel.value)?.cloud === true)
 
 /** The default is kept as "none chosen", so that a new default on the server reaches this form too. */
@@ -447,18 +464,32 @@ const batchOptions = Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label
         @click="askDraft"
       />
     </div>
-    <Select
-      v-if="lyricsModelOptions.length > 1"
-      v-model="lyricsModel"
-      :options="lyricsModelOptions"
-      option-value="value"
-      option-label="label"
-      :disabled="drafting"
-      :aria-label="t('lyricsModel')"
-      :title="t('lyricsModel')"
-      size="small"
-      class="mt-2 w-full"
-    />
+    <div class="mt-2 flex flex-wrap gap-2">
+      <Select
+        v-if="lyricsModelOptions.length > 1"
+        v-model="lyricsModel"
+        :options="lyricsModelOptions"
+        option-value="value"
+        option-label="label"
+        :disabled="drafting"
+        :aria-label="t('lyricsModel')"
+        :title="t('lyricsModel')"
+        size="small"
+        class="min-w-0 flex-[2_1_14rem]"
+      />
+      <Select
+        v-if="!cloudModel"
+        v-model="form.lyricsReasoning"
+        :options="reasoningOptions"
+        option-value="value"
+        option-label="label"
+        :disabled="drafting"
+        :aria-label="t('lyricsReasoning')"
+        :title="t('lyricsReasoning')"
+        size="small"
+        class="min-w-0 flex-[1_1_10rem]"
+      />
+    </div>
     <small v-if="cloudModel" class="muted mt-1 block">{{ t('lyricsCloudHint') }}</small>
     <div v-if="photo" class="mt-2 flex items-center gap-2">
       <img :src="photo" :alt="t('photoAlt')" class="h-16 w-16 rounded-md object-cover" />

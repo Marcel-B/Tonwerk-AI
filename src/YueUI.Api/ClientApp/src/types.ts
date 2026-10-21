@@ -404,6 +404,9 @@ export interface PromptTemplate {
 /** What a lyrics draft is written in (Lyrics/LyricsLanguage.cs). */
 export type LyricsLanguage = 'english' | 'german'
 
+/** How much a thinking model thinks before a draft (Lyrics/LyricsReasoning.cs); left out, as set in LM Studio. */
+export type LyricsReasoning = 'off' | 'low' | 'medium' | 'high' | 'on'
+
 /** A language model LM Studio, or Claude in the cloud, offers for drafts (Lyrics/LyricsModels.cs). */
 export interface LyricsModel {
   id: string

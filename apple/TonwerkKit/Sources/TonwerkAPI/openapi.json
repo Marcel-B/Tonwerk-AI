@@ -7657,6 +7657,16 @@
           }
         }
       },
+      "LyricsReasoning": {
+        "enum": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "on"
+        ],
+        "type": "string"
+      },
       "LyricsRequest": {
         "required": [
           "keywords",
@@ -7708,6 +7718,9 @@
               "null",
               "string"
             ]
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/LyricsReasoning"
           }
         }
       },

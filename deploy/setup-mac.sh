@@ -7,7 +7,7 @@
 #   deploy/setup-mac.sh --transcription    plus SheetSage2 for transcriptions (about 2 GB more)
 #   deploy/setup-mac.sh --voices           plus stem separation and Seed-VC for other voices (about 3 GB more)
 #   deploy/setup-mac.sh --speech           plus the speech lab's environment (deploy/install-speech.sh)
-#   deploy/setup-mac.sh --images           plus FLUX.2 Klein for painted covers (deploy/install-images.sh)
+#   deploy/setup-mac.sh --images           plus the cover painters, mflux and flux3-mlx (deploy/install-images.sh)
 #   deploy/setup-mac.sh --midi             plus Basic Pitch for audio to MIDI (deploy/install-midi.sh)
 #   deploy/setup-mac.sh --whisper          plus Whisper for lyrics timing (deploy/install-whisper.sh)
 #   deploy/setup-mac.sh --montage          plus photo videos cut to the beat (deploy/install-montage.sh)
@@ -322,7 +322,7 @@ fi
 
 if [ "$IMAGES" = true ]; then
   step "Painted covers"
-  # install-images.sh pins mflux; an update runs it only when the script (and with it the pin) changed.
+  # install-images.sh pins mflux and flux3-mlx; an update runs it only when the script (and with it a pin) changed.
   IMAGES_RECIPE="$(cksum < "$REPO/deploy/install-images.sh")"
   if [ "$UPDATE" = true ] && [ "$(cat "$DATA/images/recipe" 2>/dev/null)" = "$IMAGES_RECIPE" ]; then
     echo "Unchanged."

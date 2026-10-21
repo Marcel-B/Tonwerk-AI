@@ -8,11 +8,11 @@ using YueUI.Api.Worker;
 namespace YueUI.Api.Images;
 
 /// <summary>
-/// Paints cover candidates for songs, one at a time, with a local FLUX.2 Klein (<see cref="IImageEngine"/>). The dialog
+/// Paints cover candidates for songs, one at a time, with a local image model (<see cref="IImageEngine"/>). The dialog
 /// lists a song's candidates; taking one makes it the song's cover (<see cref="Library.SongLibrary.SetCover"/>).
 /// </summary>
 /// <remarks>
-/// Klein holds about 9 GB while it paints, so it follows the memory rule the speech lab follows on 24 GB: a picture
+/// Klein holds about 9 GB while it paints, Krea 2 about 22, so every model follows the rule YuE2 does: a picture
 /// waits while songs are generated, lyrics written, a voice sung or a take spoken, an idle YuE worker is shut down
 /// first, and while it holds the memory (<see cref="ModelMemory"/>) the others wait. A picture may be painted on another
 /// Mac instead (<see cref="Machines.Machines"/>), which waits for its own memory. Candidates are not cover material
@@ -29,7 +29,7 @@ public sealed class ImageMaker(
     TimeProvider time,
     ILogger<ImageMaker> logger) : BackgroundService
 {
-    /// <summary>Square, the size covers are drawn and exported at, and one Klein was trained on.</summary>
+    /// <summary>Square, the size covers are drawn and exported at, and one every offered model was trained on.</summary>
     public const int Size = 1024;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -213,7 +213,8 @@ public sealed class ImageMaker(
             }
 
             await using var placement = await machines.PlaceAsync(
-                LargeModel.Images, Machines.Engines.Images, image.Machine, options.Value.WaitInterval, cancel.Token, engine.Installed);
+                LargeModel.Images, Machines.Engines.ImageModel(model.Id), image.Machine, options.Value.WaitInterval, cancel.Token,
+                engine.Unavailable(model) is null);
             var painter = placement.Helper is { } helper ? remote.Images(helper) : engine;
 
             image = Update(image, i => i with { Stage = "loading", RanOn = placement.Name });
@@ -240,6 +241,7 @@ public sealed class ImageMaker(
             {
                 Stage = "done",
                 Fraction = 1,
+                PaintedPrompt = result.PaintedPrompt ?? i.PaintedPrompt,
                 LoadSeconds = result.LoadSeconds,
                 PaintSeconds = result.PaintSeconds,
                 PeakMemoryGb = result.PeakMemoryGb,

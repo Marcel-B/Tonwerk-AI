@@ -30,7 +30,7 @@ git clone https://github.com/Marcel-B/Tonwerk-AI.git ~/repos/Tonwerk-AI
 ~/repos/Tonwerk-AI/deploy/setup-mac.sh # --transcription, --voices, --speech, --images, --midi, --montage, --ace, --whisper, --singing oder --all für mehr
 ```
 
-Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` FLUX.2 Klein für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell, mit `--singing` SoulX-Singer für die Seite **Singen**.
+Es prüft den Mac (Apple Silicon, macOS 14+, Speicher, rund 20 GB frei) und installiert, was fehlt: Homebrew, uv, ffmpeg, Node.js und das .NET 10 SDK. Danach holt es YuE2 ohne die App, nämlich als Git-Checkout von [YuE Studio](https://github.com/tonywestonuk/YuE-Studio) in der Version, gegen die Tonwerks Erweiterung des Workers geprüft ist (`ENGINE_REF`, derzeit v0.4.0). Es baut die Brücke zur Neural Engine, legt die Python-Umgebung an und lädt die Modelle (etwa 7 GB). Am Ende veröffentlicht es Tonwerk mit `deploy/install.sh` und startet den Worker einmal zur Probe. Mit `--transcription` kommt SheetSage2 dazu (etwa 2 GB), mit `--speech` das Sprachlabor, mit `--images` die Bildmodelle für gemalte Cover, mit `--midi` Basic Pitch für Audio zu MIDI, mit `--montage` die Fotovideos, mit `--ace` ACE-Step als zweites Songmodell, mit `--singing` SoulX-Singer für die Seite **Singen**.
 
 Die Schritte entsprechen denen des Installers der App und landen in denselben Ordnern (`~/Library/Application Support/YuE Studio`, Songs in `~/Music/YuE Studio`). Tonwerk braucht deshalb keine andere Konfiguration, und eine später installierte App findet die Modelle. Öffnet man die App, installiert sie ihre eigene Kopie über den Checkout; das funktioniert, nur die Git-Historie ist dann weg. Umgekehrt lässt das Skript eine Installation der App unangetastet, solange es nicht mit `--engine-from-source` läuft.
 
@@ -453,30 +453,33 @@ In `~/Library/Application Support/YueUI/app/appsettings.Production.json` auf dem
 
 Danach Tonwerk neu starten (`launchctl kickstart -k gui/$(id -u)/de.bvelop.yueui`).
 
-## Cover malen mit FLUX.2 Klein
+## Cover malen
 
-In den Songs malt **Cover malen** (im „…“-Menü des Songs) ein Cover mit [FLUX.2 Klein](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) auf dem Mac, ohne ComfyUI, über [mflux](https://github.com/filipstrand/mflux) (MLX):
+In den Songs malt **Cover malen** (im „…“-Menü des Songs) ein Cover mit einem Bildmodell auf dem Mac, ohne ComfyUI: FLUX.2 Klein, Z-Image Turbo und Krea 2 Turbo über [mflux](https://github.com/mflux-community/mflux) (MLX), FLUX 3 Image Klein über [flux3-mlx](https://github.com/felix-ab/flux3-mlx) (MLX, mit dem Prompt-Upsampler von Black Forest Labs, den mflux nicht hat):
 
-1. Die Bildbeschreibung ist aus Titel und Stil vorgeschlagen und frei änderbar, am besten auf Englisch. **Titel ins Bild schreiben** bittet das Modell, den Titel einmal ins Bild zu setzen; sonst kommt der Titel im Vorschlag gar nicht vor. Einen Negativ-Prompt kennt FLUX Klein nicht, und „no text“ oder „no logo“ in der Beschreibung bringen Text und Logos eher hinein, weil das Modell malt, was genannt wird. Deshalb beschreibt der Vorschlag nur, was zu sehen sein soll (ein Gemälde statt „Albumcover“), ohne Tempo- und Gesangsangaben aus dem Stil.
+1. Die Bildbeschreibung ist aus Titel und Stil vorgeschlagen und frei änderbar, am besten auf Englisch. **Titel ins Bild schreiben** bittet das Modell, den Titel einmal ins Bild zu setzen; sonst kommt der Titel im Vorschlag gar nicht vor. Einen Negativ-Prompt kennen die Modelle nicht, und „no text“ oder „no logo“ in der Beschreibung bringen Text und Logos eher hinein, weil das Modell malt, was genannt wird. Deshalb beschreibt der Vorschlag nur, was zu sehen sein soll (ein Gemälde statt „Albumcover“), ohne Tempo- und Gesangsangaben aus dem Stil.
 2. Modell wählen und **Malen**. Jedes Bild ist ein Vorschlag mit eigenem Seed, quadratisch mit 1024 Pixeln, und steht darunter.
 3. **Als Cover** macht einen Vorschlag zum Cover des Songs, wie ein gewähltes Foto: in der Bibliothek, im Player, in jedem Export und im Musikvideo. Die Vorschläge bleiben, bis man sie löscht, so lässt sich zurückwechseln.
 
 | Modell | Lizenz | Download | Speicher beim Malen |
 |---|---|---|---|
-| Klein 4B (Standard, 8 Bit) | Apache 2.0, auch für veröffentlichte Songs | etwa 15 GB | etwa 9 GB |
-| Klein 9B (4 Bit) | FLUX Non-Commercial, nur privat | etwa 32 GB | etwa 10 GB |
+| FLUX.2 Klein 4B (Standard, 8 Bit) | Apache 2.0, auch für veröffentlichte Songs | etwa 15 GB | etwa 9 GB |
+| FLUX.2 Klein 9B (4 Bit) | FLUX Non-Commercial, nur privat | etwa 32 GB | etwa 10 GB |
+| Z-Image Turbo (8 Bit, 9 Schritte) | Apache 2.0, auch für veröffentlichte Songs | etwa 21 GB | etwa 11 GB |
+| Krea 2 Turbo (8 Bit, 8 Schritte), nur ab 32 GB | Krea 2 Community, kommerziell bis 1 Mio. $ Umsatz | etwa 35 GB | etwa 22 GB |
+| FLUX 3 Klein (8 Bit, 16 Schritte, mit Upsampler), nur ab 32 GB | FLUX Kommunity, kommerziell bis 5 Mio. $ Umsatz | etwa 15 GB | etwa 12 GB |
 
-Die Speicherwerte sind geschätzt, nicht gemessen. Ein Bild wartet wie ein Sprachtest, bis YuE2, das Textmodell, Stimmumwandlungen und das Sprachlabor den Speicher freigeben, und so lange warten diese. Die **Warteschlange** listet Bilder in Arbeit unter **Cover**. Das Modell wird für jedes Bild geladen und danach freigegeben; beim ersten Bild lädt es sich herunter.
+Die Speicherwerte sind geschätzt, nicht gemessen. Krea 2 und FLUX 3 bietet nur ein Mac mit mindestens 32 GB an (`Images:SystemMemoryGb` übersteuert, was der Mac meldet); ein Helfer mit weniger bekommt sie auch automatisch nie. Z-Image Turbo, Krea 2 und FLUX 3 können kurze Wörter ins Bild schreiben (**Titel ins Bild schreiben**), Klein nicht. Krea 2s Lizenz verlangt einen Inhaltsfilter: Jedes Krea-Bild geht durch den NSFW-Klassifikator [Falconsai/nsfw_image_detection](https://huggingface.co/Falconsai/nsfw_image_detection), ein angeschlagenes wird nicht behalten. FLUX 3 Klein läuft immer mit dem Upsampler, der die Beschreibung ausformuliert (so verlangt es Black Forest Labs); was er schrieb, steht unter dem Bild. Ein Bild wartet wie ein Song, bis YuE2, das Textmodell, Stimmumwandlungen und das Sprachlabor den Speicher freigeben, und so lange warten diese. Die **Warteschlange** listet Bilder in Arbeit unter **Cover**. Das Modell wird für jedes Bild geladen und danach freigegeben; beim ersten Bild lädt es sich herunter.
 
 **Einrichtung.** Einmal auf dem Mac im Repository, nach `deploy/install.sh`:
 
 ```sh
-deploy/install-images.sh   # eigene Python-Umgebung mit mflux (Version fest im Skript)
+deploy/install-images.sh   # je eine Python-Umgebung mit mflux und mit flux3-mlx (Versionen fest im Skript)
 ```
 
 Oder mit den bisherigen Optionen über das Einrichtungsskript, damit Updates die Umgebung mitpflegen: `deploy/setup-mac.sh $(cat "$HOME/Library/Application Support/YuE UI/setup-options") --images`. Umgebung und Modelle liegen unter `~/Library/Application Support/YuE UI/images/`, die Vorschläge neben der Datenbank in `images/` (nicht in der Sicherung, das übernommene Cover schon).
 
-Klein 9B liegt auf Hugging Face hinter seiner Lizenz: auf [huggingface.co/black-forest-labs/FLUX.2-klein-9B](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B) annehmen, ein Lese-Token für das Konto anlegen und auf dem Mac in `~/.config/tonwerk/huggingface.token` speichern. Klein 4B braucht das nicht. Die Gewichte, die ComfyUI schon geladen hat, nutzt mflux nicht; es lädt sie im Format von Hugging Face neu.
+Klein 9B und Krea 2 liegen auf Hugging Face hinter ihren Lizenzen: auf [huggingface.co/black-forest-labs/FLUX.2-klein-9B](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B) bzw. [huggingface.co/krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) annehmen, ein Lese-Token für das Konto anlegen und auf dem Mac in `~/.config/tonwerk/huggingface.token` speichern. Die anderen brauchen das nicht. `deploy/move-to-volume.sh images` verlegt die Modelle aller fünf, sie liegen im selben Hugging-Face-Cache. Die Gewichte, die ComfyUI schon geladen hat, nutzt mflux nicht; es lädt sie im Format von Hugging Face neu.
 
 ## Songs mit ACE-Step
 
@@ -561,8 +564,10 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `Montage:ModelCache` (`Montage__ModelCache`) | `~/Library/Application Support/YuE UI/montage/models` | Hugging-Face-Cache für CLIP (`HF_HOME`) |
 | `Images:Root` (`Images__Root`) | `~/Library/Application Support/YuE UI/images` | Ordner für gemalte Cover (Python-Umgebung und Modelle) |
 | `Images:Python` (`Images__Python`) | `<Root>/env/bin/python` | Python mit mflux |
+| `Images:Flux3Python` (`Images__Flux3Python`) | `<Root>/flux3/bin/python` | Python mit flux3-mlx (FLUX 3 Klein) |
+| `Images:SystemMemoryGb` (`Images__SystemMemoryGb`) | was der Mac meldet | Speicher, nach dem Krea 2 und FLUX 3 (ab 32 GB) angeboten werden |
 | `Images:ModelCache` (`Images__ModelCache`) | `<Root>/models` | Hugging-Face-Cache der Bildmodelle (`HF_HOME`) |
-| `Images:TokenFile` (`Images__TokenFile`) | `~/.config/tonwerk/huggingface.token` | Hugging-Face-Token, nur für Klein 9B |
+| `Images:TokenFile` (`Images__TokenFile`) | `~/.config/tonwerk/huggingface.token` | Hugging-Face-Token, für Klein 9B und Krea 2 |
 | `Images:Timeout` (`Images__Timeout`) | `01:30:00` | so lange darf ein Bild samt erstem Download dauern |
 | `Ace:Root` (`Ace__Root`) | `~/Library/Application Support/YuE UI/ace` | Ordner für ACE-Step; die folgenden drei liegen darunter |
 | `Ace:Binaries` (`Ace__Binaries`) | `acestep.cpp/build` | `ace-lm` und `ace-synth` |
@@ -687,7 +692,7 @@ Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit
 | `DELETE` | `/api/ace/{id}` | Auftrag abbrechen oder aus der Liste nehmen |
 | `GET` | `/api/songs/{run}/{song}/ace` | Einstellungen eines ACE-Songs für „Alles übernehmen“ |
 | `GET` | `/api/images` | Gemalte Cover: `{ installed, python, models }` (Modelle mit Lizenz, `commercial`, `downloaded`, `tokenFound`) |
-| `GET` / `POST` | `/api/songs/{run}/{song}/images` | Vorschläge des Songs, neueste zuerst, bzw. `{ prompt, model?, seed? }` malen; antwortet `202`, der Fortschritt kommt als `image`-Event (`queued`, `loading`, `painting` mit `fraction`, dann `done` oder `failed`); `501` ohne mflux |
+| `GET` / `POST` | `/api/songs/{run}/{song}/images` | Vorschläge des Songs, neueste zuerst, bzw. `{ prompt, model?, seed? }` malen; antwortet `202`, der Fortschritt kommt als `image`-Event (`queued`, `loading`, `painting` mit `fraction`, dann `done` oder `failed`); `501`, wenn kein Mac hier das Modell malen kann (Runner fehlt, zu wenig Speicher) |
 | `GET` / `DELETE` | `/api/images/{id}` | Vorschlag als JPEG bzw. abbrechen oder löschen |
 | `PUT` | `/api/images/{id}/cover` | Vorschlag als Cover des Songs übernehmen |
 | `GET` | `/api/sketches/info` | Ausarbeitung: `{ configured, model }` |

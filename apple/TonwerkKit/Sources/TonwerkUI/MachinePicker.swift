@@ -48,6 +48,8 @@ struct MachinePicker: View {
         case "voices": String(localized: "Stimmen")
         case "stems": String(localized: "Stem-Trennung")
         case "singing": String(localized: "Gesang")
+        // One image model ("images:krea-2-turbo"): the server lists the ones a Mac has the runner and memory for.
+        case let name where name.hasPrefix("images:"): String(localized: "dieses Bildmodell")
         default: engine
         }
     }

@@ -247,6 +247,7 @@ public sealed class StorageScanner(
             Measure(voice.ResolvedEngineRoot, skip: modelPaths),
             Measure(Path.Combine(speechRoot.ResolvedRoot, "env")),
             Measure(Path.Combine(imageRoot.ResolvedRoot, "env")),
+            Measure(Path.Combine(imageRoot.ResolvedRoot, "flux3")),
             Measure(Path.Combine(montage.ResolvedRoot, "env")),
             Measure(midiOptions.Value.ResolvedRoot),
             Measure(ace.ResolvedRoot, skip: [ace.ResolvedModels]),

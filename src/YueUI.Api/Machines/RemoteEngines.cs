@@ -139,6 +139,9 @@ public sealed class RemoteEngines(HelperClient client, Machines machines)
 
         public bool Downloaded(ImageModel model) => true;
 
+        /// <summary>The helper says so itself when it refuses the run.</summary>
+        public string? Unavailable(ImageModel model) => null;
+
         public async Task<ImageResult> PaintAsync(ImageJob job, Action<string, double> progress, CancellationToken cancellationToken)
         {
             var outcome = await client.RunAsync(

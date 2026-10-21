@@ -191,6 +191,29 @@ public sealed class MachineTests : IDisposable
     }
 
     [Fact]
+    public async Task A_model_too_large_for_the_helper_waits_for_this_Mac_instead()
+    {
+        _helper.Images.Missing["krea-2-turbo"] = "Krea 2 Turbo needs a Mac with 32 GB; this one has 24.";
+        var client = _app.CreateClient();
+        _app.AddSong("20260922-101500-Neon-Night", "song1");
+        var machines = await WaitForMachines(client, all => all.Any(m => m.Id == "alt" && m.Reachable));
+        Assert.Contains(Engines.ImageModel("klein-4b"), machines[1].Engines);
+        Assert.DoesNotContain(Engines.ImageModel("krea-2-turbo"), machines[1].Engines);
+        var memory = _app.Services.GetRequiredService<ModelMemory>();
+        Assert.True(memory.TryClaim(LargeModel.Speech));
+
+        await client.PostAsJsonAsync("/api/songs/20260922-101500-Neon-Night/song1/images", new { prompt = "a neon city", model = "krea-2-turbo" });
+        await Task.Delay(300);
+
+        // The helper is free but cannot paint it; it waits for this Mac.
+        Assert.Empty(_helper.Images.Jobs);
+        Assert.Empty(_app.Images.Jobs);
+        memory.Release(LargeModel.Speech);
+        await TestApp.WaitUntil(() => _app.Images.Jobs.Count == 1);
+        Assert.Empty(_helper.Images.Jobs);
+    }
+
+    [Fact]
     public async Task Lyrics_asked_for_the_helper_are_written_by_its_LM_Studio_beside_a_busy_Mac()
     {
         _helper.LmStudio.Answer = "[Verse]\nVom alten Mac";

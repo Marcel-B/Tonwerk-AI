@@ -7,7 +7,7 @@ using YueUI.Api.Worker;
 namespace YueUI.Api;
 
 /// <summary>
-/// Covers painted by a local FLUX.2 Klein (<see cref="ImageMaker"/>): a prompt in, candidates out, which the cover
+/// Covers painted by a local image model (<see cref="ImageMaker"/>): a prompt in, candidates out, which the cover
 /// dialog lists; one taken becomes the song's cover like a photo would. Pictures are painted in the background; their
 /// progress arrives as <c>image</c> events.
 /// </summary>
@@ -15,13 +15,30 @@ public static class ImageEndpoints
 {
     public static RouteGroupBuilder MapImageEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/images", (IOptions<ImageOptions> options, IImageEngine engine, IPromptTranslator translator) =>
+        api.MapGet("/images", (IOptions<ImageOptions> options, IImageEngine engine, IPromptTranslator translator, Machines.Machines machines) =>
             new ImageInfo(
                 engine.Installed,
                 options.Value.ResolvedPython,
-                [.. options.Value.ResolvedModels.Select(m => new ImageModelInfo(
-                    m.Id, m.Label, m.DownloadGb, m.MemoryGb, m.License, m.Commercial, m.Gated, engine.Downloaded(m), !m.Gated || engine.TokenFound))],
-                translator.Configured))
+                [.. options.Value.ResolvedModels.Select(m =>
+                {
+                    var unavailable = engine.Unavailable(m);
+                    return new ImageModelInfo(
+                        m.Id,
+                        m.Label,
+                        m.DownloadGb,
+                        m.MemoryGb,
+                        m.License,
+                        m.Commercial,
+                        m.Gated,
+                        engine.Downloaded(m),
+                        !m.Gated || engine.TokenFound,
+                        machines.CanRun(Machines.Engines.ImageModel(m.Id), null, unavailable is null),
+                        unavailable,
+                        m.Lettering,
+                        m.MinSystemGb);
+                })],
+                translator.Configured,
+                options.Value.ResolvedFlux3Python))
             .WithName("GetImageInfo")
             .Produces<ImageInfo>(StatusCodes.Status200OK);
 
@@ -113,13 +130,13 @@ public static class ImageEndpoints
         {
             return Results.ValidationProblem(errors);
         }
-        if (!machines.CanRun(Machines.Engines.Images, machine, engine.Installed))
+        if (!machines.CanRun(Machines.Engines.ImageModel(model!.Id), machine, engine.Unavailable(model) is null))
         {
             return Results.Problem(
-                $"mflux is not installed ({options.Value.ResolvedPython}); run deploy/install-images.sh.",
+                engine.Unavailable(model) ?? $"No Mac here can paint with {model.Label}.",
                 statusCode: StatusCodes.Status501NotImplemented);
         }
-        // mflux seeds MLX's generator, which takes 32 bits.
+        // The runners seed MLX's generator, which takes 32 bits.
         var seed = request.Seed ?? Random.Shared.NextInt64(0, (long)uint.MaxValue + 1);
         var image = images.Enqueue($"{run}/{song}", library.TitleOf(run, directory), model!, prompt, seed, machine);
         return Results.Accepted($"/api/images/{image.Id}", image);

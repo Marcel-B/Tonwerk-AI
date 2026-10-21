@@ -29,11 +29,15 @@ private struct SketchSessionView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Eine schriftliche Ausarbeitung (Form, Tempo, Akkorde, Text, Melodieideen) wird von Claude zu einer vollständigen Partitur: jede Zeile mit Melodie, jeder Takt mit Akkorden. Daraus macht Tonwerk einen MIDI-Entwurf und einen YuE-Song.")
+                Text("Eine schriftliche Ausarbeitung (Form, Tempo, Akkorde, Text, Melodieideen) wird von Claude oder einem Modell in LM Studio zu einer vollständigen Partitur: jede Zeile mit Melodie, jeder Takt mit Akkorden. Daraus macht Tonwerk einen MIDI-Entwurf und einen YuE-Song.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let info = session.info {
-                    if info.configured {
+                    if session.isLocal(session.modelId) {
+                        Text("Das Modell schreibt auf dem Mac, ohne Kosten, aber langsam: ein Song von hundert Takten sind rund 20000 Tokens, mit Gemma 4 31B fast eine Stunde, mit Qwen 3.6 einige Minuten. Solange es schreibt, warten Songs. Lokale Modelle verzählen sich bei Takten und Silben öfter als Claude.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if info.configured {
                         Text("Die Ausarbeitung geht dazu an Anthropic; das kostet je Plan einige Cent bis rund einen Euro (mit Fable gut das Doppelte) und dauert ein paar Minuten.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -107,10 +111,19 @@ private struct SketchSessionView: View {
             TextField("Wünsche für diesen Versuch (optional)", text: $session.wishes,
                       prompt: Text("z. B. Refrainmelodie höher, Strophe ruhiger"))
                 .textFieldStyle(.roundedBorder)
-            if let info = session.info, info.models.count > 1 {
-                Picker("Claude-Modell", selection: $session.modelId) {
-                    ForEach(info.models, id: \.id) { choice in
-                        Text(choice.id == info.model ? "\(choice.name) (Standard)" : choice.name).tag(choice.id)
+            if let info = session.info, info.models.count + session.localModels.count > 1 {
+                Picker("Modell", selection: $session.modelId) {
+                    Section("Claude") {
+                        ForEach(info.models, id: \.id) { choice in
+                            Text(choice.id == info.model ? "\(choice.name) (Standard)" : choice.name).tag(choice.id)
+                        }
+                    }
+                    if !session.localModels.isEmpty {
+                        Section("Auf dem Mac (LM Studio)") {
+                            ForEach(session.localModels, id: \.id) { choice in
+                                Text(choice.roleNote.map { "\(choice.name) · \($0)" } ?? choice.name).tag(choice.id)
+                            }
+                        }
                     }
                 }
             }
@@ -118,11 +131,11 @@ private struct SketchSessionView: View {
                 Button {
                     Task { await session.send() }
                 } label: {
-                    Label("Mit Claude ausarbeiten", systemImage: "sparkles")
+                    Label(session.isLocal(session.modelId) ? "Auf dem Mac ausarbeiten" : "Mit Claude ausarbeiten", systemImage: "sparkles")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(session.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.sending
-                          || session.info?.configured == false)
+                          || !session.canPlan)
                 if session.sending {
                     ProgressView().controlSize(.small)
                 }
@@ -288,7 +301,7 @@ private struct SketchSessionView: View {
                     } label: {
                         Label("Noch einmal ausarbeiten", systemImage: "arrow.clockwise")
                     }
-                    .disabled(session.info?.configured == false)
+                    .disabled(session.info?.configured == false && !session.isLocal(detail.job.model ?? ""))
                 }
                 Button(role: .destructive) {
                     deleting = detail

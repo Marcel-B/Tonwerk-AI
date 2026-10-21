@@ -16,6 +16,10 @@ namespace YueUI.Api.Sketches;
 public sealed partial class SketchMaker(
     SqliteSketchStore store,
     ISketchModel model,
+    LocalSketchModel localModel,
+    Lyrics.LmStudio lmStudio,
+    IOptions<Lyrics.LyricsOptions> lyricsOptions,
+    Memory.ModelMemory memory,
     IOptions<SketchOptions> options,
     PushStore pushStore,
     IPushSender pushSender,
@@ -33,6 +37,28 @@ public sealed partial class SketchMaker(
         options.Value.ResolveApiKey() is not null,
         options.Value.Model,
         [.. options.Value.Offered.Select(ClaudeModelChoice.Of)]);
+
+    /// <summary><see cref="Info"/> with LM Studio's models, which plan on this Mac.</summary>
+    public async Task<SketchInfo> InfoAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Lyrics.LyricsModel> local;
+        try
+        {
+            var roles = lyricsOptions.Value;
+            local = [.. (await lmStudio.ListAsync(cancellationToken))
+                .Select(m => roles.RoleOf(m.Id) is { } role ? m with { Role = role.Role, NeedsGb = roles.MissingMemoryFor(m.Id) } : m)
+                .OrderBy(m => m.Role is null)];
+        }
+        catch (Lyrics.LyricsUnavailableException exception)
+        {
+            logger.LogInformation("LM Studio's models are not offered for sketches: {Message}", exception.Message);
+            local = [];
+        }
+        return Info with { Local = local };
+    }
+
+    /// <summary>Whether <paramref name="id"/> plans in LM Studio rather than at Anthropic.</summary>
+    public bool IsLocal(string? id) => !string.IsNullOrWhiteSpace(id) && !options.Value.Offered.Contains(id.Trim());
 
     /// <summary>Every sketch, newest first.</summary>
     public IReadOnlyList<SketchJob> Jobs()
@@ -122,9 +148,15 @@ public sealed partial class SketchMaker(
                     Save(job);
                     _queue.Writer.TryWrite(job.Id);
                 }
+                else if (job.Stage == "waiting")
+                {
+                    // It had not started; it waits again.
+                    Save(job with { Stage = "queued", UpdatedAt = time.GetUtcNow() });
+                    _queue.Writer.TryWrite(job.Id);
+                }
                 else if (!job.Finished)
                 {
-                    Save(job with { Stage = "failed", Message = "The server restarted while Claude was writing.", UpdatedAt = time.GetUtcNow() });
+                    Save(job with { Stage = "failed", Message = "The server restarted while the plan was being written.", UpdatedAt = time.GetUtcNow() });
                 }
                 else
                 {
@@ -152,16 +184,29 @@ public sealed partial class SketchMaker(
             return;
         }
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        cancel.CancelAfter(options.Value.Timeout);
+        var chosen = job.Model ?? options.Value.Model;
+        var local = IsLocal(chosen);
+        var limit = local ? options.Value.LocalTimeout : options.Value.Timeout;
         lock (_gate)
         {
             _running = id;
             _cancel = cancel;
         }
+        var claimed = false;
         try
         {
+            if (local)
+            {
+                // A local model needs the memory YuE2 and the other large models share; it waits for them like a draft.
+                job = Save(job with { Stage = "waiting", UpdatedAt = time.GetUtcNow() });
+                await memory.ClaimAsync(Memory.LargeModel.Lyrics, TimeSpan.FromSeconds(2), time, cancel.Token);
+                claimed = true;
+            }
+            cancel.CancelAfter(limit);
             job = Save(job with { Stage = "writing", UpdatedAt = time.GetUtcNow() });
-            var answer = await model.PlanAsync(job.Source, job.Instruction, job.Model ?? options.Value.Model, cancel.Token);
+            var answer = local
+                ? await localModel.PlanAsync(job.Source, job.Instruction, chosen, cancel.Token)
+                : await model.PlanAsync(job.Source, job.Instruction, chosen, cancel.Token);
             job = Save(job with
             {
                 Stage = "done",
@@ -188,13 +233,17 @@ public sealed partial class SketchMaker(
                 return;
             }
             var message = exception is OperationCanceledException
-                ? $"Claude did not answer within {options.Value.Timeout.TotalMinutes:0} minutes."
+                ? $"{(local ? chosen : "Claude")} did not answer within {limit.TotalMinutes:0} minutes."
                 : exception.Message;
             logger.LogWarning(exception, "Sketch {Id} failed", id);
             job = Save(job with { Stage = "failed", Message = message, UpdatedAt = time.GetUtcNow() });
         }
         finally
         {
+            if (claimed)
+            {
+                memory.Release(Memory.LargeModel.Lyrics);
+            }
             lock (_gate)
             {
                 _running = null;

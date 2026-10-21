@@ -28,7 +28,7 @@ final class SketchSession {
     var problem: String?
     var text = ""
     var wishes = ""
-    /// The chosen Claude model, empty for the server's default, so a new default reaches it.
+    /// The chosen model (Claude's or one in LM Studio), empty for the server's default, so a new default reaches it.
     private(set) var chosenModel: String
 
     private static let modelKey = "sketchModel"
@@ -44,7 +44,7 @@ final class SketchSession {
     var modelId: String {
         get {
             guard let info else { return chosenModel }
-            return info.models.contains { $0.id == chosenModel } ? chosenModel : info.model
+            return offers(chosenModel) ? chosenModel : info.model
         }
         set {
             chosenModel = newValue == info?.model ? "" : newValue
@@ -52,7 +52,22 @@ final class SketchSession {
         }
     }
 
-    var working: Bool { sketches.contains { $0.stage == "queued" || $0.stage == "writing" } }
+    var working: Bool { sketches.contains { $0.stage == "queued" || $0.stage == "waiting" || $0.stage == "writing" } }
+
+    /// LM Studio's models that fit this Mac; the large ones say so where it is too small.
+    var localModels: [Components.Schemas.LyricsModel] {
+        (info?.local ?? []).filter { $0.needsGb == nil }
+    }
+
+    /// Whether `id` plans on the Mac rather than at Anthropic.
+    func isLocal(_ id: String) -> Bool { localModels.contains { $0.id == id } }
+
+    private func offers(_ id: String) -> Bool {
+        info?.models.contains { $0.id == id } == true || isLocal(id)
+    }
+
+    /// Whether the chosen model can plan now: a local one always, Claude only with a key.
+    var canPlan: Bool { info?.configured == true || isLocal(modelId) }
 
     func load() async {
         if let info = try? await model.sketchInfo() {
@@ -95,7 +110,7 @@ final class SketchSession {
 
     /// A model the server no longer offers goes to the default rather than to a refusal.
     private func offered(_ id: String?) -> String? {
-        guard let id, info?.models.contains(where: { $0.id == id }) == true else { return nil }
+        guard let id, offers(id) else { return nil }
         return id
     }
 
@@ -154,7 +169,8 @@ final class SketchSession {
     nonisolated static func stageName(_ stage: String) -> String {
         switch stage {
         case "queued": String(localized: "wartet")
-        case "writing": String(localized: "Claude schreibt …")
+        case "waiting": String(localized: "wartet auf den Speicher")
+        case "writing": String(localized: "wird geschrieben …")
         case "done": String(localized: "fertig")
         case "failed": String(localized: "fehlgeschlagen")
         default: stage

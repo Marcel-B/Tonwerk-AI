@@ -36,7 +36,8 @@ final class SketchTests: XCTestCase {
         XCTAssertEqual(SketchSession.warning(detail.warnings![1]), "Für YuE2 vereinfacht (im MIDI bleiben sie): Bbmaj7")
         XCTAssertEqual(SketchSession.summary(bars: detail.bars, seconds: detail.seconds), "2 Takte · 0:05")
         XCTAssertNil(SketchSession.summary(bars: nil, seconds: 3))
-        XCTAssertEqual(SketchSession.stageName("writing"), "Claude schreibt …")
+        XCTAssertEqual(SketchSession.stageName("writing"), "wird geschrieben …")
+        XCTAssertEqual(SketchSession.stageName("waiting"), "wartet auf den Speicher")
     }
 
     func testThePlanGoesToTheAcePageWithWhatAceStepReads() throws {

@@ -119,11 +119,13 @@ public sealed record SketchResult(
     double Seconds);
 
 /// <param name="Instruction">Optional wishes for this attempt.</param>
-/// <param name="Model">One of <see cref="SketchInfo.Models"/>; <see cref="SketchOptions.Model"/> when left out.</param>
+/// <param name="Model">One of <see cref="SketchInfo.Models"/> or <see cref="SketchInfo.Local"/>; <see cref="SketchOptions.Model"/> when left out.</param>
 public sealed record SketchRequest(string Text, string? Instruction = null, string? Model = null);
 
-/// <summary>Whether Claude can be asked (a key is set), with which model by default and which to choose from.</summary>
-public sealed record SketchInfo(bool Configured, string Model, IReadOnlyList<ClaudeModelChoice> Models);
+/// <summary>Whether Claude can be asked (a key is set), with which model by default, and which models to choose from.</summary>
+/// <param name="Configured">Whether an Anthropic key is set, so the Claude models can plan.</param>
+/// <param name="Local">LM Studio's models, which plan on this Mac; empty while LM Studio does not answer.</param>
+public sealed record SketchInfo(bool Configured, string Model, IReadOnlyList<ClaudeModelChoice> Models, IReadOnlyList<Lyrics.LyricsModel>? Local = null);
 
 /// <summary>A Claude model a picker offers, by its API id and the name Anthropic gives it.</summary>
 public sealed record ClaudeModelChoice(string Id, string Name)

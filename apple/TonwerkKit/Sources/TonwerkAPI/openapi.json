@@ -7661,6 +7661,19 @@
           "cloud": {
             "type": "boolean",
             "default": false
+          },
+          "role": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "needsGb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
           }
         }
       },
@@ -9003,6 +9016,15 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ClaudeModelChoice"
+            }
+          },
+          "local": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/LyricsModel"
             }
           }
         }

@@ -60,6 +60,7 @@ builder.Services.AddHttpClient(YueUI.Api.Machines.HelperClient.HttpClientName, c
 // Lyrics drafts from LM Studio; loading a 15 GB model and writing take far longer than HttpClient's 100 s default allows for.
 builder.Services.Configure<LyricsOptions>(builder.Configuration.GetSection(LyricsOptions.Section));
 builder.Services.AddSingleton<ILmStudioStarter, LmsCli>();
+builder.Services.AddSingleton<LmStudio>();
 builder.Services.AddSingleton<LyricsWriter>();
 builder.Services.AddSingleton<ICloudLyricsModel, ClaudeLyricsModel>();
 builder.Services.AddHttpClient(LyricsWriter.HttpClientName, (services, client) =>
@@ -165,6 +166,7 @@ builder.Services.AddHostedService(services => services.GetRequiredService<AceCom
 builder.Services.Configure<SketchOptions>(builder.Configuration.GetSection(SketchOptions.Section));
 builder.Services.AddSingleton<SqliteSketchStore>();
 builder.Services.AddSingleton<ISketchModel, ClaudeSketchModel>();
+builder.Services.AddSingleton<LocalSketchModel>();
 // The SDK keeps its own timeout (Sketch:Timeout); HttpClient's 100 seconds would cut a plan off long before.
 builder.Services.AddHttpClient(ClaudeSketchModel.HttpClientName, client => client.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddSingleton<SketchMaker>();

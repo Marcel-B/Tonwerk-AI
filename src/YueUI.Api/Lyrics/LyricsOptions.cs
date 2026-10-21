@@ -68,7 +68,50 @@ public sealed class LyricsOptions
     /// <summary>Upper limit of Claude's answer, thinking included.</summary>
     public int ClaudeMaxTokens { get; set; } = 16000;
 
+    /// <summary>
+    /// Local models the picker marks with what they are good for, matched by a part of their LM Studio key, so any
+    /// quantisation counts. Both need a Mac with 32 GB: Gemma 4 31B is dense, about 20 GB at 4 bits, and writes slowly
+    /// but well, German included; Qwen 3.6 35B A3B is larger (about 23 GB) but only 3B of it work per token, so it
+    /// answers several times as fast, for ideas, rhymes and variants.
+    /// </summary>
+    public LyricsModelRole[] Roles { get; set; } =
+    [
+        new() { Match = "gemma-4-31b", Role = "quality", MinSystemGb = 32 },
+        new() { Match = "qwen3.6-35b-a3b", Role = "ideas", MinSystemGb = 32 },
+    ];
+
+    /// <summary>
+    /// The Mac's memory in GB, which decides which of <see cref="Roles"/>' models it offers; null reads it from the
+    /// system as the painted covers do.
+    /// </summary>
+    public double? SystemMemoryGb { get; set; }
+
+    public double? ResolvedSystemMemoryGb => SystemMemoryGb ?? (GC.GetGCMemoryInfo().TotalAvailableMemoryBytes is > 0 and var bytes
+        ? bytes / (double)(1L << 30)
+        : null);
+
+    /// <summary>The role entry whose <see cref="LyricsModelRole.Match"/> the model's key contains, if any.</summary>
+    public LyricsModelRole? RoleOf(string model) => Roles.FirstOrDefault(r =>
+        !string.IsNullOrWhiteSpace(r.Match) && model.Contains(r.Match.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The memory <paramref name="model"/> needs and this Mac lacks; null when it fits or nobody knows.</summary>
+    public double? MissingMemoryFor(string model) =>
+        RoleOf(model)?.MinSystemGb is { } needed && ResolvedSystemMemoryGb is { } has && has < needed - 0.5 ? needed : null;
+
     public string LmsPath => string.IsNullOrWhiteSpace(Lms)
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".lmstudio", "bin", "lms")
         : Lms;
+}
+
+/// <summary>What a local model is suggested for (<see cref="LyricsOptions.Roles"/>).</summary>
+public sealed class LyricsModelRole
+{
+    /// <summary>A part of the model's LM Studio key, e.g. <c>gemma-4-31b</c>.</summary>
+    public string Match { get; set; } = "";
+
+    /// <summary><c>quality</c> (final lyrics, German) or <c>ideas</c> (fast brainstorming); the apps name it.</summary>
+    public string Role { get; set; } = "";
+
+    /// <summary>The Mac's memory it needs in GB; smaller Macs do not offer it.</summary>
+    public double? MinSystemGb { get; set; }
 }

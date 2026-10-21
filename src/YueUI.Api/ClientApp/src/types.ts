@@ -419,6 +419,10 @@ export interface LyricsModel {
   vision: boolean | null
   /** Runs at Anthropic: the draft neither waits for nor stops a song, and the text leaves the Mac. */
   cloud: boolean
+  /** What a local model is suggested for (Lyrics:Roles): final lyrics or fast ideas. */
+  role?: 'quality' | 'ideas' | null
+  /** The memory it needs and the Mac that lists it lacks, in GB. */
+  needsGb?: number | null
 }
 
 /** What the lyrics model picker offers; `default` is the configured model, used when a draft names none. */
@@ -1004,7 +1008,7 @@ export interface SketchBar {
   parts: string[] | null
 }
 
-export type SketchStage = 'queued' | 'writing' | 'done' | 'failed'
+export type SketchStage = 'queued' | 'waiting' | 'writing' | 'done' | 'failed'
 
 export interface SketchJob {
   id: string
@@ -1059,6 +1063,8 @@ export interface SketchInfo {
   model: string
   /** The Claude models to choose from, the default first. */
   models: ClaudeModelChoice[]
+  /** LM Studio's models, which plan on the Mac; empty while LM Studio does not answer. */
+  local?: LyricsModel[] | null
 }
 
 /** A Claude model a picker offers (Sketches/SketchModels.cs). */

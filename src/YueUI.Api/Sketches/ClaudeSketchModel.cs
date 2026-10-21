@@ -40,19 +40,6 @@ public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClie
             HttpClient = httpClients.CreateClient(HttpClientName),
         };
 
-        var user = new StringBuilder();
-        user.AppendLine("<sketch>");
-        user.AppendLine(sketch.Trim());
-        user.AppendLine("</sketch>");
-        if (!string.IsNullOrWhiteSpace(instruction))
-        {
-            user.AppendLine();
-            user.AppendLine("<wishes>");
-            user.AppendLine(instruction.Trim());
-            user.AppendLine("</wishes>");
-        }
-        user.Append("Plan this song.");
-
         var parameters = new MessageCreateParams
         {
             Model = model,
@@ -64,7 +51,7 @@ public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClie
                 Effort = ParseEffort(settings.Effort),
                 Format = new JsonOutputFormat { Schema = Schema },
             },
-            Messages = [new() { Role = Role.User, Content = user.ToString() }],
+            Messages = [new() { Role = Role.User, Content = UserPrompt(sketch, instruction) }],
         };
 
         var text = new StringBuilder();
@@ -117,6 +104,24 @@ public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClie
             throw new SketchModelException("Claude's answer held no sections.");
         }
         return new SketchAnswer(plan, model, inputTokens, outputTokens);
+    }
+
+    /// <summary>The sketch and the wishes, tagged apart; the local models get the same.</summary>
+    public static string UserPrompt(string sketch, string? instruction)
+    {
+        var user = new StringBuilder();
+        user.AppendLine("<sketch>");
+        user.AppendLine(sketch.Trim());
+        user.AppendLine("</sketch>");
+        if (!string.IsNullOrWhiteSpace(instruction))
+        {
+            user.AppendLine();
+            user.AppendLine("<wishes>");
+            user.AppendLine(instruction.Trim());
+            user.AppendLine("</wishes>");
+        }
+        user.Append("Plan this song.");
+        return user.ToString();
     }
 
     private static Effort ParseEffort(string effort) => effort.Trim().ToLowerInvariant() switch

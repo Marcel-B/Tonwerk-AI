@@ -59,7 +59,7 @@ public static class WritingEndpoints
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["model"] = ["At most 200 characters."] });
             }
-            return Answer(() => desk.Send(id, request.Text, request.Model));
+            return Answer(() => desk.Send(id, request.Text, request.Model, request.Reasoning));
         })
             .WithName("SendWritingMessage")
             .Produces<WritingReply>(StatusCodes.Status202Accepted)
@@ -67,7 +67,7 @@ public static class WritingEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
         api.MapPost("/writing/{id}/retry", (string id, WritingRetryRequest? request, WritingDesk desk) =>
-            Answer(() => desk.Retry(id, request?.Model)))
+            Answer(() => desk.Retry(id, request?.Model, request?.Reasoning)))
             .WithName("RetryWritingMessage")
             .Produces<WritingReply>(StatusCodes.Status202Accepted)
             .Produces(StatusCodes.Status404NotFound)

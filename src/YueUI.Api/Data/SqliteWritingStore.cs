@@ -9,7 +9,11 @@ namespace YueUI.Api.Data;
 /// </summary>
 public sealed class SqliteWritingStore(SqliteDatabase database)
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    // Enums by name, so that a menu's order never changes what a stored chat says.
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+    };
 
     /// <summary>Every conversation, oldest first.</summary>
     public IReadOnlyList<WritingChat> All()

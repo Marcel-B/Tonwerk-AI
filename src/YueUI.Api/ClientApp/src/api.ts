@@ -992,16 +992,25 @@ export async function createWritingChat(): Promise<WritingChat> {
 }
 
 /** Answers 202 at once; the answer grows in `writing` events. */
-export async function sendWriting(id: string, text: string, model: string | null): Promise<WritingReply> {
+export async function sendWriting(
+  id: string,
+  text: string,
+  model: string | null,
+  reasoning: LyricsReasoning | null = null,
+): Promise<WritingReply> {
   return (
-    await send(`/api/writing/${encodeURIComponent(id)}/messages`, json('POST', { text, model }))
+    await send(`/api/writing/${encodeURIComponent(id)}/messages`, json('POST', { text, model, reasoning }))
   ).json() as Promise<WritingReply>
 }
 
 /** The last answer written again, by the chosen model. */
-export async function retryWriting(id: string, model: string | null): Promise<WritingReply> {
+export async function retryWriting(
+  id: string,
+  model: string | null,
+  reasoning: LyricsReasoning | null = null,
+): Promise<WritingReply> {
   return (
-    await send(`/api/writing/${encodeURIComponent(id)}/retry`, json('POST', { model }))
+    await send(`/api/writing/${encodeURIComponent(id)}/retry`, json('POST', { model, reasoning }))
   ).json() as Promise<WritingReply>
 }
 

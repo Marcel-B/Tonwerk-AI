@@ -11,6 +11,9 @@ public sealed record WritingChat
     /// <summary>The model of the last answer, which the next one takes unless another is chosen; null for the default.</summary>
     public string? Model { get; init; }
 
+    /// <summary>How much the last answer was to think, for the page's picker; null for LM Studio's setting.</summary>
+    public Lyrics.LyricsReasoning? Reasoning { get; init; }
+
     public IReadOnlyList<WritingMessage> Messages { get; init; } = [];
 
     public DateTimeOffset CreatedAt { get; init; }
@@ -41,6 +44,9 @@ public sealed record WritingReply
 
     public string Model { get; init; } = "";
 
+    /// <summary>How much the model was asked to think; null leaves it to LM Studio.</summary>
+    public Lyrics.LyricsReasoning? Reasoning { get; init; }
+
     /// <summary>The answer so far, without the model's reasoning.</summary>
     public string Text { get; init; } = "";
 
@@ -69,9 +75,11 @@ public sealed record WritingOverview(IReadOnlyList<WritingChatSummary> Chats, Wr
 public sealed record WritingChatRequest(string? Title = null, string? Model = null);
 
 /// <param name="Model">An LM Studio model's key; the chat's last, else the default, when left out.</param>
-public sealed record WritingMessageRequest(string Text, string? Model = null);
+/// <param name="Reasoning">How much a thinking model thinks first; left out, as set in LM Studio.</param>
+public sealed record WritingMessageRequest(string Text, string? Model = null, Lyrics.LyricsReasoning? Reasoning = null);
 
 public sealed record WritingTitleRequest(string Title);
 
 /// <param name="Model">Another model for the new answer; the chat's own when left out.</param>
-public sealed record WritingRetryRequest(string? Model = null);
+/// <param name="Reasoning">How much to think this time; left out, as set in LM Studio.</param>
+public sealed record WritingRetryRequest(string? Model = null, Lyrics.LyricsReasoning? Reasoning = null);

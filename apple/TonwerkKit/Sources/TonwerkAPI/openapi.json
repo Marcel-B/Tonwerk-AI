@@ -11453,6 +11453,9 @@
               "string"
             ]
           },
+          "reasoning": {
+            "$ref": "#/components/schemas/LyricsReasoning"
+          },
           "messages": {
             "type": "array",
             "items": {
@@ -11565,6 +11568,9 @@
               "null",
               "string"
             ]
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/LyricsReasoning"
           }
         }
       },
@@ -11615,6 +11621,9 @@
           "model": {
             "type": "string"
           },
+          "reasoning": {
+            "$ref": "#/components/schemas/LyricsReasoning"
+          },
           "text": {
             "type": "string"
           },
@@ -11644,6 +11653,9 @@
               "null",
               "string"
             ]
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/LyricsReasoning"
           }
         }
       },

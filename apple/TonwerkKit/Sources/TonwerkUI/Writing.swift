@@ -17,12 +17,23 @@ final class WritingSession {
     /// The chosen model, empty for the chat's own or the server's default.
     private(set) var chosenModel: String
 
+    /// How much a thinking model thinks first (`LyricsReasoning`'s raw value); empty leaves it to LM Studio.
+    var reasoning: String {
+        didSet { UserDefaults.standard.set(reasoning, forKey: Self.reasoningKey) }
+    }
+
     private static let modelKey = "writingModel"
+    private static let reasoningKey = "writingReasoning"
     private unowned let model: AppModel
 
     init(model: AppModel) {
         self.model = model
         chosenModel = UserDefaults.standard.string(forKey: Self.modelKey) ?? ""
+        reasoning = UserDefaults.standard.string(forKey: Self.reasoningKey) ?? ""
+    }
+
+    private var chosenReasoning: String? {
+        Components.Schemas.LyricsReasoning(rawValue: reasoning)?.rawValue
     }
 
     /// What the picker shows: the chosen model while LM Studio has it, else the chat's, else the default.
@@ -107,7 +118,8 @@ final class WritingSession {
                 chat = try await model.createWritingChat()
             }
             guard let id = chat?.id else { return }
-            let reply = try await model.sendWriting(id, text: message, model: modelId.isEmpty ? nil : modelId)
+            let reply = try await model.sendWriting(
+                id, text: message, model: modelId.isEmpty ? nil : modelId, reasoning: chosenReasoning)
             model.liveWriting = reply
             if message == text.trimmingCharacters(in: .whitespacesAndNewlines) {
                 text = ""
@@ -122,7 +134,8 @@ final class WritingSession {
     func retry() async {
         guard let id = chat?.id, !replying else { return }
         do {
-            model.liveWriting = try await model.retryWriting(id, model: modelId.isEmpty ? nil : modelId)
+            model.liveWriting = try await model.retryWriting(
+                id, model: modelId.isEmpty ? nil : modelId, reasoning: chosenReasoning)
             chat = try await model.writingChat(id)
         } catch {
             problem = error.localizedDescription
@@ -218,14 +231,21 @@ extension AppModel {
         return try decode(Components.Schemas.WritingChat.self, data)
     }
 
-    func sendWriting(_ id: String, text: String, model: String?) async throws -> Components.Schemas.WritingReply {
-        let body: [String: Any] = ["text": text, "model": model.map { $0 as Any } ?? NSNull()]
+    func sendWriting(_ id: String, text: String, model: String?, reasoning: String? = nil) async throws -> Components.Schemas.WritingReply {
+        let body: [String: Any] = [
+            "text": text,
+            "model": model.map { $0 as Any } ?? NSNull(),
+            "reasoning": reasoning.map { $0 as Any } ?? NSNull(),
+        ]
         let (data, _) = try await call("POST", address("api/writing", id, "messages"), json: body, accept: [202])
         return try decode(Components.Schemas.WritingReply.self, data)
     }
 
-    func retryWriting(_ id: String, model: String?) async throws -> Components.Schemas.WritingReply {
-        let body: [String: Any] = ["model": model.map { $0 as Any } ?? NSNull()]
+    func retryWriting(_ id: String, model: String?, reasoning: String? = nil) async throws -> Components.Schemas.WritingReply {
+        let body: [String: Any] = [
+            "model": model.map { $0 as Any } ?? NSNull(),
+            "reasoning": reasoning.map { $0 as Any } ?? NSNull(),
+        ]
         let (data, _) = try await call("POST", address("api/writing", id, "retry"), json: body, accept: [202])
         return try decode(Components.Schemas.WritingReply.self, data)
     }

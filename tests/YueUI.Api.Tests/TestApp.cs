@@ -553,8 +553,12 @@ public sealed class FakeLmStudio : ILmStudioStarter
                         ? Json(HttpStatusCode.OK, lm.RawAnswer ?? new { choices = new[] { new { message = new { role = "assistant", content = lm.Answer } } } })
                         : Json(lm.Status, new { error = new { message = "Model not found" } });
                 case "/api/v1/chat":
-                    return lm.RefusesReasoning
-                        ? Json(HttpStatusCode.BadRequest, new { error = new { message = "This model does not support the reasoning setting" } })
+                    if (lm.RefusesReasoning)
+                    {
+                        return Json(HttpStatusCode.BadRequest, new { error = new { message = "This model does not support the reasoning setting" } });
+                    }
+                    return (bool?)body?["stream"] == true
+                        ? NativeStream(lm.StreamReasoning, lm.Answer)
                         : Json(HttpStatusCode.OK, new
                         {
                             model_instance_id = (string?)body?["model"],
@@ -574,6 +578,36 @@ public sealed class FakeLmStudio : ILmStudioStarter
 
         private static HttpResponseMessage Json(HttpStatusCode status, object value) =>
             new(status) { Content = JsonContent.Create(value) };
+
+        /// <summary>The answer as LM Studio's native chat streams it: named events, reasoning and message apart.</summary>
+        private static HttpResponseMessage NativeStream(string? reasoning, string content)
+        {
+            var sse = new System.Text.StringBuilder();
+            void Event(string type, object? fields = null)
+            {
+                var data = JsonSerializer.SerializeToNode(fields ?? new { })!.AsObject();
+                data["type"] = type;
+                sse.Append("event: ").Append(type).Append("\ndata: ").Append(data.ToJsonString()).Append("\n\n");
+            }
+            Event("chat.start", new { model_instance_id = "m:1" });
+            if (reasoning is { Length: > 0 })
+            {
+                Event("reasoning.start");
+                foreach (var piece in reasoning.Chunk(7))
+                {
+                    Event("reasoning.delta", new { content = new string(piece) });
+                }
+                Event("reasoning.end");
+            }
+            Event("message.start");
+            foreach (var piece in content.Chunk(7))
+            {
+                Event("message.delta", new { content = new string(piece) });
+            }
+            Event("message.end");
+            Event("chat.end", new { result = new { model_instance_id = "m:1", output = Array.Empty<object>() } });
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(sse.ToString(), System.Text.Encoding.UTF8, "text/event-stream") };
+        }
 
         /// <summary>The answer as LM Studio streams it: reasoning first, then the content, a few characters a chunk.</summary>
         private static HttpResponseMessage Stream(string? reasoning, string content, string finish)

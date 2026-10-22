@@ -19,7 +19,7 @@ import {
 import { copyText } from '../clipboard'
 import { t, type MessageKey } from '../i18n'
 import { liveWriting } from '../writing'
-import type { LyricsModel, WritingChat, WritingOverview, WritingReply } from '../types'
+import type { LyricsModel, LyricsReasoning, WritingChat, WritingOverview, WritingReply } from '../types'
 
 /**
  * Conversations with a model in LM Studio for ideas, rhymes, variants and lyrics. The server keeps the conversations
@@ -58,6 +58,35 @@ const model = computed({
     }
   },
 })
+/** How much a thinking model thinks first, per browser; empty leaves it to LM Studio. */
+const reasoningKey = 'yue-ui.writingReasoning'
+const reasoningValues: LyricsReasoning[] = ['off', 'low', 'medium', 'high', 'on']
+const reasoning = ref<LyricsReasoning | ''>(readReasoning())
+watch(reasoning, (value) => {
+  try {
+    localStorage.setItem(reasoningKey, value)
+  } catch {
+    // Only a convenience.
+  }
+})
+const reasoningOptions = computed(() => [
+  { value: '', label: t('lyricsReasoningDefault') },
+  { value: 'off', label: t('lyricsReasoningOff') },
+  { value: 'low', label: t('lyricsReasoningLow') },
+  { value: 'medium', label: t('lyricsReasoningMedium') },
+  { value: 'high', label: t('lyricsReasoningHigh') },
+  { value: 'on', label: t('lyricsReasoningOn') },
+])
+
+function readReasoning(): LyricsReasoning | '' {
+  try {
+    const stored = localStorage.getItem(reasoningKey) as LyricsReasoning | null
+    return stored && reasoningValues.includes(stored) ? stored : ''
+  } catch {
+    return ''
+  }
+}
+
 const modelOptions = computed(() =>
   models.value.map((m) => {
     const name = m.role ? `${m.name} · ${t(`lyricsModelRole_${m.role}`)}` : m.name
@@ -168,7 +197,7 @@ async function send(): Promise<void> {
       chat.value = await createWritingChat()
     }
     const id = chat.value.id
-    liveWriting.value = await sendWriting(id, value, chosenModel())
+    liveWriting.value = await sendWriting(id, value, chosenModel(), reasoning.value || null)
     text.value = ''
     chat.value = await getWritingChat(id)
     overview.value = await getWriting()
@@ -183,7 +212,7 @@ async function retry(): Promise<void> {
   const id = chat.value?.id
   if (!id || replying.value) return
   try {
-    liveWriting.value = await retryWriting(id, chosenModel())
+    liveWriting.value = await retryWriting(id, chosenModel(), reasoning.value || null)
     chat.value = await getWritingChat(id)
   } catch (caught) {
     emit('error', message(caught))
@@ -297,6 +326,18 @@ function stageText(value: WritingReply): string {
           v-model="model"
           input-id="writing-model"
           :options="modelOptions"
+          option-value="value"
+          option-label="label"
+          size="small"
+          fluid
+        />
+      </div>
+      <div v-if="models.length" class="flex min-w-40 flex-col gap-1">
+        <label for="writing-reasoning" class="text-sm font-semibold">{{ t('writingReasoning') }}</label>
+        <Select
+          v-model="reasoning"
+          input-id="writing-reasoning"
+          :options="reasoningOptions"
           option-value="value"
           option-label="label"
           size="small"

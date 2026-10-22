@@ -7,8 +7,9 @@ import { t } from '../i18n'
 import { blocksIn, toggleBlock } from '../coverBlocks'
 import { imageTarget, loadImageSettings, saveImageSettings, suggestPrompt } from '../images'
 import { machineField, ranOnNote, storedMachine } from '../machines'
-import type { ImageInfo, ImageState } from '../types'
+import type { ImageInfo, ImageLoraChoice, ImageState } from '../types'
 import CoverBlocks from './CoverBlocks.vue'
+import CoverLoras from './CoverLoras.vue'
 import MachinePicker from './MachinePicker.vue'
 
 /**
@@ -33,6 +34,8 @@ const info = ref<ImageInfo | null>(null)
 const loaded = ref<ImageState[]>([])
 const sending = ref(false)
 const taking = ref<string | null>(null)
+/** The LoRAs for the next picture, with their strengths; `CoverLoras` drops those that do not fit the model. */
+const loras = ref<ImageLoraChoice[]>([])
 
 /** Whether the description is still the suggestion, so that the title switch may rewrite it. */
 const suggested = ref(true)
@@ -123,6 +126,7 @@ async function start(): Promise<void> {
       prompt: prompt.value,
       model: model.value,
       machine: machineField(machine.value),
+      loras: loras.value.length > 0 ? loras.value : undefined,
     })
     if (imageTarget.value === target) {
       loaded.value = [image, ...loaded.value.filter((i) => i.id !== image.id)]
@@ -196,6 +200,7 @@ function close(): void {
         <small class="muted">{{ t(info?.translates ? 'imagePromptHintTranslated' : 'imagePromptHint') }}</small>
       </label>
       <CoverBlocks :chosen="chosenBlocks" :song-style="imageTarget?.style ?? ''" @toggle="toggle" />
+      <CoverLoras v-model="loras" :model="chosen" :models="info?.models ?? []" @error="(m) => emit('error', m)" />
       <label class="flex items-center gap-2">
         <Checkbox v-model="withTitle" binary />
         <span>{{ t('imageWithTitle') }}</span>
@@ -252,7 +257,14 @@ function close(): void {
             </div>
           </div>
           <span class="text-xs text-muted-color truncate" :title="image.paintedPrompt ?? image.prompt">{{
-            [image.modelLabel, t('imageSeed', { seed: image.seed }), ranOnNote(image.ranOn)].filter(Boolean).join(' · ')
+            [
+              image.modelLabel,
+              ...(image.loras ?? []).map((lora) => `${lora.label} ${lora.strength.toFixed(2)}`),
+              t('imageSeed', { seed: image.seed }),
+              ranOnNote(image.ranOn),
+            ]
+              .filter(Boolean)
+              .join(' · ')
           }}</span>
           <div class="flex items-center gap-1">
             <Button

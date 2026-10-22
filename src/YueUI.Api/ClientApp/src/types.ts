@@ -845,6 +845,56 @@ export interface ImageState {
   machine?: string | null
   /** The name of the Mac that runs it, once one does. */
   ranOn?: string | null
+  /** The LoRAs it was painted with. */
+  loras?: ImageLoraUsed[] | null
+}
+
+/** A LoRA for the image models (Images/ImageLoras.cs `ImageLoraInfo`). */
+export interface ImageLora {
+  /** The file name without `.safetensors`; what a picture asks for. */
+  name: string
+  label: string
+  /** The image model it was trained for; null until someone says. */
+  model: string | null
+  /** Words added to the end of the description when it paints. */
+  trigger: string | null
+  strength: number
+  sizeBytes: number
+  modifiedAt: string
+  /** The Hugging Face repository it came from. */
+  source?: string | null
+}
+
+/** One of Krea's LoRAs, offered to fetch from Hugging Face. */
+export interface ImageLoraSuggestion {
+  name: string
+  label: string
+  model: string
+  trigger: string
+  strength: number
+  repo: string
+  file: string
+  license: string
+}
+
+export interface ImageLoraList {
+  /** Where the files lie on the Mac; files put there by hand are listed too. */
+  folder: string
+  loras: ImageLora[]
+  suggestions: ImageLoraSuggestion[]
+  fetching: string[]
+}
+
+export interface ImageLoraChoice {
+  name: string
+  strength: number
+}
+
+export interface ImageLoraUsed {
+  name: string
+  label: string
+  strength: number
+  trigger: string | null
 }
 
 export interface ImageModelInfo {
@@ -867,6 +917,8 @@ export interface ImageModelInfo {
   lettering?: boolean
   /** The least memory a Mac needs to be offered it, in GB. */
   minSystemGb?: number | null
+  /** Its runner applies LoRAs (FLUX 3 Klein's does not). */
+  loras?: boolean
 }
 
 /** `GET /api/audio-midi`: whether Basic Pitch is set up, and where the server looks for it. */

@@ -1,5 +1,9 @@
 import { expect, run, test } from './fakeApi'
 
+function lora(name: string, model: string | null, trigger: string | null) {
+  return { name, label: name, model, trigger, strength: 1, sizeBytes: 80 << 20, modifiedAt: '2026-10-22T12:00:00Z' }
+}
+
 test.beforeEach(({ api }) => {
   api.runs = [run('run-1', { title: 'Nachtzug', style: 'German, dark synthwave, 110 BPM' })]
   api.answers.set('GET /api/images', () => ({
@@ -19,8 +23,19 @@ test.beforeEach(({ api }) => {
         tokenFound: true,
         available: true,
         lettering: false,
+        loras: true,
       },
     ],
+  }))
+  api.answers.set('GET /api/image-loras', () => ({
+    folder: '/data/image-loras',
+    loras: [
+      lora('MetroRose', 'flux2-klein-4b', 'metrorose'),
+      lora('RealSkin', 'flux2-klein-4b', null),
+      lora('mystery', null, null),
+    ],
+    suggestions: [],
+    fetching: [],
   }))
   api.answers.set('GET /api/songs/run-1/song1/images', () => [])
   api.answers.set('POST /api/songs/run-1/song1/images', () => ({
@@ -62,4 +77,25 @@ test('cover blocks go into the description, a medium replaces the painting', asy
   await expect.poll(() => api.callsTo('POST', '/api/songs/run-1/song1/images').length).toBe(1)
   const body = api.callsTo('POST', '/api/songs/run-1/song1/images')[0]!.body as { prompt: string }
   expect(body.prompt).toContain('Shot as a photograph')
+})
+
+test('LoRAs of the chosen model go with the picture at their strength', async ({ page, api }) => {
+  await page.goto('#/songs')
+  await page.getByRole('button', { name: 'Weitere Aktionen' }).first().click()
+  await page.getByRole('menuitem', { name: 'Cover malen' }).click()
+
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'MetroRose' }).click()
+  await expect(dialog.getByRole('slider', { name: 'Stärke von MetroRose' })).toBeVisible()
+  await dialog.getByRole('slider', { name: 'Stärke von MetroRose' }).press('ArrowLeft')
+  // The one without a known model is only counted until someone assigns it.
+  await expect(dialog.getByRole('button', { name: 'mystery' })).toHaveCount(0)
+  await expect(dialog.getByText('1 LoRA(s) ohne bekanntes Modell')).toBeVisible()
+
+  await dialog.getByRole('button', { name: 'Malen' }).click()
+  await expect.poll(() => api.callsTo('POST', '/api/songs/run-1/song1/images').length).toBe(1)
+  const body = api.callsTo('POST', '/api/songs/run-1/song1/images')[0]!.body as {
+    loras: { name: string; strength: number }[]
+  }
+  expect(body.loras).toEqual([{ name: 'MetroRose', strength: 0.95 }])
 })

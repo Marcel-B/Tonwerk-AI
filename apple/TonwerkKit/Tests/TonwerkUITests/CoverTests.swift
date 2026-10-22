@@ -1,5 +1,6 @@
 import CoreGraphics
 import ImageIO
+import TonwerkKit
 import UniformTypeIdentifiers
 import XCTest
 @testable import TonwerkUI
@@ -60,6 +61,27 @@ final class CoverTests: XCTestCase {
         XCTAssertEqual(
             CoverPrompt.suggest(title: "Nachtzug", style: "dreamy", withTitle: true, blocks: ["neon", "pencil"]),
             "A square picture, one striking scene with a strong central motif, high detail. Its mood and colours evoke dreamy music. \(pencil) \(neon) The words \"Nachtzug\" are written once in elegant, legible lettering.")
+    }
+
+    private func lora(_ name: String, strength: Double = 1) -> Components.Schemas.ImageLoraInfo {
+        .init(
+            name: name, label: name, model: "klein-4b", trigger: nil, strength: strength, sizeBytes: 1,
+            modifiedAt: Date(timeIntervalSince1970: 0))
+    }
+
+    func testLorasAreChosenAtTheirOwnStrengthAndNoMoreThanThree() {
+        var chosen: [ImageLoras.Choice] = []
+        for name in ["a", "b", "c", "d"] {
+            chosen = ImageLoras.toggle(lora(name, strength: 0.8), in: chosen)
+        }
+        XCTAssertEqual(chosen.map(\.name), ["a", "b", "c"])
+        XCTAssertEqual(chosen.first?.strength, 0.8)
+        XCTAssertEqual(ImageLoras.toggle(lora("b"), in: chosen).map(\.name), ["a", "c"])
+    }
+
+    func testLorasThatNoLongerFitLeaveTheChoice() {
+        let chosen = [ImageLoras.Choice(name: "a", strength: 1), ImageLoras.Choice(name: "gone", strength: 1)]
+        XCTAssertEqual(ImageLoras.kept(chosen, fitting: [lora("a")]).map(\.name), ["a"])
     }
 
     func testPhotoIsCutSquareAtTheGivenSide() throws {

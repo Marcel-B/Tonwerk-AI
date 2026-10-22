@@ -12,7 +12,8 @@ namespace YueUI.Api.Machines;
 public sealed record SpeechHelperJob(string Model, bool Clean, string? Text = null, string? RefText = null, double Seconds = 0);
 
 /// <summary>A painted picture. Out: <c>image.jpg</c>.</summary>
-public sealed record ImageHelperJob(string Model, string Prompt, long Seed, int Width, int Height);
+/// <param name="Loras">The strengths of the LoRAs sent along as files <c>lora0</c>, <c>lora1</c>, …, in that order.</param>
+public sealed record ImageHelperJob(string Model, string Prompt, long Seed, int Width, int Height, IReadOnlyList<double>? Loras = null);
 
 /// <summary>A sung melody. Out: <c>take.wav</c>; an <c>aligned</c> event before the model loads.</summary>
 public sealed record SingingHelperJob(IReadOnlyList<SungNote> Notes, string Lyrics, string Voice, int PitchShift, bool AutoShift);

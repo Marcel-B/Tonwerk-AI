@@ -134,13 +134,15 @@ extension AppModel {
         (try? await tonwerk?.api.listSongImages(path: .init(run: song.run, song: song.name)).ok.body.json) ?? []
     }
 
-    func paint(_ song: Song, prompt: String, model: String, machine: String = "") async throws
-        -> Components.Schemas.ImageState
+    func paint(_ song: Song, prompt: String, model: String, machine: String = "", loras: [ImageLoras.Choice] = [])
+        async throws -> Components.Schemas.ImageState
     {
         guard let tonwerk else { throw ServerError(String(localized: "Kein Server verbunden.")) }
         switch try await tonwerk.api.createSongImage(
             path: .init(run: song.run, song: song.name),
-            body: .json(.init(prompt: prompt, model: model, seed: nil, machine: machine.isEmpty ? nil : machine)))
+            body: .json(.init(
+                prompt: prompt, model: model, seed: nil, machine: machine.isEmpty ? nil : machine,
+                loras: loras.isEmpty ? nil : loras.map { .init(name: $0.name, strength: $0.strength) })))
         {
         case .accepted(let accepted):
             let image = try accepted.body.json
@@ -338,6 +340,8 @@ struct PaintCoverView: View {
     @State private var taking: String?
     @State private var message: String?
     @State private var failed = false
+    /// The LoRAs for the next picture; `CoverLorasSection` drops those that do not fit the model.
+    @State private var loras: [ImageLoras.Choice] = []
 
     var body: some View {
         NavigationStack {
@@ -351,6 +355,9 @@ struct PaintCoverView: View {
                 }
                 describe
                 modelSection
+                if let info, !info.models.isEmpty {
+                    CoverLorasSection(chosen: $loras, imageModel: chosen, models: info.models)
+                }
                 Section { start }
                 if !candidates.isEmpty {
                     Section {
@@ -524,8 +531,7 @@ struct PaintCoverView: View {
             picture(image)
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text(([image.modelLabel, "Seed \(image.seed.map(String.init) ?? "–")", model.ranOnNote(image.ranOn)]
-                as [String?]).compactMap { $0 }.joined(separator: " · "))
+            Text(Self.note(of: image, ranOn: model.ranOnNote(image.ranOn)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -605,7 +611,18 @@ struct PaintCoverView: View {
         }
     }
 
-    static func stage(of image: Components.Schemas.ImageState) -> String {
+    /// Model, LoRAs with their strengths, seed and where it ran, under the picture.
+    static func note(of image: Components.Schemas.ImageState, ranOn: String?) -> String {
+        var parts: [String?] = [image.modelLabel]
+        for lora in image.loras ?? [] {
+            parts.append("\(lora.label) \(lora.strength.formatted(.number.precision(.fractionLength(2))))")
+        }
+        parts.append("Seed \(image.seed.map(String.init) ?? "–")")
+        parts.append(ranOn)
+        return parts.compactMap { $0 }.joined(separator: " · ")
+    }
+
+        static func stage(of image: Components.Schemas.ImageState) -> String {
         switch image.stage ?? "" {
         case "painting": "\(Int(((image.fraction ?? 0) * 100).rounded())) %"
         case "loading": String(localized: "Lädt Modell")
@@ -632,7 +649,7 @@ struct PaintCoverView: View {
         message = nil
         Task {
             do {
-                let image = try await model.paint(song, prompt: prompt, model: modelId, machine: machine)
+                let image = try await model.paint(song, prompt: prompt, model: modelId, machine: machine, loras: loras)
                 loaded = [image] + loaded.filter { $0.id != image.id }
             } catch {
                 failed = true

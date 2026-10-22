@@ -57,6 +57,12 @@ public sealed class ImageModel
     /// <summary>It can write short words into the picture (a title on a wall), which Klein 4B cannot.</summary>
     public bool Lettering { get; set; }
 
+    /// <summary>
+    /// Whether its runner applies LoRAs (<see cref="ImageLoraLibrary"/>): mflux does for Klein, Z-Image and Krea 2;
+    /// flux3-mlx has no LoRA loader.
+    /// </summary>
+    public bool TakesLoras => Runner == ImageRunners.Mflux;
+
     /// <summary>Roughly what it downloads, in GB, so the dialog can say what the first picture costs.</summary>
     public double DownloadGb { get; set; }
 
@@ -218,6 +224,9 @@ public sealed record ImageState
     /// <summary>The Mac it was asked for (<c>local</c> or a helper's id, Machines/); null for whichever is free.</summary>
     public string? Machine { get; init; }
 
+    /// <summary>The LoRAs it is painted with, as they were when it was asked for; null or empty for none.</summary>
+    public IReadOnlyList<ImageLoraUsed>? Loras { get; init; }
+
     /// <summary>The name of the Mac that runs it, once one does.</summary>
     public string? RanOn { get; init; }
 
@@ -232,7 +241,8 @@ public sealed record ImageState
 /// <param name="Model">An <see cref="ImageModel.Id"/>; null for the first one offered.</param>
 /// <param name="Seed">Null for a new one each time.</param>
 /// <param name="Machine">The Mac to paint on: <c>local</c>, a helper's id, or null for whichever is free.</param>
-public sealed record ImageRequest(string? Prompt, string? Model, long? Seed, string? Machine = null)
+/// <param name="Loras">Up to <see cref="ImageLoraLibrary.MaxPerPicture"/> LoRAs made for the model.</param>
+public sealed record ImageRequest(string? Prompt, string? Model, long? Seed, string? Machine = null, IReadOnlyList<ImageLoraChoice>? Loras = null)
 {
     /// <summary>Klein reads its prompt through Qwen3 with 512 tokens; this stays well inside.</summary>
     public const int MaxPromptLength = 2000;
@@ -248,6 +258,7 @@ public sealed record ImageInfo(bool Installed, string Python, IReadOnlyList<Imag
 /// <param name="Available">Whether a Mac here can paint it: this one, or a helper that says so.</param>
 /// <param name="Unavailable">Why this Mac cannot (its runner missing, too little memory), even where a helper can.</param>
 /// <param name="Lettering">It can write a short title into the picture.</param>
+/// <param name="Loras">It can be painted with LoRAs made for it.</param>
 public sealed record ImageModelInfo(
     string Id,
     string Label,
@@ -261,4 +272,5 @@ public sealed record ImageModelInfo(
     bool Available = true,
     string? Unavailable = null,
     bool Lettering = false,
-    double? MinSystemGb = null);
+    double? MinSystemGb = null,
+    bool Loras = false);

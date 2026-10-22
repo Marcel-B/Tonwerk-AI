@@ -26,6 +26,9 @@ public static class WorkerEndpoints
             .WithName("GetStatus");
         api.MapGet("/busy", Busy)
             .WithName("GetBusy");
+        // What YuE2's synthesis took per engine, so GPU and Neural Engine can be compared without Grafana.
+        api.MapGet("/stats/synthesis", (Stats.SynthesisStats stats) => stats.Overview())
+            .WithName("GetSynthesisStats");
         api.MapGet("/events", (Status.StatusHub hub, CancellationToken cancellationToken) =>
             TypedResults.ServerSentEvents(Stream(hub, cancellationToken)))
             .WithName("StreamEvents")

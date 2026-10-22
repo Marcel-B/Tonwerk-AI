@@ -62,6 +62,23 @@
         }
       }
     },
+    "/api/stats/synthesis": {
+      "get": {
+        "operationId": "GetSynthesisStats",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SynthesisOverview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/events": {
       "get": {
         "operationId": "StreamEvents",
@@ -7446,6 +7463,36 @@
           }
         }
       },
+      "AneProgramStats": {
+        "required": [
+          "count",
+          "meanSeconds",
+          "longestSeconds",
+          "lastAt"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "meanSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "longestSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "lastAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "AudioMidiInfo": {
         "required": [
           "installed",
@@ -7759,6 +7806,47 @@
       },
       "EmptyEvent": {
         "type": "object"
+      },
+      "EngineStats": {
+        "required": [
+          "engine",
+          "steps",
+          "count",
+          "meanRate",
+          "bestRate",
+          "meanSeconds",
+          "lastAt"
+        ],
+        "type": "object",
+        "properties": {
+          "engine": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "meanRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "bestRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "meanSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "lastAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "GenerateRequest": {
         "required": [
@@ -10900,6 +10988,13 @@
           },
           "finished": {
             "type": "boolean"
+          },
+          "waitingSince": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -11255,6 +11350,11 @@
           "startedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "waited": {
+            "type": "number",
+            "format": "double",
+            "default": 0
           }
         }
       },
@@ -11832,6 +11932,66 @@
           },
           "finished": {
             "type": "boolean"
+          }
+        }
+      },
+      "SynthesisOverview": {
+        "required": [
+          "engines",
+          "anePrograms",
+          "recent"
+        ],
+        "type": "object",
+        "properties": {
+          "engines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EngineStats"
+            }
+          },
+          "anePrograms": {
+            "$ref": "#/components/schemas/AneProgramStats"
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SynthesisRecord"
+            }
+          }
+        }
+      },
+      "SynthesisRecord": {
+        "required": [
+          "at",
+          "song",
+          "engine",
+          "steps",
+          "seconds",
+          "rate"
+        ],
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "song": {
+            "type": "string"
+          },
+          "engine": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "seconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "rate": {
+            "type": "number",
+            "format": "double"
           }
         }
       },

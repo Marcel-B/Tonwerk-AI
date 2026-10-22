@@ -3,7 +3,7 @@ import Foundation
 import Observation
 import TonwerkKit
 
-/// A voice recorded with the device's microphone for the speech lab, as the web page's `MediaRecorder` does: AAC in
+/// A voice recorded with the device's microphone for the speech lab and the singing page, only when the user starts it, as the web page's `MediaRecorder` does: AAC in
 /// the temporary folder, at most `maxSeconds`, which ffmpeg on the server reads. Without the phone's call processing,
 /// since noise suppression and gain control change the timbre the model copies.
 @MainActor
@@ -23,7 +23,7 @@ final class VoiceRecorder {
     /// Starts recording; `done` gets the file once stopped by hand or at the limit.
     func start(_ done: @escaping @MainActor (PickedFile?) -> Void) async throws {
         guard await AVAudioApplication.requestRecordPermission() else {
-            throw ServerError(String(localized: "Tonwerk darf das Mikrofon nicht benutzen. Das lässt sich in den Einstellungen erlauben."))
+            throw ServerError(String(localized: "Tonwerk-AI darf das Mikrofon nicht benutzen. Das lässt sich in den Einstellungen erlauben."))
         }
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()

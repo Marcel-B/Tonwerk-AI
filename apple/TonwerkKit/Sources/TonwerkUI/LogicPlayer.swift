@@ -52,7 +52,25 @@ final class LogicPlayer {
 
     /// What the page's analyzer hears: the synthesizers, samplers and the recording together.
     let analyzer = SpectrumAnalyzer()
-    private let engine = AVAudioEngine()
+    /// Made on the first score, not with the page: on the Mac, wiring an engine to the output was enough for
+    /// macOS to ask for the microphone as the singing page opened, before anything was played.
+    private var built: AVAudioEngine?
+    private var engine: AVAudioEngine {
+        if let built { return built }
+        let engine = AVAudioEngine()
+        built = engine
+        engine.attach(recordingNode)
+        recordingNode.volume = recordingVolume
+        engine.mainMixerNode.feed(analyzer)
+        // The engine stops by itself when the output changes (headphones, the song player taking the session); a
+        // playing score goes on from where it was.
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resume() }
+        }
+        return engine
+    }
     private var configurationObserver: NSObjectProtocol?
     private var sequencer: AVAudioSequencer?
     private var instruments: [String: Instrument] = [:]
@@ -65,19 +83,6 @@ final class LogicPlayer {
     private var clock: Task<Void, Never>?
     /// Counts loads, so one overtaken while its instruments were being made leaves the score to the newer one.
     private var loads = 0
-
-    init() {
-        engine.attach(recordingNode)
-        recordingNode.volume = recordingVolume
-        engine.mainMixerNode.feed(analyzer)
-        // The engine stops by itself when the output changes (headphones, the song player taking the session); a
-        // playing score goes on from where it was.
-        configurationObserver = NotificationCenter.default.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.resume() }
-        }
-    }
 
     private func resume() {
         guard isPlaying else { return }
@@ -157,7 +162,8 @@ final class LogicPlayer {
     /// The song's audio, to hear the score against it; nil drops it.
     func setRecording(_ url: URL?) {
         recording = url.flatMap { try? AVAudioFile(forReading: $0) }
-        if let recording {
+        // Without an engine yet, the next load connects it.
+        if let recording, let engine = built {
             engine.connect(recordingNode, to: engine.mainMixerNode, format: recording.processingFormat)
         }
     }
@@ -208,7 +214,7 @@ final class LogicPlayer {
 
     func apply(_ mixer: LogicMixer) {
         currentMixer = mixer
-        engine.mainMixerNode.outputVolume = mixer.master
+        built?.mainMixerNode.outputVolume = mixer.master
         for (name, instrument) in instruments {
             instrument.node.volume = mixer[name].volume
             instrument.node.pan = mixer[name].pan
@@ -271,7 +277,9 @@ final class LogicPlayer {
 
     func pause() {
         sequencer?.stop()
-        recordingNode.stop()
+        if built != nil {
+            recordingNode.stop()
+        }
         clock?.cancel()
         clock = nil
         isPlaying = false

@@ -5,7 +5,9 @@ import { addSwap, deleteSwap, listSwaps, listVoices, swapAudioUrl, swapSourceUrl
 import { formatDateTime, formatDuration, t, versionProgress } from '../i18n'
 import { playing as songPlaying, toggle as toggleSong } from '../player'
 import type { ReferenceVoice, SwapState } from '../types'
+import { machineField, ranOnNote, storedMachine } from '../machines'
 import { octaveOptions, stepOptions, strengthOptions } from '../voiceChoices'
+import MachinePicker from './MachinePicker.vue'
 
 /**
  * An uploaded recording sung again with one of the reference voices: a bare vocal track straight through Seed-VC, a
@@ -87,6 +89,8 @@ const strength = ref(0.7)
 const steps = ref(50)
 const keepReverb = ref(true)
 const sending = ref(false)
+/** The Mac that converts (and separates a whole song); shared with the library's voice dialog. */
+const machine = storedMachine('voices')
 
 const kinds = computed(() => [
   { value: false, label: t('swapKindVocals') },
@@ -113,6 +117,7 @@ async function send(): Promise<void> {
       diffusionSteps: steps.value,
       separate: whole.value && props.canSeparate,
       keepReverb: keepReverb.value,
+      machine: machineField(machine.value),
     })
     loaded.value = [swap, ...loaded.value.filter((s) => s.id !== swap.id)]
     file.value = null
@@ -210,6 +215,7 @@ function settings(swap: SwapState): string {
     }),
     ...(swap.separate ? [swap.keepReverb ? t('withReverb') : t('withoutReverb')] : []),
     formatDateTime(swap.createdAt),
+    ...(ranOnNote(swap.ranOn) ? [ranOnNote(swap.ranOn)!] : []),
   ].join(' · ')
 }
 
@@ -307,6 +313,7 @@ const stageSeverity: Record<string, string | undefined> = { failed: 'danger' }
           <Checkbox v-model="keepReverb" input-id="swap-reverb" binary />
           <label for="swap-reverb" class="text-sm">{{ t('keepReverb') }}</label>
         </div>
+        <MachinePicker v-model="machine" engine="voices" :disabled="sending" />
         <Button
           type="submit"
           class="ml-auto"

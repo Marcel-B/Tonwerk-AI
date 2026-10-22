@@ -36,6 +36,7 @@ import { videoTarget } from './video'
 import { imageTarget } from './images'
 import { checkForUpdate, reload, updateAvailable } from './update'
 import { visuals } from './spectrum'
+import { singFinished } from './singing'
 import QueueOverview from './components/QueueOverview.vue'
 import ScoreField from './components/ScoreField.vue'
 import TemplatePicker from './components/TemplatePicker.vue'
@@ -44,6 +45,7 @@ import { navigate, view, type View } from './view'
 import type {
   SongRequest,
   AceJob,
+  SingTake,
   LogEntry,
   LyricsState,
   PromptTemplate,
@@ -86,6 +88,8 @@ const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.
 const TemplatesPage = defineAsyncComponent(() => import('./components/TemplatesPage.vue'))
 const InsightsPage = defineAsyncComponent(() => import('./components/InsightsPage.vue'))
 const SketchPage = defineAsyncComponent(() => import('./components/SketchPage.vue'))
+// The singing page with its note editor, likewise.
+const SingPage = defineAsyncComponent(() => import('./components/SingPage.vue'))
 
 const logCapacity = 300
 const form = ref(loadFormState())
@@ -133,6 +137,8 @@ const memory = ref<LargeModel | null>(null)
 const speechTakes = ref<SpeechTake[]>([])
 /** ACE-Step's jobs, those in the works from the snapshot, then as the event stream reports them. */
 const aceJobs = ref<AceJob[]>([])
+/** Sung melodies, those in the works from the snapshot, then as the event stream reports them. */
+const singTakes = ref<SingTake[]>([])
 /** Songs, renders and drafts waiting for the memory. */
 const jobs = ref<QueuedJob[]>([])
 /** How long songs may pass a waiting draft or version (Queue:BundleWindow). */
@@ -233,6 +239,7 @@ const unsubscribe = subscribe({
     images.value = snapshot.images ?? []
     speechTakes.value = snapshot.speech ?? []
     aceJobs.value = snapshot.ace ?? []
+    singTakes.value = snapshot.singing ?? []
     jobs.value = snapshot.queue ?? []
     bundleWindowSeconds.value = snapshot.bundleWindowSeconds ?? null
     memory.value = snapshot.memory?.holder ?? null
@@ -286,6 +293,14 @@ const unsubscribe = subscribe({
       aceJobs.value.push(job)
     }
   },
+  singing(take) {
+    const index = singTakes.value.findIndex((other) => other.id === take.id)
+    if (index >= 0) {
+      singTakes.value[index] = take
+    } else {
+      singTakes.value.push(take)
+    }
+  },
   queue(queue) {
     jobs.value = queue
   },
@@ -322,6 +337,7 @@ const tools: Page[] = [
   { view: 'harmony', label: 'menuHarmony', icon: 'pi pi-align-center' },
   { view: 'instruments', label: 'menuInstruments', icon: 'pi pi-sliders-h' },
   { view: 'lab', label: 'menuLab', icon: 'pi pi-comments' },
+  { view: 'sing', label: 'menuSing', icon: 'pi pi-volume-up' },
   { view: 'storage', label: 'menuStorage', icon: 'pi pi-database' },
   { view: 'logs', label: 'menuLogs', icon: 'pi pi-file' },
 ]
@@ -341,6 +357,7 @@ const queueCount = computed(
     images.value.filter((i) => !i.finished).length +
     speechTakes.value.filter((take) => !take.finished).length +
     aceJobs.value.filter((job) => !job.finished).length +
+    singTakes.value.filter((take) => !singFinished(take)).length +
     transcriptions.value.filter((tr) => !tr.finished).length,
 )
 
@@ -361,6 +378,7 @@ const badges = computed<Partial<Record<View, number>>>(() => ({
     swaps.value.filter((s) => !s.finished).length,
   lab: speechTakes.value.filter((take) => !take.finished).length,
   ace: aceJobs.value.filter((job) => !job.finished).length,
+  sing: singTakes.value.filter((take) => !singFinished(take)).length,
 }))
 
 /**
@@ -387,7 +405,11 @@ const sketchOpened = ref(view.value === 'sketch')
 const instrumentsOpened = ref(view.value === 'instruments')
 const harmonyOpened = ref(view.value === 'harmony')
 const aceOpened = ref(view.value === 'ace')
+const singOpened = ref(view.value === 'sing')
 watch(view, (value) => {
+  if (value === 'sing') {
+    singOpened.value = true
+  }
   if (value === 'ace') {
     aceOpened.value = true
   }
@@ -601,7 +623,7 @@ async function useAsNewSong(songId: string): Promise<void> {
   try {
     if (found.song.engine === 'ace') {
       // ACE-Step's own settings go back into its page; YuE2's form knows none of them.
-      aceForm.value = fromAceRequest(await aceSongRequest(songId))
+      aceForm.value = fromAceRequest(await aceSongRequest(songId), aceForm.value.machine)
       navigate('ace')
       show(t('newSongApplied', { title: found.run.title || t('untitled'), song: t('songN', { n: found.song.index }) }))
       return
@@ -759,6 +781,7 @@ async function useAsNewSong(songId: string): Promise<void> {
           :images="images"
           :videos="videos"
           :ace="aceJobs"
+          :singing="singTakes"
         />
       </a>
     </div>
@@ -793,6 +816,7 @@ async function useAsNewSong(songId: string): Promise<void> {
           :videos="videos"
           :images="images"
           :ace="aceJobs"
+          :singing="singTakes"
           :bundle-window-seconds="bundleWindowSeconds"
           :takes="speechTakes"
           :transcriptions="transcriptions"
@@ -922,6 +946,15 @@ async function useAsNewSong(songId: string): Promise<void> {
 
   <main v-if="labOpened" v-show="view === 'lab'">
     <SpeechLab :active="view === 'lab'" :connected="connected" :live="speechTakes" @error="show($event, true)" />
+  </main>
+  <main v-if="singOpened" v-show="view === 'sing'">
+    <SingPage
+      :active="view === 'sing'"
+      :connected="connected"
+      :live="singTakes"
+      :runs="runs"
+      @error="show($event, true)"
+    />
   </main>
   <main v-if="aceOpened" v-show="view === 'ace'">
     <AcePage

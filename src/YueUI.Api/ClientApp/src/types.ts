@@ -117,6 +117,8 @@ export interface StatusSnapshot {
   memory?: MemoryInfo | null
   /** ACE-Step's songs in the works (and the last finished one); null from a server before them. */
   ace?: AceJob[] | null
+  /** Melodies being sung by SoulX-Singer (and the last finished one); null from a server before them. */
+  singing?: SingTake[] | null
 }
 
 /** The large models besides YuE2 that take turns in the memory. */
@@ -736,6 +738,8 @@ export interface VersionRequest {
   diffusionSteps: number
   /** Mixes the original's reverb back in. */
   keepReverb: boolean
+  /** The Mac to convert on: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
 }
 
 /** A text-to-speech model the speech lab offers (SpeechModelInfo in Speech/SpeechModels.cs). */
@@ -928,6 +932,8 @@ export interface AceSongRequest {
   coverStrength?: number | null
   repaintStart?: number | null
   repaintEnd?: number | null
+  /** The Mac to compose on: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
 }
 
 export type AceStage =
@@ -1077,4 +1083,114 @@ export interface MachineInfo {
   busy: boolean
   engines: string[]
   message?: string | null
+}
+
+/** A note to sing, in seconds (SungNote in Singing/SingingModels.cs); `lyric` a word, a syllable or a hold mark. */
+export interface SungNote {
+  start: number
+  end: number
+  pitch: number
+  lyric?: string | null
+}
+
+/** A voice SoulX-Singer sings with: a bundled one or one made from a recording on the singing page (`own`). */
+export interface SingingVoiceInfo {
+  id: string
+  label: string
+  language: string
+  own: boolean
+  /** What the voice sings in its recording. */
+  text?: string | null
+  seconds?: number | null
+  /** The lowest and highest note heard (MIDI). */
+  low?: number | null
+  high?: number | null
+  createdAt?: string | null
+}
+
+/** What the server made of a recording turned into a voice. */
+export interface SingingVoiceMade {
+  seconds: number
+  recordedSeconds: number
+  notes: number
+  held: number
+  unsung: number
+  leftover: number
+  text: string
+  /** 0 to 1; near 1 the recording clipped. */
+  peak: number
+  low: number
+  high: number
+}
+
+export interface SingingVoiceCreated {
+  voice: SingingVoiceInfo
+  heard: SingingVoiceMade
+}
+
+export type SingStage = 'queued' | 'loading' | 'singing' | 'done' | 'failed' | 'cancelled'
+
+/** A melody with words sung by SoulX-Singer; live changes arrive as `singing` events. */
+export interface SingTake {
+  id: string
+  title: string
+  stage: SingStage
+  message?: string | null
+  progress?: number | null
+  voiceId: string
+  voiceLabel: string
+  songId?: string | null
+  fileName?: string | null
+  lyrics: string
+  pitchShift: number
+  autoShift: boolean
+  noteCount: number
+  tempoBpm?: number | null
+  /** Notes that got a syllable, notes left without one, words left over. */
+  sung?: number | null
+  unsung?: number | null
+  leftover?: number | null
+  seconds?: number | null
+  loadSeconds?: number | null
+  singSeconds?: number | null
+  peakMemoryGb?: number | null
+  /** The Mac it was asked for: `local` or a helper's id; null for whichever is free. */
+  machine?: string | null
+  /** The name of the Mac that runs it, once one does. */
+  ranOn?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** The singing page: whether SoulX-Singer is there, its voices and takes (`GET /api/singing`). */
+export interface SingingInfo {
+  installed: boolean
+  modelDownloaded: boolean
+  python: string
+  source: string
+  model: string
+  nltkData: string
+  voices: SingingVoiceInfo[]
+  takes: SingTake[]
+}
+
+/** A file's, song's or take's melody for the note editor. */
+export interface SingingMelody {
+  notes: SungNote[]
+  tempoBpm: number
+  lyrics: string
+  title: string
+  part?: string | null
+}
+
+/** What a note sings: SoulX-Singer's note type 2 a word's first note, 3 held over, 1 none. */
+export interface AlignedNote {
+  word?: string | null
+  type: number
+  phonemes: string
+}
+
+export interface SingingAligned {
+  notes: AlignedNote[]
+  leftover: number
 }

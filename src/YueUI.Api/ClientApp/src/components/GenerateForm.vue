@@ -9,7 +9,9 @@ import { insertSectionTag } from '../lyricsTags'
 import { hasTag } from '../styleTags'
 import type { LyricsModels, LyricsReasoning, LyricsState, ReferenceVoice } from '../types'
 import { octaveOptions, stepOptions, strengthOptions } from '../voiceChoices'
+import { machineField } from '../machines'
 import FieldHelp from './FieldHelp.vue'
+import MachinePicker from './MachinePicker.vue'
 import SectionTags from './SectionTags.vue'
 import StyleBlocks from './StyleBlocks.vue'
 import TextActions from './TextActions.vue'
@@ -157,6 +159,7 @@ async function revise(): Promise<void> {
       form.value.lyricsLanguage,
       form.value.lyricsModel || null,
       reasoning(),
+      machineField(form.value.lyricsMachine),
     )
     form.value.lyricsDraftId = started.id
     take(props.lyricsDraft)
@@ -205,6 +208,7 @@ async function draft(): Promise<void> {
       form.value.lyricsModel || null,
       photo.value,
       reasoning(),
+      machineField(form.value.lyricsMachine),
     )
     form.value.lyricsDraftId = started.id
     // A quick failure (LM Studio missing) can arrive as an event before this answer.
@@ -250,9 +254,14 @@ const blind = computed(() => {
 /** Null until LM Studio answered; without it the picker stays hidden and drafts use the configured model. */
 const lyricsModels = ref<LyricsModels | null>(null)
 
-onMounted(async () => {
+/** The models of the chosen Mac's LM Studio (a helper's may have others), read again when the choice changes. */
+async function loadLyricsModels(): Promise<void> {
+  const machine = form.value.lyricsMachine
   try {
-    const models = await getLyricsModels()
+    const models = await getLyricsModels(machineField(machine))
+    if (machine !== form.value.lyricsMachine) {
+      return
+    }
     // A model deleted in LM Studio since it was picked: back to the default rather than a draft that fails.
     if (form.value.lyricsModel && !models.models.some((m) => m.id === form.value.lyricsModel)) {
       form.value.lyricsModel = ''
@@ -260,8 +269,14 @@ onMounted(async () => {
     lyricsModels.value = models
   } catch {
     // LM Studio is not there; a draft says so with its own message.
+    if (machine === form.value.lyricsMachine) {
+      lyricsModels.value = null
+    }
   }
-})
+}
+
+onMounted(loadLyricsModels)
+watch(() => form.value.lyricsMachine, loadLyricsModels)
 
 /** Null until the voice service answered; without it the choice stays hidden and songs keep their own voice. */
 const voiceList = ref<ReferenceVoice[] | null>(null)
@@ -489,6 +504,7 @@ const batchOptions = Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label
         size="small"
         class="min-w-0 flex-[1_1_10rem]"
       />
+      <MachinePicker v-model="form.lyricsMachine" engine="lyrics" :disabled="drafting" class="flex-[1_1_10rem]" />
     </div>
     <small v-if="cloudModel" class="muted mt-1 block">{{ t('lyricsCloudHint') }}</small>
     <div v-if="photo" class="mt-2 flex items-center gap-2">

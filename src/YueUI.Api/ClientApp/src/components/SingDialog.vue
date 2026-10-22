@@ -5,7 +5,9 @@ import Dialog from 'primevue/dialog'
 import { addVersion, listVoices } from '../api'
 import { t } from '../i18n'
 import type { ReferenceVoice, RunInfo, SongInfo } from '../types'
+import { machineField, storedMachine } from '../machines'
 import { octaveOptions, stepOptions, strengthOptions } from '../voiceChoices'
+import MachinePicker from './MachinePicker.vue'
 
 /** Asks for a version of a song sung with a reference voice. One for the whole library, shown while `target` is set. */
 const target = defineModel<{ run: RunInfo; song: SongInfo } | null>({ required: true })
@@ -24,6 +26,8 @@ const strength = ref(0.7)
 const steps = ref(50)
 const keepReverb = ref(true)
 const queueing = ref(false)
+/** The Mac that separates and converts; the mix is made here either way. */
+const machine = storedMachine('voices')
 
 const octaves = computed(octaveOptions)
 const strengths = computed(strengthOptions)
@@ -65,6 +69,7 @@ async function sing(): Promise<void> {
       strength: strength.value,
       diffusionSteps: steps.value,
       keepReverb: keepReverb.value,
+      machine: machineField(machine.value),
     })
     target.value = null
     emit('notice', t('versionQueued', { title: song.run.title || t('untitled'), voice: version.voiceLabel }))
@@ -140,7 +145,8 @@ async function sing(): Promise<void> {
         <label for="sing-reverb">{{ t('keepReverb') }}</label>
       </div>
       <p class="muted m-0 text-sm">{{ t('singHint') }}</p>
-      <div class="flex justify-end gap-2">
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <MachinePicker v-model="machine" engine="voices" :disabled="queueing" class="mr-auto" />
         <Button type="button" :label="t('cancel')" severity="secondary" text @click="target = null" />
         <Button type="submit" :label="t('sing')" :loading="queueing" :disabled="!voiceChoice || voicesLoading" />
       </div>

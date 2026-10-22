@@ -13,6 +13,8 @@ import {
 } from '../api'
 import { loadMidiInfo, midiInfo, midiSettings } from '../audioMidi'
 import { formatDateTime, formatDuration, hasMessage, t } from '../i18n'
+import { machineField, ranOnNote, storedMachine } from '../machines'
+import MachinePicker from './MachinePicker.vue'
 import { playing as songPlaying, toggle as toggleSong } from '../player'
 import type { RunInfo, StemFile, StemModel, StemSetState } from '../types'
 import { showSong, songHref, stemSong } from '../view'
@@ -190,6 +192,8 @@ function readModel(): string | null {
 const chosenModel = computed(() => models.value.find((m) => m.id === model.value) ?? null)
 const dereverb = ref(false)
 const separating = ref(false)
+/** The Mac that separates; empty lets the server choose. */
+const machine = storedMachine('stems')
 
 /** What the model makes and roughly how long it takes for the chosen song. */
 const modelHint = computed(() => {
@@ -217,8 +221,8 @@ async function separate(): Promise<void> {
   try {
     const set =
       source.value === 'song'
-        ? await separateSong(song.value!, model.value, dereverb.value)
-        : await separateFile(file.value!, model.value, dereverb.value)
+        ? await separateSong(song.value!, model.value, dereverb.value, machineField(machine.value))
+        : await separateFile(file.value!, model.value, dereverb.value, machineField(machine.value))
     loaded.value = [set, ...loaded.value.filter((s) => s.id !== set.id)]
     if (source.value === 'file') {
       file.value = null
@@ -458,6 +462,7 @@ const stageSeverity: Record<string, string | undefined> = { done: 'success', fai
         <Checkbox v-model="dereverb" input-id="stems-dereverb" binary />
         <label for="stems-dereverb" class="text-sm">{{ t('stemsDereverb') }}</label>
       </div>
+      <MachinePicker v-model="machine" engine="stems" :disabled="separating" />
       <Button
         type="submit"
         :label="t('stemsSeparate')"
@@ -502,7 +507,8 @@ const stageSeverity: Record<string, string | undefined> = { done: 'success', fai
             >
             <div class="muted truncate text-sm">
               {{ modelName(set.model) }}<template v-if="set.dereverb"> · {{ t('stemsDereverbShort') }}</template> ·
-              {{ formatDateTime(set.createdAt) }}
+              {{ formatDateTime(set.createdAt)
+              }}<template v-if="ranOnNote(set.ranOn)"> · {{ ranOnNote(set.ranOn) }}</template>
             </div>
           </div>
           <Tag v-if="set.stage !== 'done'" :severity="stageSeverity[set.stage]">

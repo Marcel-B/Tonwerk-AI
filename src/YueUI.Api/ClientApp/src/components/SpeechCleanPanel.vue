@@ -3,6 +3,8 @@ import RadioButton from 'primevue/radiobutton'
 import { ref, watch } from 'vue'
 import { cleanSpeech, speechTakeAudioUrl, speechTakeSourceUrl } from '../api'
 import { formatDuration, locale, t, tMaybe } from '../i18n'
+import { machineField, ranOnNote, storedMachine } from '../machines'
+import MachinePicker from './MachinePicker.vue'
 import TabRecordButton from './TabRecordButton.vue'
 import type { SpeechInfo, SpeechModelInfo, SpeechTake } from '../types'
 
@@ -35,6 +37,8 @@ watch(
   },
 )
 
+/** The lab's Mac, the same as for its takes. */
+const machine = storedMachine('speech')
 const file = ref<File | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 const sending = ref(false)
@@ -61,7 +65,7 @@ async function send(): Promise<void> {
   }
   sending.value = true
   try {
-    emit('added', await cleanSpeech(file.value, file.value.name, model.value))
+    emit('added', await cleanSpeech(file.value, file.value.name, model.value, machineField(machine.value)))
     file.value = null
     fromTab.value = false
     if (input.value) {
@@ -142,6 +146,7 @@ function size(gb: number): string {
               :loading="sending"
               :disabled="!info.installed || !info.ffmpegInstalled || !file || !model"
             />
+            <MachinePicker v-model="machine" engine="speech" :disabled="sending" />
             <span v-if="!info.ffmpegInstalled" class="danger text-sm">{{ t('labNoFfmpeg') }}</span>
           </div>
         </form>
@@ -161,7 +166,8 @@ function size(gb: number): string {
                 <div class="truncate font-semibold">{{ take.source }}</div>
                 <div class="muted truncate text-sm">
                   {{ take.modelLabel
-                  }}<template v-if="take.seconds !== null"> · {{ formatDuration(take.seconds) }}</template>
+                  }}<template v-if="take.seconds !== null"> · {{ formatDuration(take.seconds) }}</template
+                  ><template v-if="ranOnNote(take.ranOn)"> · {{ ranOnNote(take.ranOn) }}</template>
                 </div>
               </div>
               <Tag :severity="stageSeverity[take.stage]">{{ stage(take) }}</Tag>

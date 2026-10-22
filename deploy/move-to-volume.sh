@@ -27,7 +27,7 @@ URL="${YUEUI_URL:-http://127.0.0.1:5090}"
 SETTINGS="$HOME/Library/Application Support/YueUI/app/appsettings.Production.json"
 LMS="$HOME/.lmstudio/bin/lms"
 DOMAIN="gui/$(id -u)"
-PARTS="yue2 ane songs lmstudio speech images montage acestep acesongs singing separator seedvc versions stems videos"
+PARTS="yue2 ane songs lmstudio speech images imageloras montage acestep acesongs singing separator seedvc versions stems videos"
 SUFFIX=tonwerk-move
 
 fail() { echo "$1" >&2; exit 1; }
@@ -66,6 +66,7 @@ path_of() {
       if [ -n "$model" ]; then dirname "$model"; else echo "$(or_default "$(setting Singing.Root)" "$APP_DATA/singing")/models"; fi ;;
     separator) or_default "$(setting Voice.SeparatorModels)" "$ENGINES/separator/models" ;;
     seedvc) or_default "$(setting Voice.SeedVcModels)" "$ENGINES/seed-vc/models" ;;
+    imageloras) echo "$DATA/image-loras" ;;
     versions | stems | videos) echo "$DATA/$1" ;;
     *) return 1 ;;
   esac
@@ -79,6 +80,7 @@ describe() {
     lmstudio) echo "LM Studio's models" ;;
     speech) echo "speech lab models" ;;
     images) echo "image models for painted covers (Klein, Z-Image, Krea 2, FLUX 3)" ;;
+    imageloras) echo "LoRAs for painted covers" ;;
     montage) echo "CLIP models for photo videos with a motif" ;;
     acestep) echo "ACE-Step models" ;;
     acesongs) echo "songs made with ACE-Step" ;;

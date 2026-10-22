@@ -325,6 +325,7 @@ const lyricsModelOptions = computed(() =>
     const name = m.id === lyricsModels.value?.default ? t('lyricsModelDefault', { name: m.name }) : m.name
     const details = [
       m.cloud ? t('lyricsModelCloud') : '',
+      m.needsGb ? t('lyricsModelNeeds', { gb: m.needsGb }) : m.role ? t(`lyricsModelRole_${m.role}`) : '',
       m.sizeBytes ? formatBytes(m.sizeBytes) : '',
       m.vision ? t('lyricsModelVision') : '',
       m.loaded ? t('lyricsModelLoaded') : '',

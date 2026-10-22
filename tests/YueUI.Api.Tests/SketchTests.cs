@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Interaction;
+using Microsoft.Extensions.DependencyInjection;
 using YueToLogic.Core.Abc;
 using YueUI.Api.Sketches;
 
@@ -300,6 +301,61 @@ public sealed class SketchEndpointTests : IDisposable
         await WaitForStage((string)queued!["id"]!, "done");
 
         Assert.Equal(["claude-opus-5-5"], _app.Sketches.Models);
+    }
+
+    [Fact]
+    public async Task A_model_in_LM_Studio_plans_on_this_Mac_without_a_key()
+    {
+        _app.SketchKey = null;
+        _app.LmStudio.Answer = "```json\n" + System.Text.Json.JsonSerializer.Serialize(SketchSamples.Plan(), System.Text.Json.JsonSerializerOptions.Web) + "\n```";
+        _app.LmStudio.Gate = new TaskCompletionSource();
+
+        var info = (await Client.GetFromJsonAsync<SketchInfo>("/api/sketches/info", TestApp.Json))!;
+        Assert.Equal(["google/gemma-4-e4b", "qwen/qwen3-8b"], info.Local!.Select(m => m.Id));
+        var response = await Client.PostAsJsonAsync("/api/sketches", new { text = "Something", model = "qwen/qwen3-8b" });
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var id = (string)(await response.Content.ReadFromJsonAsync<JsonObject>())!["id"]!;
+
+        await WaitForStage(id, "writing");
+        // Songs wait while it writes, as for a lyrics draft.
+        Assert.Equal(Api.Memory.LargeModel.Lyrics, _app.Services.GetRequiredService<Api.Memory.ModelMemory>().Holder);
+        _app.LmStudio.Gate.SetResult();
+        await WaitForStage(id, "done");
+
+        Assert.Empty(_app.Sketches.Calls);
+        Assert.Null(_app.Services.GetRequiredService<Api.Memory.ModelMemory>().Holder);
+        var load = Assert.Single(_app.LmStudio.Requests, r => r.Path == "/api/v1/models/load").Body!;
+        Assert.Equal("qwen/qwen3-8b", (string?)load["model"]);
+        Assert.Equal(32768, (int?)load["context_length"]);
+        var completion = Assert.Single(_app.LmStudio.Requests, r => r.Path == "/v1/chat/completions").Body!;
+        Assert.Equal("json_schema", (string?)completion["response_format"]!["type"]);
+        Assert.True((bool?)completion["stream"]);
+        Assert.Contains("<sketch>", (string?)completion["messages"]![1]!["content"], StringComparison.Ordinal);
+        Assert.Equal("/api/v1/models/unload", _app.LmStudio.Requests[^1].Path);
+        var result = await Client.GetFromJsonAsync<JsonObject>($"/api/sketches/{id}", TestApp.Json);
+        Assert.Equal("qwen/qwen3-8b", (string?)result!["job"]!["model"]);
+        Assert.Equal(7, (int?)result["bars"]);
+    }
+
+    [Fact]
+    public async Task A_local_plan_that_runs_out_of_tokens_says_so()
+    {
+        _app.LmStudio.Answer = "{\"title\": \"Half";
+        _app.LmStudio.StreamFinish = "length";
+
+        var queued = await (await Client.PostAsJsonAsync("/api/sketches", new { text = "Something", model = "google/gemma-4-e4b" }))
+            .Content.ReadFromJsonAsync<JsonObject>();
+        var job = await WaitForStage((string)queued!["id"]!, "failed");
+
+        Assert.Contains("outgrew", (string?)job["message"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_model_LM_Studio_does_not_have_is_refused()
+    {
+        var response = await Client.PostAsJsonAsync("/api/sketches", new { text = "Something", model = "mistral/unknown" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

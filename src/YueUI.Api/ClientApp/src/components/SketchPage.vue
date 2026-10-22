@@ -10,7 +10,7 @@ import { navigate, openMidiOn } from '../view'
 import type { SketchInfo, SketchResult, SketchStage, SketchSummary, SketchWarning, SongRequest } from '../types'
 
 /**
- * A written song sketch planned by Claude: the sketch in, after a few minutes a whole score, and from it a MIDI draft
+ * A written song sketch planned by Claude or a model in LM Studio: the sketch in, after a few minutes a whole score, and from it a MIDI draft
  * to download, the score for the Logic page and the song for the create form. The server keeps the sketches, so the
  * page only asks: on showing, and every few seconds while one is being written.
  */
@@ -27,14 +27,27 @@ const sending = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 let poll: ReturnType<typeof setTimeout> | undefined
 
-const working = computed(() => sketches.value.some((s) => s.stage === 'queued' || s.stage === 'writing'))
+const working = computed(() =>
+  sketches.value.some((s) => s.stage === 'queued' || s.stage === 'waiting' || s.stage === 'writing'),
+)
 const keyFile = '~/.config/tonwerk/anthropic.key'
 
-/** The Claude model chosen on this browser; empty for the server's default, so a new default reaches it. */
+/** LM Studio's models that fit this Mac; the large ones need 32 GB. */
+const localModels = computed(() => (info.value?.local ?? []).filter((m) => !m.needsGb))
+
+function isLocal(id: string | null | undefined): boolean {
+  return !!id && localModels.value.some((m) => m.id === id)
+}
+
+function offers(id: string): boolean {
+  return (info.value?.models.some((m) => m.id === id) ?? false) || isLocal(id)
+}
+
+/** The model chosen on this browser (Claude's or one in LM Studio); empty for the server's default, so a new default reaches it. */
 const modelKey = 'yue-ui.sketchModel'
 const chosen = ref(readModel())
 const model = computed({
-  get: () => (info.value?.models.some((m) => m.id === chosen.value) ? chosen.value : (info.value?.model ?? '')),
+  get: () => (offers(chosen.value) ? chosen.value : (info.value?.model ?? '')),
   set: (value: string) => {
     chosen.value = value === info.value?.model ? '' : value
     try {
@@ -44,12 +57,30 @@ const model = computed({
     }
   },
 })
-const modelOptions = computed(() =>
-  (info.value?.models ?? []).map((m) => ({
-    value: m.id,
-    label: m.id === info.value?.model ? t('sketchModelDefault', { name: m.name }) : m.name,
-  })),
-)
+const modelGroups = computed(() => [
+  {
+    label: t('sketchModelsClaude'),
+    items: (info.value?.models ?? []).map((m) => ({
+      value: m.id,
+      label: m.id === info.value?.model ? t('sketchModelDefault', { name: m.name }) : m.name,
+    })),
+  },
+  ...(localModels.value.length > 0
+    ? [
+        {
+          label: t('sketchModelsLocal'),
+          items: localModels.value.map((m) => ({
+            value: m.id,
+            label: m.role ? `${m.name} · ${t(`lyricsModelRole_${m.role}`)}` : m.name,
+          })),
+        },
+      ]
+    : []),
+])
+const modelCount = computed(() => modelGroups.value.reduce((sum, group) => sum + group.items.length, 0))
+const local = computed(() => isLocal(model.value))
+/** A local model plans without a key; Claude needs one. */
+const canPlan = computed(() => info.value?.configured !== false || local.value)
 
 function readModel(): string {
   try {
@@ -61,7 +92,7 @@ function readModel(): string {
 
 /** A model the server no longer offers goes to the default rather than to a refusal. */
 function offered(id: string | null | undefined): string | null {
-  return id && info.value?.models.some((m) => m.id === id) ? id : null
+  return id && offers(id) ? id : null
 }
 
 function message(caught: unknown): string {
@@ -215,7 +246,8 @@ function chordLine(chords: string[]): string {
 
 <template>
   <div class="flex flex-col gap-5">
-    <Message v-if="info && !info.configured" severity="warn" role="note">{{
+    <p v-if="info && local" class="muted m-0 text-sm">{{ t('sketchLocal') }}</p>
+    <Message v-else-if="info && !info.configured" severity="warn" role="note">{{
       t('sketchNoKey', { path: keyFile })
     }}</Message>
     <p v-else-if="info" class="muted m-0 text-sm">{{ t('sketchCloud') }}</p>
@@ -241,14 +273,16 @@ function chordLine(chords: string[]): string {
         <label for="sketch-wishes" class="text-sm font-semibold">{{ t('sketchWishes') }}</label>
         <InputText id="sketch-wishes" v-model="wishes" :placeholder="t('sketchWishesPlaceholder')" fluid />
       </div>
-      <div v-if="modelOptions.length > 1" class="flex flex-col gap-1">
+      <div v-if="modelCount > 1" class="flex flex-col gap-1">
         <label for="sketch-model" class="text-sm font-semibold">{{ t('sketchModel') }}</label>
         <Select
           v-model="model"
           input-id="sketch-model"
-          :options="modelOptions"
+          :options="modelGroups"
           option-value="value"
           option-label="label"
+          option-group-label="label"
+          option-group-children="items"
           size="small"
           fluid
         />
@@ -257,9 +291,9 @@ function chordLine(chords: string[]): string {
         <Button
           type="submit"
           icon="pi pi-sparkles"
-          :label="t('sketchPlan')"
+          :label="t(local ? 'sketchPlanLocal' : 'sketchPlan')"
           :loading="sending"
-          :disabled="!text.trim() || info?.configured === false"
+          :disabled="!text.trim() || !canPlan"
         />
       </div>
     </form>
@@ -366,7 +400,7 @@ function chordLine(chords: string[]): string {
           :label="t('sketchAgain')"
           severity="secondary"
           text
-          :disabled="info?.configured === false"
+          :disabled="info?.configured === false && !isLocal(selected.job.model)"
           @click="send(selected.job.source, selected.job.instruction ?? '', selected.job.model ?? model)"
         />
         <Button icon="pi pi-trash" :label="t('sketchDelete')" severity="danger" text @click="remove(selected)" />

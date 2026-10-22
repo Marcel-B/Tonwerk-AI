@@ -421,6 +421,10 @@ export interface LyricsModel {
   vision: boolean | null
   /** Runs at Anthropic: the draft neither waits for nor stops a song, and the text leaves the Mac. */
   cloud: boolean
+  /** What a local model is suggested for (Lyrics:Roles): final lyrics or fast ideas. */
+  role?: 'quality' | 'ideas' | null
+  /** The memory it needs and the Mac that lists it lacks, in GB. */
+  needsGb?: number | null
 }
 
 /** What the lyrics model picker offers; `default` is the configured model, used when a draft names none. */
@@ -1010,7 +1014,7 @@ export interface SketchBar {
   parts: string[] | null
 }
 
-export type SketchStage = 'queued' | 'writing' | 'done' | 'failed'
+export type SketchStage = 'queued' | 'waiting' | 'writing' | 'done' | 'failed'
 
 export interface SketchJob {
   id: string
@@ -1065,6 +1069,8 @@ export interface SketchInfo {
   model: string
   /** The Claude models to choose from, the default first. */
   models: ClaudeModelChoice[]
+  /** LM Studio's models, which plan on the Mac; empty while LM Studio does not answer. */
+  local?: LyricsModel[] | null
 }
 
 /** A Claude model a picker offers (Sketches/SketchModels.cs). */
@@ -1083,6 +1089,61 @@ export interface MachineInfo {
   busy: boolean
   engines: string[]
   message?: string | null
+}
+
+/** A message on the writing page (Writing/WritingModels.cs). */
+export interface WritingMessage {
+  role: 'user' | 'assistant'
+  text: string
+  at: string
+  /** The model that wrote an answer. */
+  model?: string | null
+  /** An answer stopped before its end; what came is kept. */
+  stopped?: boolean
+}
+
+export type WritingStage = 'waiting' | 'loading' | 'writing' | 'done' | 'stopped' | 'failed'
+
+/** The answer being written; it arrives as `writing` events, the whole text so far each time. */
+export interface WritingReply {
+  id: string
+  chatId: string
+  stage: WritingStage
+  model: string
+  text: string
+  /** The model is thinking before (or between) its words. */
+  thinking: boolean
+  message?: string | null
+  updatedAt: string
+  finished: boolean
+}
+
+export interface WritingChat {
+  id: string
+  title: string
+  model?: string | null
+  messages: WritingMessage[]
+  createdAt: string
+  updatedAt: string
+  reply?: WritingReply | null
+}
+
+export interface WritingChatSummary {
+  id: string
+  title: string
+  model?: string | null
+  messages: number
+  updatedAt: string
+}
+
+export interface WritingOverview {
+  /** Newest first. */
+  chats: WritingChatSummary[]
+  reply?: WritingReply | null
+  /** The model a chat writes with when none is chosen. */
+  model: string
+  /** The model kept in memory between answers. */
+  loaded?: string | null
 }
 
 /** A note to sing, in seconds (SungNote in Singing/SingingModels.cs); `lyric` a word, a syllable or a hold mark. */

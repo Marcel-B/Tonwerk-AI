@@ -103,6 +103,40 @@ public sealed class LyricsEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Gemma_4_31B_and_Qwen_3_6_are_marked_for_quality_and_ideas()
+    {
+        _app.LmStudio.MoreModels.Add(Model("google/gemma-4-31b-qat", "Gemma 4 31B"));
+        _app.LmStudio.MoreModels.Add(Model("qwen/qwen3.6-35b-a3b", "Qwen3.6 35B A3B"));
+
+        var list = (await _client.GetFromJsonAsync<JsonObject>("/api/lyrics/models"))!["models"]!.AsArray();
+
+        Assert.Equal([null, null, "quality", "ideas"], list.Select(m => (string?)m!["role"]));
+        Assert.All(list, m => Assert.Null(m!["needsGb"]));
+    }
+
+    [Fact]
+    public async Task A_smaller_Mac_marks_the_large_models_as_not_fitting()
+    {
+        _app.LyricsMemoryGb = 24;
+        _app.LmStudio.MoreModels.Add(Model("google/gemma-4-31b-qat", "Gemma 4 31B"));
+
+        var list = (await _client.GetFromJsonAsync<JsonObject>("/api/lyrics/models"))!["models"]!.AsArray();
+
+        Assert.Equal(32, (double?)list[2]!["needsGb"]);
+        Assert.Null(list[0]!["needsGb"]);
+    }
+
+    private static object Model(string key, string name) => new
+    {
+        type = "llm",
+        key,
+        display_name = name,
+        size_bytes = 20_000_000_000L,
+        loaded_instances = Array.Empty<object>(),
+        capabilities = new { vision = true },
+    };
+
+    [Fact]
     public async Task The_picker_says_which_models_can_read_a_photo()
     {
         var list = (await _client.GetFromJsonAsync<JsonObject>("/api/lyrics/models"))!["models"]!.AsArray();

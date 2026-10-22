@@ -38,6 +38,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
         _fakeWorker = fakeWorker;
         // A job waiting for the memory starts within moments of it being free, not a second later.
         Queue.JobQueue.CheckInterval = TimeSpan.FromMilliseconds(20);
+        Api.Writing.WritingDesk.CheckInterval = TimeSpan.FromMilliseconds(20);
         Root = Directory.CreateTempSubdirectory("yueui-").FullName;
         OutputDir = Path.Combine(Root, "songs");
         Directory.CreateDirectory(OutputDir);
@@ -52,6 +53,12 @@ public sealed class TestApp : WebApplicationFactory<Program>
     public FakeStudio Studio { get; } = new();
 
     public FakeLmStudio LmStudio { get; } = new();
+
+    /// <summary>How long the writing page keeps its model loaded after an answer; set before the first request.</summary>
+    public TimeSpan WritingKeepLoaded { get; set; } = TimeSpan.FromMinutes(3);
+
+    /// <summary>The Mac's memory as the lyrics models see it (<c>Lyrics:SystemMemoryGb</c>); set before the first request.</summary>
+    public double LyricsMemoryGb { get; set; } = 32;
 
     public FakePushSender Push { get; } = new();
 
@@ -194,7 +201,9 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.Model = "google/gemma-4-e4b";
                 options.ContextLength = 8192;
                 options.MinContextLength = 2048;
+                options.SystemMemoryGb = LyricsMemoryGb;
             });
+            services.Configure<Api.Writing.WritingOptions>(options => options.KeepLoaded = WritingKeepLoaded);
             // A new handler each time: the factory disposes the ones it rotates out.
             services.AddHttpClient(LyricsWriter.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeLmStudio.Handler(LmStudio));
 
@@ -460,6 +469,15 @@ public sealed class FakeLmStudio : ILmStudioStarter
 
     public List<(string Path, JsonObject? Body)> Requests { get; } = [];
 
+    /// <summary>Reasoning a streamed answer sends before <see cref="Answer"/>.</summary>
+    public string? StreamReasoning { get; set; }
+
+    /// <summary>The finish reason a streamed answer ends with.</summary>
+    public string StreamFinish { get; set; } = "stop";
+
+    /// <summary>Models listed after the two every test sees, as LM Studio's native listing writes them.</summary>
+    public List<object> MoreModels { get; } = [];
+
     public Task<bool> StartAsync(CancellationToken cancellationToken)
     {
         Starts++;
@@ -509,7 +527,7 @@ public sealed class FakeLmStudio : ILmStudioStarter
                                 capabilities = new { vision = false, trained_for_tool_use = true },
                             },
                             new { type = "embedding", key = "text-embedding-nomic", display_name = "Nomic Embed", size_bytes = 80_000_000L, loaded_instances = Array.Empty<object>() },
-                        },
+                        }.Concat(lm.MoreModels).ToArray(),
                     });
                 case "/api/v1/models/load":
                     return lm.LoadRefusal is { } refusal && lm.RefusesContext?.Invoke((int)body!["context_length"]!) != false
@@ -526,6 +544,10 @@ public sealed class FakeLmStudio : ILmStudioStarter
                     if (lm.Gate is { } gate)
                     {
                         await gate.Task.WaitAsync(cancellationToken);
+                    }
+                    if ((bool?)body?["stream"] == true && lm.Status == HttpStatusCode.OK)
+                    {
+                        return Stream(lm.StreamReasoning, lm.Answer, lm.StreamFinish);
                     }
                     return lm.Status == HttpStatusCode.OK
                         ? Json(HttpStatusCode.OK, lm.RawAnswer ?? new { choices = new[] { new { message = new { role = "assistant", content = lm.Answer } } } })
@@ -552,6 +574,26 @@ public sealed class FakeLmStudio : ILmStudioStarter
 
         private static HttpResponseMessage Json(HttpStatusCode status, object value) =>
             new(status) { Content = JsonContent.Create(value) };
+
+        /// <summary>The answer as LM Studio streams it: reasoning first, then the content, a few characters a chunk.</summary>
+        private static HttpResponseMessage Stream(string? reasoning, string content, string finish)
+        {
+            var sse = new System.Text.StringBuilder();
+            void Chunk(object delta, string? reason = null) => sse.Append("data: ")
+                .Append(JsonSerializer.Serialize(new { choices = new[] { new { index = 0, delta, finish_reason = reason } } }))
+                .Append("\n\n");
+            foreach (var piece in (reasoning ?? "").Chunk(7))
+            {
+                Chunk(new { reasoning_content = new string(piece) });
+            }
+            foreach (var piece in content.Chunk(7))
+            {
+                Chunk(new { content = new string(piece) });
+            }
+            Chunk(new { }, finish);
+            sse.Append("data: [DONE]\n\n");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(sse.ToString(), System.Text.Encoding.UTF8, "text/event-stream") };
+        }
     }
 }
 

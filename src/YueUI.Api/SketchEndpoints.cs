@@ -5,14 +5,14 @@ using YueUI.Api.Sketches;
 namespace YueUI.Api;
 
 /// <summary>
-/// Written song sketches planned by Claude (<see cref="SketchMaker"/>): a sketch in, a plan out after a few minutes,
+/// Written song sketches planned by Claude or a model in LM Studio (<see cref="SketchMaker"/>): a sketch in, a plan out after a few minutes,
 /// and from the plan a score with lyrics for the create form, a MIDI draft and the score as a file.
 /// </summary>
 public static class SketchEndpoints
 {
     public static RouteGroupBuilder MapSketchEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/sketches/info", (SketchMaker maker) => maker.Info)
+        api.MapGet("/sketches/info", (SketchMaker maker, CancellationToken cancellationToken) => maker.InfoAsync(cancellationToken))
             .WithName("GetSketchInfo")
             .Produces<SketchInfo>(StatusCodes.Status200OK);
         api.MapGet("/sketches", async (SketchMaker maker) =>
@@ -22,7 +22,7 @@ public static class SketchEndpoints
         })
             .WithName("ListSketches")
             .Produces<List<SketchSummary>>(StatusCodes.Status200OK);
-        api.MapPost("/sketches", (SketchRequest request, SketchMaker maker, IOptions<SketchOptions> options) =>
+        api.MapPost("/sketches", async (SketchRequest request, SketchMaker maker, IOptions<SketchOptions> options, CancellationToken cancellationToken) =>
         {
             var limit = options.Value.MaxSketchCharacters;
             if (string.IsNullOrWhiteSpace(request.Text))
@@ -33,18 +33,23 @@ public static class SketchEndpoints
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["text"] = [$"At most {limit} characters."] });
             }
-            if (!maker.Info.Configured)
+            if (maker.IsLocal(request.Model))
+            {
+                // A local model must be one LM Studio has; any other id would fail only once its turn came.
+                var local = (await maker.InfoAsync(cancellationToken)).Local ?? [];
+                if (!local.Any(m => m.Id == request.Model!.Trim()))
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["model"] = [$"One of {string.Join(", ", options.Value.Offered.Concat(local.Select(m => m.Id)))}."],
+                    });
+                }
+            }
+            else if (!maker.Info.Configured)
             {
                 return Results.Problem(
-                    $"No Anthropic API key: set ANTHROPIC_API_KEY or write it into {options.Value.ResolvedKeyFile}.",
+                    $"No Anthropic API key: set ANTHROPIC_API_KEY or write it into {options.Value.ResolvedKeyFile}, or choose a model in LM Studio.",
                     statusCode: StatusCodes.Status501NotImplemented);
-            }
-            if (request.Model is { } model && !options.Value.Offered.Contains(model))
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["model"] = [$"One of {string.Join(", ", options.Value.Offered)}."],
-                });
             }
             var job = maker.Enqueue(request.Text, request.Instruction, request.Model);
             return Results.Accepted($"/api/sketches/{job.Id}", SketchSummary.Of(job));

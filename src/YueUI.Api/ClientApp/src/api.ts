@@ -61,6 +61,9 @@ import type {
   MemoryInfo,
   VoiceInfo,
   WorkerInfo,
+  WritingChat,
+  WritingOverview,
+  WritingReply,
 } from './types'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? ''
@@ -975,6 +978,50 @@ export async function aceSongRequest(songId: string): Promise<AceSongRequest> {
   return (await send(`/api/songs/${songId}/ace`)).json() as Promise<AceSongRequest>
 }
 
+/** The writing page's chats and the answer being written. */
+export async function getWriting(): Promise<WritingOverview> {
+  return (await send('/api/writing')).json() as Promise<WritingOverview>
+}
+
+export async function getWritingChat(id: string): Promise<WritingChat> {
+  return (await send(`/api/writing/${encodeURIComponent(id)}`)).json() as Promise<WritingChat>
+}
+
+export async function createWritingChat(): Promise<WritingChat> {
+  return (await send('/api/writing', json('POST', {}))).json() as Promise<WritingChat>
+}
+
+/** Answers 202 at once; the answer grows in `writing` events. */
+export async function sendWriting(id: string, text: string, model: string | null): Promise<WritingReply> {
+  return (
+    await send(`/api/writing/${encodeURIComponent(id)}/messages`, json('POST', { text, model }))
+  ).json() as Promise<WritingReply>
+}
+
+/** The last answer written again, by the chosen model. */
+export async function retryWriting(id: string, model: string | null): Promise<WritingReply> {
+  return (
+    await send(`/api/writing/${encodeURIComponent(id)}/retry`, json('POST', { model }))
+  ).json() as Promise<WritingReply>
+}
+
+export async function stopWriting(id: string): Promise<void> {
+  await send(`/api/writing/${encodeURIComponent(id)}/stop`, { method: 'POST' })
+}
+
+export async function renameWriting(id: string, title: string): Promise<WritingChat> {
+  return (await send(`/api/writing/${encodeURIComponent(id)}`, json('PUT', { title }))).json() as Promise<WritingChat>
+}
+
+export async function deleteWriting(id: string): Promise<void> {
+  await send(`/api/writing/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** Unloads the model kept between answers, so a song need not wait for it. */
+export async function releaseWriting(): Promise<void> {
+  await send('/api/writing/release', { method: 'POST' })
+}
+
 export interface EventHandlers {
   snapshot(snapshot: StatusSnapshot): void
   song(song: SongState): void
@@ -996,6 +1043,8 @@ export interface EventHandlers {
   image(image: ImageState): void
   /** An ACE-Step job changed; a stopped one arrives as cancelled. */
   ace(job: AceJob): void
+  /** The answer on the writing page grew or ended. */
+  writing(reply: WritingReply): void
   /** A take of the singing page changed; a deleted one arrives as cancelled. */
   singing(take: SingTake): void
   queue(queue: QueuedJob[]): void
@@ -1029,6 +1078,7 @@ export function subscribe(handlers: EventHandlers): () => void {
   on<VideoState>('video', handlers.video)
   on<ImageState>('image', handlers.image)
   on<AceJob>('ace', handlers.ace)
+  on<WritingReply>('writing', handlers.writing)
   on<SingTake>('singing', handlers.singing)
   on<MemoryInfo>('memory', handlers.memory)
   source.onerror = () => handlers.connection(false)

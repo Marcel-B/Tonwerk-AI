@@ -622,6 +622,21 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 29;
                     """);
             }
+            if (current < 30)
+            {
+                // Conversations of the writing page (Writing/WritingDesk.cs), one JSON each with its messages.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE writing_chats (
+                        id TEXT PRIMARY KEY,
+                        chat TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 30;
+                    """);
+            }
             _ready = true;
         }
     }

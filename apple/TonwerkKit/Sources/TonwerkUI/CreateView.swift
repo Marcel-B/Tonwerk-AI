@@ -233,6 +233,9 @@ struct CreateView: View {
 
     private static func label(_ choice: Components.Schemas.LyricsModel) -> String {
         var name = choice.cloud == true ? "\(choice.name) ☁︎" : choice.name
+        if let note = choice.memoryNote ?? choice.roleNote {
+            name += " · \(note)"
+        }
         if choice.vision == true {
             name += String(localized: " · sieht Fotos")
         }

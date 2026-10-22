@@ -9,7 +9,10 @@ namespace YueUI.Api.Lyrics;
 /// Runs at Anthropic, not on the Mac (<see cref="ClaudeLyricsModel"/>): the lyrics leave the house, and the draft
 /// neither waits for nor stops a song.
 /// </param>
-public sealed record LyricsModel(string Id, string Name, long? SizeBytes, bool Loaded, bool? Vision, bool Cloud = false);
+/// <param name="Role">What it is suggested for (<see cref="LyricsOptions.Roles"/>): <c>quality</c> or <c>ideas</c>.</param>
+/// <param name="NeedsGb">The memory it needs and the Mac that lists it lacks; the apps show it but do not offer it.</param>
+public sealed record LyricsModel(
+    string Id, string Name, long? SizeBytes, bool Loaded, bool? Vision, bool Cloud = false, string? Role = null, double? NeedsGb = null);
 
 /// <param name="Default">The configured model (<see cref="LyricsOptions.Model"/>), used when a request names none.</param>
 public sealed record LyricsModels(string Default, IReadOnlyList<LyricsModel> Models);

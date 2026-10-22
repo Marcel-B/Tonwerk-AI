@@ -38,6 +38,17 @@ public sealed class SketchOptions
     /// <summary>A plan gives up after this long.</summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(20);
 
+    /// <summary>
+    /// The context a local model (LM Studio) is loaded with for a plan: the prompts take about 3000 tokens, a song of
+    /// a hundred bars about 20000. LM Studio's guardrail may halve it down to <c>Lyrics:MinContextLength</c>.
+    /// </summary>
+    public int LocalContextLength { get; set; } = 32768;
+
+    public double LocalTemperature { get; set; } = 0.7;
+
+    /// <summary>A local plan gives up after this long, counted from when its model has the memory.</summary>
+    public TimeSpan LocalTimeout { get; set; } = TimeSpan.FromMinutes(90);
+
     /// <summary>Sketches longer than this are refused before they cost anything.</summary>
     public int MaxSketchCharacters { get; set; } = 60000;
 

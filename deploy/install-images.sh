@@ -23,6 +23,9 @@ FLUX3="flux3-mlx[pup]==0.1.0"
 # Pillow 13 imports numbers._IntegralLike at run time, which no released Python has (seen 2026-10-21 on Python 3.12),
 # so mflux failed on its first import; held below 13 until Pillow fixes it.
 PILLOW="pillow<13"
+# The content filter (Falconsai's classifier through transformers' pipeline) needs torch; mflux brings it, flux3-mlx
+# does not (its mlx-vlm brings only transformers, which since version 5 runs on torch alone).
+TORCH="torch==2.14.0"
 
 # The server says where it looks for the environments; without a running server, its defaults.
 INFO="$(curl -fsS "$URL/api/images" 2>/dev/null || true)"
@@ -70,6 +73,6 @@ install() {
 
 install "$PYTHON" "$PACKAGE" "$PILLOW"
 "$PYTHON" -c 'import importlib.metadata as m; from mflux.models.flux2.variants import Flux2Klein; from mflux.models.krea2 import Krea2; from mflux.models.z_image import ZImage; print("mflux", m.version("mflux"), "is installed.")'
-install "$FLUX3_PYTHON" "$FLUX3" "$PILLOW"
-"$FLUX3_PYTHON" -c 'import importlib.metadata as m; from flux3_mlx import Flux3Klein; import mlx_vlm; print("flux3-mlx", m.version("flux3-mlx"), "is installed.")'
+install "$FLUX3_PYTHON" "$FLUX3" "$PILLOW" "$TORCH"
+"$FLUX3_PYTHON" -c 'import importlib.metadata as m; from flux3_mlx import Flux3Klein; import mlx_vlm, torch; from transformers import pipeline; print("flux3-mlx", m.version("flux3-mlx"), "is installed.")'
 echo "Open a song's cover in Tonwerk and paint one; each model downloads itself with its first picture."

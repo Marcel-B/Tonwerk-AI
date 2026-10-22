@@ -43,7 +43,8 @@ public sealed class ImageModel
 
     /// <summary>
     /// Every picture passes an NSFW classifier before it is kept, and a flagged one is not: Krea 2's licence (§4.2)
-    /// requires a content filter wherever the model is used.
+    /// requires a content filter wherever the model is used, FLUX 3's (FLUX Kommunity §2.e) a filter or a review of
+    /// every picture before it is published, and the filter does not depend on someone looking.
     /// </summary>
     public bool ContentFilter { get; set; }
 
@@ -149,6 +150,7 @@ public sealed class ImageModel
             MoreRepos = ["VisualInference/FLUX-3-Image-Klein-pup-MLX-4bit"],
             Steps = 16,
             Upsampler = "4bit",
+            ContentFilter = true,
             MinSystemGb = 32,
             Lettering = true,
             DownloadGb = 15,

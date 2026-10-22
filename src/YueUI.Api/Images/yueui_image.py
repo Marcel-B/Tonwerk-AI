@@ -19,7 +19,8 @@ import json
 import sys
 import time
 
-# Krea's licence asks for a content filter; this is one of the classifiers it names, the one the ComfyUI node uses too.
+# Krea's licence asks for a content filter, FLUX 3's for a filter or a review; this is one of the classifiers Krea's
+# names, the one the ComfyUI node and Black Forest Labs' FLUX 3 reference code use too.
 NSFW_REPO = "Falconsai/nsfw_image_detection"
 NSFW_THRESHOLD = 0.85
 
@@ -117,7 +118,8 @@ def paint_flux3(pipe, request: dict, steps: int):
 
 
 def flagged(image) -> bool:
-    """Falconsai's ViT on the CPU through transformers, which mflux brings along; a few hundred MB, cached in HF_HOME."""
+    """Falconsai's ViT on the CPU through transformers (mflux brings it, flux3-mlx's mlx-vlm too, torch is installed
+    beside); a few hundred MB, cached in HF_HOME."""
     from transformers import pipeline
 
     classify = pipeline("image-classification", model=NSFW_REPO, device="cpu")

@@ -56,6 +56,7 @@ public sealed class ImageEndpointTests : IDisposable
         // FLUX 3 runs in flux3-mlx's own environment, which is not there.
         Assert.Contains("flux3-mlx is not installed", MfluxEngine.UnavailableOn(flux3, settings));
         Assert.True(krea.ContentFilter);
+        Assert.True(flux3.ContentFilter);
         Assert.Equal("4bit", flux3.Upsampler);
     }
 

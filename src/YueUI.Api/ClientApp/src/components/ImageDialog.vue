@@ -4,9 +4,11 @@ import Dialog from 'primevue/dialog'
 import Checkbox from 'primevue/checkbox'
 import { deleteImage, getImageInfo, imageUrl, listImages, paintImage, takeImage } from '../api'
 import { t } from '../i18n'
+import { blocksIn, toggleBlock } from '../coverBlocks'
 import { imageTarget, loadImageSettings, saveImageSettings, suggestPrompt } from '../images'
 import { machineField, ranOnNote, storedMachine } from '../machines'
 import type { ImageInfo, ImageState } from '../types'
+import CoverBlocks from './CoverBlocks.vue'
 import MachinePicker from './MachinePicker.vue'
 
 /**
@@ -35,9 +37,18 @@ const taking = ref<string | null>(null)
 /** Whether the description is still the suggestion, so that the title switch may rewrite it. */
 const suggested = ref(true)
 
-function suggestion(): string {
+/** The suggestion with the blocks `text` holds, so that choosing blocks keeps a description the suggestion. */
+function suggestion(text = prompt.value): string {
   const target = imageTarget.value
-  return target ? suggestPrompt(target.title, target.style, withTitle.value) : ''
+  return target ? suggestPrompt(target.title, target.style, withTitle.value, blocksIn(text)) : ''
+}
+
+const chosenBlocks = computed(() => blocksIn(prompt.value))
+
+/** A block in or out; a description still the suggestion is written anew, so a medium can replace "painting". */
+function toggle(key: string): void {
+  const next = toggleBlock(prompt.value, key)
+  prompt.value = suggested.value ? suggestion(next) : next
 }
 
 watch(
@@ -46,7 +57,7 @@ watch(
     if (!target) {
       return
     }
-    prompt.value = suggestion()
+    prompt.value = suggestion('')
     suggested.value = true
     loaded.value = []
     try {
@@ -184,6 +195,7 @@ function close(): void {
         <Textarea v-model="prompt" rows="4" auto-resize fluid maxlength="2000" @input="edited" />
         <small class="muted">{{ t(info?.translates ? 'imagePromptHintTranslated' : 'imagePromptHint') }}</small>
       </label>
+      <CoverBlocks :chosen="chosenBlocks" :song-style="imageTarget?.style ?? ''" @toggle="toggle" />
       <label class="flex items-center gap-2">
         <Checkbox v-model="withTitle" binary />
         <span>{{ t('imageWithTitle') }}</span>

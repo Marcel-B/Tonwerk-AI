@@ -22,6 +22,46 @@ final class CoverTests: XCTestCase {
         XCTAssertFalse(CoverPrompt.suggest(title: "", style: "", withTitle: true).contains("words"))
     }
 
+    func testCoverBlocksAreUniqueAndNoneHoldsAnother() {
+        XCTAssertEqual(Set(CoverBlocks.all.map(\.key)).count, CoverBlocks.all.count)
+        for a in CoverBlocks.all {
+            for b in CoverBlocks.all where a != b {
+                XCTAssertFalse(a.text.contains(b.text), "\(a.key) holds \(b.key)")
+            }
+        }
+    }
+
+    func testCoverBlockIsAddedAtTheEndAndTakenOutAgain() throws {
+        let neon = try XCTUnwrap(CoverBlocks.block("neon")).text
+        let added = CoverBlocks.toggle("neon", in: "A fox in snow.")
+        XCTAssertEqual(added, "A fox in snow. \(neon)")
+        XCTAssertEqual(CoverBlocks.blocks(in: added), ["neon"])
+        XCTAssertEqual(CoverBlocks.toggle("neon", in: added), "A fox in snow.")
+    }
+
+    func testOneMediumAtATime() throws {
+        let pencil = try XCTUnwrap(CoverBlocks.block("pencil")).text
+        let photo = try XCTUnwrap(CoverBlocks.block("photo")).text
+        let both = CoverBlocks.toggle("pencil", in: CoverBlocks.toggle("photo", in: "A fox."))
+        XCTAssertEqual(both, "A fox. \(pencil)")
+        XCTAssertFalse(both.contains(photo))
+    }
+
+    func testCoverBlocksForTheSongFollowWholeWords() {
+        XCTAssertEqual(CoverBlocks.forSong(style: "German, dark synthwave, 110 BPM"), ["synthwave80s", "neon", "charcoal", "dramatic"])
+        XCTAssertEqual(CoverBlocks.forSong(style: "trap"), ["dramatic", "photo"])
+        XCTAssertEqual(CoverBlocks.forSong(style: "post-rock"), ["landscape", "mist"])
+        XCTAssertEqual(CoverBlocks.forSong(style: ""), [])
+    }
+
+    func testPromptWithAMediumDropsPaintingAndListsBlocksBeforeTheTitle() throws {
+        let pencil = try XCTUnwrap(CoverBlocks.block("pencil")).text
+        let neon = try XCTUnwrap(CoverBlocks.block("neon")).text
+        XCTAssertEqual(
+            CoverPrompt.suggest(title: "Nachtzug", style: "dreamy", withTitle: true, blocks: ["neon", "pencil"]),
+            "A square picture, one striking scene with a strong central motif, high detail. Its mood and colours evoke dreamy music. \(pencil) \(neon) The words \"Nachtzug\" are written once in elegant, legible lettering.")
+    }
+
     func testPhotoIsCutSquareAtTheGivenSide() throws {
         let jpeg = try XCTUnwrap(CoverPhoto.squareJPEG(from: png(width: 300, height: 200), side: 100))
         let source = try XCTUnwrap(CGImageSourceCreateWithData(jpeg as CFData, nil))

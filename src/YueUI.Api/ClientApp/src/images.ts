@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { blockSentences, hasMedium } from './coverBlocks'
 import type { ExportTarget } from './export'
 
 /**
@@ -19,16 +20,27 @@ export function openImages(target: ExportTarget): void {
  * guidance above 1), and "no text, no logos" in the prompt itself put text and logos in, since a diffusion model draws
  * what a prompt names. For the same reason it says painting, not album cover (covers carry type), leaves the title out
  * unless it is wanted in the picture, and drops the style's tempo and vocal parts, which have nothing to show.
+ *
+ * Chosen cover blocks (`coverBlocks.ts`) follow the mood; with a medium among them (pencil, photo, …) the first sentence
+ * stops saying painting, which would fight it.
  */
-export function suggestPrompt(title: string, style: string, withTitle: boolean): string {
+export function suggestPrompt(
+  title: string,
+  style: string,
+  withTitle: boolean,
+  blocks: readonly string[] = [],
+): string {
   const mood = style
     .split(',')
     .map((part) => part.trim().replace(/\s+/g, ' '))
     .filter((part) => part !== '' && !/\d|bpm|tempo|vocal|voice|singer|sung|lyrics|language/i.test(part))
     .join(', ')
   return [
-    'A square painting, one striking scene with a strong central motif, rich colour and dramatic light, painterly, high detail.',
+    hasMedium(blocks)
+      ? 'A square picture, one striking scene with a strong central motif, high detail.'
+      : 'A square painting, one striking scene with a strong central motif, rich colour and dramatic light, painterly, high detail.',
     mood ? `Its mood and colours evoke ${mood} music.` : null,
+    ...blockSentences(blocks),
     withTitle && title ? `The words "${title}" are written once in elegant, legible lettering.` : null,
   ]
     .filter(Boolean)

@@ -66,8 +66,9 @@ extension CoverPhoto {
 enum CoverPrompt {
     /// A description from the song's title and style, as `images.ts` `suggestPrompt` writes it. English, since Klein
     /// reads it through Qwen3; only what should be seen, since distilled Klein has no negative prompt and draws what a
-    /// prompt names ("no text" brings text). Tempo and vocal parts of the style have nothing to show.
-    static func suggest(title: String, style: String, withTitle: Bool) -> String {
+    /// prompt names ("no text" brings text). Tempo and vocal parts of the style have nothing to show. Chosen cover
+    /// blocks follow the mood; with a medium among them the first sentence stops saying painting, which would fight it.
+    static func suggest(title: String, style: String, withTitle: Bool, blocks: [String] = []) -> String {
         let skipped = try! NSRegularExpression(
             pattern: "\\d|bpm|tempo|vocal|voice|singer|sung|lyrics|language", options: .caseInsensitive)
         let mood = style.split(separator: ",", omittingEmptySubsequences: false)
@@ -79,11 +80,14 @@ enum CoverPrompt {
             }
             .joined(separator: ", ")
         var sentences = [
-            "A square painting, one striking scene with a strong central motif, rich colour and dramatic light, painterly, high detail."
+            CoverBlocks.hasMedium(blocks)
+                ? "A square picture, one striking scene with a strong central motif, high detail."
+                : "A square painting, one striking scene with a strong central motif, rich colour and dramatic light, painterly, high detail."
         ]
         if !mood.isEmpty {
             sentences.append("Its mood and colours evoke \(mood) music.")
         }
+        sentences += CoverBlocks.sentences(blocks)
         if withTitle && !title.isEmpty {
             sentences.append("The words \"\(title)\" are written once in elegant, legible lettering.")
         }
@@ -324,6 +328,7 @@ struct PaintCoverView: View {
     @AppStorage("imageWithTitle") private var withTitle = false
     /// The Mac that paints; empty lets the server choose.
     @AppStorage("imageMachine") private var machine = ""
+    @AppStorage("coverBlocksOpen") private var blocksOpen = true
     @State private var prompt = ""
     /// Whether the description is still the suggestion, so that the title switch may rewrite it.
     @State private var suggested = true
@@ -377,8 +382,18 @@ struct PaintCoverView: View {
         #endif
     }
 
-    private var suggestion: String {
-        CoverPrompt.suggest(title: song.title, style: song.style, withTitle: withTitle)
+    private var suggestion: String { suggestion(for: prompt) }
+
+    /// The suggestion with the blocks `text` holds, so that choosing blocks keeps a description the suggestion.
+    private func suggestion(for text: String) -> String {
+        CoverPrompt.suggest(
+            title: song.title, style: song.style, withTitle: withTitle, blocks: CoverBlocks.blocks(in: text))
+    }
+
+    /// A block in or out; a description still the suggestion is written anew, so a medium can replace "painting".
+    private func toggle(_ key: String) {
+        let next = CoverBlocks.toggle(key, in: prompt)
+        prompt = suggested ? suggestion(for: next) : next
     }
 
     private var chosen: Components.Schemas.ImageModelInfo? {
@@ -409,6 +424,10 @@ struct PaintCoverView: View {
                 .lineLimit(4...10)
                 .onChange(of: prompt) { suggested = prompt == suggestion }
             Toggle("Titel ins Bild schreiben", isOn: $withTitle)
+            DisclosureGroup("Bausteine", isExpanded: $blocksOpen) {
+                CoverBlocksView(chosen: CoverBlocks.blocks(in: prompt), songStyle: song.style, toggle: toggle)
+                    .padding(.top, 4)
+            }
         } header: {
             HStack {
                 CardHeading("Bildbeschreibung", systemImage: "text.quote")

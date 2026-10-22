@@ -130,7 +130,14 @@ public static class ImageEndpoints
         {
             return Results.ValidationProblem(errors);
         }
-        if (!machines.CanRun(Machines.Engines.ImageModel(model!.Id), machine, engine.Unavailable(model) is null))
+        if (machines.Lacks(Machines.Engines.ImageModel(model!.Id), machine))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["machine"] = [$"{machines.Find(machine)!.Label} cannot paint with {model.Label}; choose another Mac or Automatic."],
+            });
+        }
+        if (!machines.CanRun(Machines.Engines.ImageModel(model.Id), machine, engine.Unavailable(model) is null))
         {
             return Results.Problem(
                 engine.Unavailable(model) ?? $"No Mac here can paint with {model.Label}.",

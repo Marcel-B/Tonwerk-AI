@@ -40,6 +40,8 @@ export interface AceForm {
   coverStrength: number | null
   repaintStart: number | null
   repaintEnd: number | null
+  /** The Mac that composes; empty lets the server choose. */
+  machine: string
 }
 
 export function defaultAceForm(): AceForm {
@@ -74,6 +76,7 @@ export function defaultAceForm(): AceForm {
     coverStrength: null,
     repaintStart: null,
     repaintEnd: null,
+    machine: '',
   }
 }
 
@@ -171,14 +174,19 @@ export function toAceRequest(form: AceForm): AceSongRequest {
     coverStrength: form.task === 'cover' ? form.coverStrength : null,
     repaintStart: form.task === 'repaint' ? form.repaintStart : null,
     repaintEnd: form.task === 'repaint' ? form.repaintEnd : null,
+    machine: text(form.machine),
   }
 }
 
-/** A song's request laid over the form, to make it again: what it does not say goes back to the default. */
-export function fromAceRequest(request: AceSongRequest): AceForm {
+/**
+ * A song's request laid over the form, to make it again: what it does not say goes back to the default. The Mac chosen
+ * is the page's, not the song's, so the caller hands it over.
+ */
+export function fromAceRequest(request: AceSongRequest, machine = ''): AceForm {
   const form = defaultAceForm()
   return {
     ...form,
+    machine,
     title: request.title ?? '',
     caption: request.caption ?? '',
     lyrics: request.lyrics ?? '',

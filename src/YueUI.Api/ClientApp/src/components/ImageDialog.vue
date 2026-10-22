@@ -5,7 +5,9 @@ import Checkbox from 'primevue/checkbox'
 import { deleteImage, getImageInfo, imageUrl, listImages, paintImage, takeImage } from '../api'
 import { t } from '../i18n'
 import { imageTarget, loadImageSettings, saveImageSettings, suggestPrompt } from '../images'
+import { machineField, ranOnNote, storedMachine } from '../machines'
 import type { ImageInfo, ImageState } from '../types'
+import MachinePicker from './MachinePicker.vue'
 
 /**
  * App.vue holds the one dialog for painted covers; the library opens it through `openImages`. A description goes to
@@ -23,6 +25,8 @@ const stored = loadImageSettings()
 const withTitle = ref(stored.withTitle)
 const model = ref<string | null>(stored.model)
 const prompt = ref('')
+/** The Mac that paints; empty lets the server choose one that has the model. */
+const machine = storedMachine('images')
 const info = ref<ImageInfo | null>(null)
 const loaded = ref<ImageState[]>([])
 const sending = ref(false)
@@ -104,7 +108,11 @@ async function start(): Promise<void> {
   }
   sending.value = true
   try {
-    const image = await paintImage(target.songId, { prompt: prompt.value, model: model.value })
+    const image = await paintImage(target.songId, {
+      prompt: prompt.value,
+      model: model.value,
+      machine: machineField(machine.value),
+    })
     if (imageTarget.value === target) {
       loaded.value = [image, ...loaded.value.filter((i) => i.id !== image.id)]
     }
@@ -204,7 +212,8 @@ function close(): void {
         <span v-if="withTitle && !chosen.lettering" class="muted">{{ t('imageModelNoLettering') }}</span>
       </div>
       <small class="muted">{{ t('imageHint', { gb: chosen?.memoryGb ?? 9 }) }}</small>
-      <div class="flex justify-end">
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <MachinePicker v-model="machine" :engine="`images:${model ?? ''}`" :disabled="sending" class="mr-auto" />
         <Button
           type="submit"
           :label="t('imageStart')"
@@ -230,9 +239,9 @@ function close(): void {
               <Tag :severity="image.stage === 'queued' ? 'secondary' : undefined">{{ stage(image) }}</Tag>
             </div>
           </div>
-          <span class="text-xs text-muted-color truncate" :title="image.paintedPrompt ?? image.prompt"
-            >{{ image.modelLabel }} · {{ t('imageSeed', { seed: image.seed }) }}</span
-          >
+          <span class="text-xs text-muted-color truncate" :title="image.paintedPrompt ?? image.prompt">{{
+            [image.modelLabel, t('imageSeed', { seed: image.seed }), ranOnNote(image.ranOn)].filter(Boolean).join(' · ')
+          }}</span>
           <div class="flex items-center gap-1">
             <Button
               v-if="image.stage === 'done'"

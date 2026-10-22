@@ -14,6 +14,8 @@ import {
 } from '../api'
 import { formatDateTime, formatDuration, locale, t, tMaybe } from '../i18n'
 import type { SpeechInfo, SpeechModelInfo, SpeechTake, SpeechVoice } from '../types'
+import { machineField, ranOnNote, storedMachine } from '../machines'
+import MachinePicker from './MachinePicker.vue'
 import SpeechCleanPanel from './SpeechCleanPanel.vue'
 import TextActions from './TextActions.vue'
 
@@ -265,6 +267,8 @@ watch(locale, () => {
 })
 const picked = ref<string[]>([])
 const sending = ref(false)
+/** The Mac that speaks; shared with the cleanups, since both are the lab's models. */
+const machine = storedMachine('speech')
 
 async function send(): Promise<void> {
   if (!text.value.trim() || picked.value.length === 0 || sending.value) {
@@ -272,7 +276,7 @@ async function send(): Promise<void> {
   }
   sending.value = true
   try {
-    const added = await speak(text.value.trim(), voiceId.value, picked.value)
+    const added = await speak(text.value.trim(), voiceId.value, picked.value, machineField(machine.value))
     if (info.value) {
       info.value = { ...info.value, takes: [...added, ...info.value.takes] }
     }
@@ -491,6 +495,7 @@ function message(caught: unknown): string {
                 :loading="sending"
                 :disabled="!info.installed || !text.trim() || picked.length === 0"
               />
+              <MachinePicker v-model="machine" engine="speech" :disabled="sending" />
               <span v-if="picked.length === 0" class="muted text-sm">{{ t('labPickModel') }}</span>
               <span v-else-if="info.models.some((m) => picked.includes(m.id) && !m.downloaded)" class="muted text-sm">{{
                 t('labSpeakHint')
@@ -520,7 +525,8 @@ function message(caught: unknown): string {
               <div class="truncate font-semibold">{{ take.modelLabel }}</div>
               <div class="muted truncate text-sm">
                 {{ take.voiceLabel ?? t('labOwnVoice')
-                }}<template v-if="take.seconds !== null"> · {{ formatDuration(take.seconds) }}</template>
+                }}<template v-if="take.seconds !== null"> · {{ formatDuration(take.seconds) }}</template
+                ><template v-if="ranOnNote(take.ranOn)"> · {{ ranOnNote(take.ranOn) }}</template>
               </div>
             </div>
             <Tag :severity="stageSeverity[take.stage]">{{ t(`labStage_${take.stage}`) }}</Tag>

@@ -207,7 +207,7 @@ function useSong(result: SketchResult): void {
 /** What ACE-Step can take of the plan (lyrics, style, tempo, key, metre, length) on its page; the melody stays here. */
 function useAce(result: SketchResult): void {
   if (result.ace) {
-    aceForm.value = fromAceRequest(result.ace)
+    aceForm.value = fromAceRequest(result.ace, aceForm.value.machine)
     navigate('ace')
     emit('notice', t('sketchAceApplied', { title: result.ace.title || t('sketchUntitled') }))
   }

@@ -12,6 +12,7 @@ import type {
   LyricsReasoning,
   LyricsModels,
   LyricsState,
+  MachineInfo,
   MidiScore,
   PlaylistInfo,
   InsightReport,
@@ -21,6 +22,12 @@ import type {
   RunInfo,
   SongRequest,
   SongState,
+  SingingAligned,
+  SingingInfo,
+  SingingMelody,
+  SingingVoiceCreated,
+  SingTake,
+  SungNote,
   SpeechInfo,
   SpeechTake,
   SpeechVoice,
@@ -91,9 +98,10 @@ export async function draftLyrics(
   model: string | null,
   image: string | null = null,
   reasoning: LyricsReasoning | null = null,
+  machine: string | null = null,
 ): Promise<LyricsState> {
   return (
-    await send('/api/lyrics', json('POST', { keywords, style, language, model, image, reasoning }))
+    await send('/api/lyrics', json('POST', { keywords, style, language, model, image, reasoning, machine }))
   ).json() as Promise<LyricsState>
 }
 
@@ -109,15 +117,28 @@ export async function reviseLyrics(
   language: LyricsLanguage,
   model: string | null,
   reasoning: LyricsReasoning | null = null,
+  machine: string | null = null,
 ): Promise<LyricsState> {
   return (
-    await send('/api/lyrics', json('POST', { lyrics, instruction, keywords, style, language, model, reasoning }))
+    await send(
+      '/api/lyrics',
+      json('POST', { lyrics, instruction, keywords, style, language, model, reasoning, machine }),
+    )
   ).json() as Promise<LyricsState>
 }
 
-/** The models LM Studio has downloaded, for the picker; starts LM Studio's server if needed (503 if it cannot). */
-export async function getLyricsModels(): Promise<LyricsModels> {
-  return (await send('/api/lyrics/models')).json() as Promise<LyricsModels>
+/**
+ * The models LM Studio has downloaded, for the picker; starts LM Studio's server if needed (503 if it cannot). With a
+ * machine, that Mac's LM Studio.
+ */
+export async function getLyricsModels(machine: string | null = null): Promise<LyricsModels> {
+  const query = machine ? `?machine=${encodeURIComponent(machine)}` : ''
+  return (await send(`/api/lyrics/models${query}`)).json() as Promise<LyricsModels>
+}
+
+/** This Mac and the helpers a job may run on, for the pickers. */
+export async function listMachines(): Promise<MachineInfo[]> {
+  return (await send('/api/machines')).json() as Promise<MachineInfo[]>
 }
 
 /** The LoRAs a song can be made with. */
@@ -521,6 +542,8 @@ export interface SwapRequest {
   /** The file is a whole song: separate it first and mix the new vocals back. */
   separate: boolean
   keepReverb: boolean
+  /** The Mac to sing on; null for whichever is free. */
+  machine?: string | null
 }
 
 /** Uploads the recording and queues it; its progress arrives as `swap` events. */
@@ -528,7 +551,7 @@ export async function addSwap(file: File, request: SwapRequest): Promise<SwapSta
   const form = new FormData()
   form.append('file', file)
   for (const [key, value] of Object.entries(request)) {
-    if (value !== undefined) {
+    if (value !== undefined && value !== null) {
       form.append(key, String(value))
     }
   }
@@ -667,16 +690,31 @@ export async function listStems(): Promise<StemSetState[]> {
 }
 
 /** Queues the song to be split into stems; its progress arrives as `stems` events. */
-export async function separateSong(songId: string, model: string | null, dereverb: boolean): Promise<StemSetState> {
-  return (await send(`/api/songs/${songId}/stems`, json('POST', { model, dereverb }))).json() as Promise<StemSetState>
+export async function separateSong(
+  songId: string,
+  model: string | null,
+  dereverb: boolean,
+  machine: string | null = null,
+): Promise<StemSetState> {
+  return (
+    await send(`/api/songs/${songId}/stems`, json('POST', { model, dereverb, machine }))
+  ).json() as Promise<StemSetState>
 }
 
 /** Queues an uploaded recording to be split into stems like a song. */
-export async function separateFile(file: File, model: string | null, dereverb: boolean): Promise<StemSetState> {
+export async function separateFile(
+  file: File,
+  model: string | null,
+  dereverb: boolean,
+  machine: string | null = null,
+): Promise<StemSetState> {
   const form = new FormData()
   form.append('file', file)
   if (model) {
     form.append('model', model)
+  }
+  if (machine) {
+    form.append('machine', machine)
   }
   form.append('dereverb', String(dereverb))
   return (await send('/api/stems', { method: 'POST', body: form })).json() as Promise<StemSetState>
@@ -719,8 +757,15 @@ export function speechVoiceAudioUrl(id: string): string {
 }
 
 /** One take per model, spoken one after the other; their progress arrives as `speech` events. */
-export async function speak(text: string, voiceId: string | null, models: string[]): Promise<SpeechTake[]> {
-  return (await send('/api/speech/takes', json('POST', { text, voiceId, models }))).json() as Promise<SpeechTake[]>
+export async function speak(
+  text: string,
+  voiceId: string | null,
+  models: string[],
+  machine: string | null = null,
+): Promise<SpeechTake[]> {
+  return (await send('/api/speech/takes', json('POST', { text, voiceId, models, machine }))).json() as Promise<
+    SpeechTake[]
+  >
 }
 
 /** Stops a take that is being spoken, or removes a finished one with its audio. */
@@ -728,7 +773,93 @@ export async function deleteSpeechTake(id: string): Promise<void> {
   await send(`/api/speech/takes/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
-/** Removes a sung take with its audio (the singing page itself is the app's). */
+/** The singing page: whether SoulX-Singer is there, its voices and the takes. */
+export async function getSinging(): Promise<SingingInfo> {
+  return (await send('/api/singing')).json() as Promise<SingingInfo>
+}
+
+/** A MIDI file's or score.abc's melody (with its lyric events), or a library song's, for the note editor. */
+export async function readSingingMelody(source: { file: File } | { song: string }): Promise<SingingMelody> {
+  const form = new FormData()
+  if ('file' in source) {
+    form.append('file', source.file)
+  } else {
+    form.append('song', source.song)
+  }
+  return (await send('/api/singing/melody', { method: 'POST', body: form })).json() as Promise<SingingMelody>
+}
+
+/** A take's notes and words, to open it in the editor again. */
+export async function singTakeNotes(id: string): Promise<SingingMelody> {
+  return (await send(`/api/singing/${encodeURIComponent(id)}/notes`)).json() as Promise<SingingMelody>
+}
+
+/**
+ * What each note sings and how its word is spoken, in the order sent; with `lyrics` that text is laid on the notes by
+ * the server's rules instead of the notes' own words.
+ */
+export async function alignSinging(notes: SungNote[], lyrics: string | null = null): Promise<SingingAligned> {
+  return (await send('/api/singing/align', json('POST', { notes, lyrics }))).json() as Promise<SingingAligned>
+}
+
+export interface SingRequest {
+  /** The editor's notes; the server reads them as the melody. */
+  notes: SungNote[]
+  tempoBpm: number
+  voice: string
+  /** Only when no note carries words: the text to spread over them. */
+  lyrics?: string
+  pitchShift?: number
+  autoShift: boolean
+  title?: string
+  machine?: string | null
+}
+
+/** Queues the editor's melody to be sung; its progress arrives as `singing` events. */
+export async function sing(request: SingRequest): Promise<SingTake> {
+  const form = new FormData()
+  form.append('notes', JSON.stringify(request.notes))
+  form.append('tempoBpm', String(request.tempoBpm))
+  form.append('voice', request.voice)
+  form.append('autoShift', String(request.autoShift))
+  if (request.lyrics) {
+    form.append('lyrics', request.lyrics)
+  }
+  if (request.pitchShift) {
+    form.append('pitchShift', String(request.pitchShift))
+  }
+  if (request.title) {
+    form.append('title', request.title)
+  }
+  if (request.machine) {
+    form.append('machine', request.machine)
+  }
+  return (await send('/api/singing', { method: 'POST', body: form })).json() as Promise<SingTake>
+}
+
+export function singTakeAudioUrl(id: string, download = false): string {
+  return `${apiBase}/api/singing/${encodeURIComponent(id)}/audio${download ? '?download=true' : ''}`
+}
+
+/** A recording of one's own singing made into a voice, with the words sung in it; 422 when no singing is heard. */
+export async function addSingingVoice(
+  label: string,
+  lyrics: string,
+  recording: Blob,
+  fileName: string,
+): Promise<SingingVoiceCreated> {
+  const form = new FormData()
+  form.append('label', label)
+  form.append('lyrics', lyrics)
+  form.append('file', recording, fileName)
+  return (await send('/api/singing/voices', { method: 'POST', body: form })).json() as Promise<SingingVoiceCreated>
+}
+
+export function singingVoiceAudioUrl(id: string): string {
+  return `${apiBase}/api/singing/voices/${encodeURIComponent(id)}/audio`
+}
+
+/** Removes a sung take with its audio, or stops one still in the line. */
 export async function deleteSingingTake(id: string): Promise<void> {
   await send(`/api/singing/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
@@ -739,9 +870,17 @@ export async function deleteSingingVoice(id: string): Promise<void> {
 }
 
 /** A speech recording cleaned of noise by one model; it waits with the takes and reports as a `speech` event. */
-export async function cleanSpeech(file: Blob, fileName: string, model: string): Promise<SpeechTake> {
+export async function cleanSpeech(
+  file: Blob,
+  fileName: string,
+  model: string,
+  machine: string | null = null,
+): Promise<SpeechTake> {
   const form = new FormData()
   form.append('model', model)
+  if (machine) {
+    form.append('machine', machine)
+  }
   form.append('file', file, fileName)
   return (await send('/api/speech/cleanups', { method: 'POST', body: form })).json() as Promise<SpeechTake>
 }
@@ -768,7 +907,7 @@ export async function listImages(songId: string): Promise<ImageState[]> {
 /** Queues a picture; its progress arrives as `image` events. Without a seed the server picks one. */
 export async function paintImage(
   songId: string,
-  request: { prompt: string; model: string; seed?: number },
+  request: { prompt: string; model: string; seed?: number; machine?: string | null },
 ): Promise<ImageState> {
   return (await send(`/api/songs/${songId}/images`, json('POST', request))).json() as Promise<ImageState>
 }
@@ -906,6 +1045,8 @@ export interface EventHandlers {
   ace(job: AceJob): void
   /** The answer on the writing page grew or ended. */
   writing(reply: WritingReply): void
+  /** A take of the singing page changed; a deleted one arrives as cancelled. */
+  singing(take: SingTake): void
   queue(queue: QueuedJob[]): void
   /** Another large model took the memory, or gave it back. */
   memory(memory: MemoryInfo): void
@@ -938,6 +1079,7 @@ export function subscribe(handlers: EventHandlers): () => void {
   on<ImageState>('image', handlers.image)
   on<AceJob>('ace', handlers.ace)
   on<WritingReply>('writing', handlers.writing)
+  on<SingTake>('singing', handlers.singing)
   on<MemoryInfo>('memory', handlers.memory)
   source.onerror = () => handlers.connection(false)
   return () => source.close()

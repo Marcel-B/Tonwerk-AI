@@ -157,6 +157,7 @@ builder.Services.Configure<ImageOptions>(builder.Configuration.GetSection(ImageO
 builder.Services.AddSingleton<IImageEngine, MfluxEngine>();
 builder.Services.AddSingleton<IPromptTranslator, ClaudePromptTranslator>();
 builder.Services.AddSingleton<ImageLoraLibrary>();
+builder.Services.AddSingleton<CoverStyleLibrary>();
 // LoRAs from Hugging Face are a few hundred MB; the home line may take a while.
 builder.Services.AddHttpClient(ImageLoraLibrary.HttpClientName, client => client.Timeout = TimeSpan.FromHours(1));
 builder.Services.AddSingleton<ImageMaker>();
@@ -257,6 +258,7 @@ api.MapSpeechEndpoints();
 api.MapSingingEndpoints();
 api.MapImageEndpoints();
 api.MapImageLoraEndpoints();
+api.MapCoverStyleEndpoints();
 api.MapAceEndpoints();
 api.MapSketchEndpoints();
 api.MapWritingEndpoints();

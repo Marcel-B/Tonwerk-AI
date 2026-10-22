@@ -847,6 +847,44 @@ export interface ImageState {
   ranOn?: string | null
   /** The LoRAs it was painted with. */
   loras?: ImageLoraUsed[] | null
+  /** The reference pictures it was painted with, in the order the prompt names them. */
+  references?: ImageReferenceUsed[] | null
+}
+
+/** What a reference picture stands for: looked at for its look, its figure, its place, or painted over. */
+export type ReferenceRole = 'style' | 'figure' | 'place' | 'start'
+
+/** A reference a new picture asks for (Images/ImageModels.cs `ImageReferenceChoice`). */
+export interface ImageReferenceChoice {
+  /** `style` (id `<styleId>/<pictureId>`), `image` (a candidate), `cover` (the song's own) or `upload`. */
+  source: 'style' | 'image' | 'cover' | 'upload'
+  id?: string | null
+  role: ReferenceRole
+  /** Only for a start picture: how much of it stays, 0.1 to 0.9. */
+  strength?: number | null
+}
+
+export interface ImageReferenceUsed {
+  role: ReferenceRole
+  label: string
+  strength?: number | null
+}
+
+export interface CoverStyleImage {
+  id: string
+  role: ReferenceRole
+}
+
+/** A look kept under a name (Images/CoverStyles.cs): text, model, LoRAs and up to four reference pictures. */
+export interface CoverStyle {
+  id: number
+  name: string
+  prompt: string | null
+  model: string | null
+  loras: ImageLoraChoice[]
+  images: CoverStyleImage[]
+  createdAt: string
+  updatedAt: string
 }
 
 /** A LoRA for the image models (Images/ImageLoras.cs `ImageLoraInfo`). */
@@ -919,6 +957,10 @@ export interface ImageModelInfo {
   minSystemGb?: number | null
   /** Its runner applies LoRAs (FLUX 3 Klein's does not). */
   loras?: boolean
+  /** How many pictures it looks at (FLUX.2 Klein, FLUX 3); 0 for none. */
+  references?: number
+  /** It paints over one start picture instead (Z-Image, Krea 2). */
+  startImage?: boolean
 }
 
 /** `GET /api/audio-midi`: whether Basic Pitch is set up, and where the server looks for it. */

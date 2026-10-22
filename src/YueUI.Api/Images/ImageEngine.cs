@@ -7,7 +7,16 @@ namespace YueUI.Api.Images;
 
 /// <param name="Output">Where the picture is written, as JPEG.</param>
 /// <param name="Loras">LoRA files to apply; null or empty for none.</param>
-public sealed record ImageJob(ImageModel Model, string Prompt, long Seed, int Width, int Height, string Output, IReadOnlyList<ImageLoraFile>? Loras = null);
+/// <param name="References">Reference pictures, or one start picture; null or empty for none.</param>
+public sealed record ImageJob(
+    ImageModel Model,
+    string Prompt,
+    long Seed,
+    int Width,
+    int Height,
+    string Output,
+    IReadOnlyList<ImageLoraFile>? Loras = null,
+    IReadOnlyList<ImageReferenceFile>? References = null);
 
 /// <summary>The script's measurements; null where it could not tell.</summary>
 /// <param name="PaintedPrompt">What FLUX 3's upsampler made of the prompt, which the model painted.</param>
@@ -115,6 +124,12 @@ public sealed class MfluxEngine(IOptions<ImageOptions> options, ILogger<MfluxEng
             ["height"] = job.Height,
             ["output"] = job.Output,
             ["loras"] = new JsonArray([.. (job.Loras ?? []).Select(l => (JsonNode)new JsonObject { ["path"] = l.Path, ["strength"] = l.Strength })]),
+            ["references"] = new JsonArray([.. (job.References ?? []).Select(r => (JsonNode)new JsonObject
+            {
+                ["path"] = r.Path,
+                ["role"] = r.Role,
+                ["strength"] = r.Strength,
+            })]),
         };
 
         using var process = Process.Start(start) ?? throw new ImageException($"Could not start {python}.");

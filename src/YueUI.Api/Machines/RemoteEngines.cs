@@ -147,9 +147,18 @@ public sealed class RemoteEngines(HelperClient client, Machines machines)
             var outcome = await client.RunAsync(
                 helper,
                 Engines.Images,
-                new ImageHelperJob(job.Model.Id, job.Prompt, job.Seed, job.Width, job.Height, [.. (job.Loras ?? []).Select(l => l.Strength)]),
+                new ImageHelperJob(
+                    job.Model.Id,
+                    job.Prompt,
+                    job.Seed,
+                    job.Width,
+                    job.Height,
+                    [.. (job.Loras ?? []).Select(l => l.Strength)],
+                    [.. (job.References ?? []).Select(r => new ImageHelperReference(r.Role, r.Strength))]),
                 // The helper has its own LoRA folder; the files go along so a LoRA added here paints there too.
-                (job.Loras ?? []).Select((l, index) => (Key: $"lora{index}", l.Path)).ToDictionary(p => p.Key, p => p.Path),
+                (job.Loras ?? []).Select((l, index) => (Key: $"lora{index}", l.Path))
+                    .Concat((job.References ?? []).Select((r, index) => (Key: $"ref{index}", r.Path)))
+                    .ToDictionary(p => p.Key, p => p.Path),
                 new Dictionary<string, string> { ["image.jpg"] = job.Output },
                 null,
                 read =>

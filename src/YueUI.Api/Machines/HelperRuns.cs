@@ -275,8 +275,12 @@ public sealed class HelperRuns(
         var loras = (job.Loras ?? []).Select((strength, index) => new ImageLoraFile(
             files.GetValueOrDefault($"lora{index}") ?? throw new HelperException($"LoRA {index} is missing.", StatusCodes.Status400BadRequest),
             strength)).ToList();
+        var references = (job.References ?? []).Select((reference, index) => new ImageReferenceFile(
+            files.GetValueOrDefault($"ref{index}") ?? throw new HelperException($"Reference picture {index} is missing.", StatusCodes.Status400BadRequest),
+            reference.Role,
+            reference.Strength)).ToList();
         var result = await services.GetRequiredService<IImageEngine>().PaintAsync(
-            new ImageJob(model, job.Prompt, job.Seed, job.Width, job.Height, Path.Combine(outputs, "image.jpg"), loras),
+            new ImageJob(model, job.Prompt, job.Seed, job.Width, job.Height, Path.Combine(outputs, "image.jpg"), loras, references),
             (stage, share) => send(new HelperEvent("progress", Stage: stage, Share: Math.Round(share, 3))),
             cancellationToken);
         return JsonSerializer.SerializeToNode(result, HelperClient.Json);

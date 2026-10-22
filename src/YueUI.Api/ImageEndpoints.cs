@@ -36,7 +36,9 @@ public static class ImageEndpoints
                         unavailable,
                         m.Lettering,
                         m.MinSystemGb,
-                        m.TakesLoras);
+                        m.TakesLoras,
+                        m.MaxReferences,
+                        m.TakesStartImage);
                 })],
                 translator.Configured,
                 options.Value.ResolvedFlux3Python))
@@ -104,6 +106,7 @@ public static class ImageEndpoints
         ImageMaker images,
         IImageEngine engine,
         ImageLoraLibrary loras,
+        CoverStyleLibrary styles,
         Machines.Machines machines,
         IOptions<ImageOptions> options)
     {
@@ -164,6 +167,7 @@ public static class ImageEndpoints
                 }
             }
         }
+        var references = model is null ? [] : References(request.References ?? [], model, run, song, library, images, styles, errors);
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -183,7 +187,72 @@ public static class ImageEndpoints
         }
         // The runners seed MLX's generator, which takes 32 bits.
         var seed = request.Seed ?? Random.Shared.NextInt64(0, (long)uint.MaxValue + 1);
-        var image = images.Enqueue($"{run}/{song}", library.TitleOf(run, directory), model!, prompt, seed, machine, used);
+        var image = images.Enqueue($"{run}/{song}", library.TitleOf(run, directory), model!, prompt, seed, machine, used, references);
         return Results.Accepted($"/api/images/{image.Id}", image);
+    }
+
+    /// <summary>Each chosen reference's file, checked against what the model can take; problems go into <paramref name="errors"/>.</summary>
+    private static List<(string Path, ImageReferenceUsed Used)> References(
+        IReadOnlyList<ImageReferenceChoice> chosen,
+        ImageModel model,
+        string run,
+        string song,
+        SongLibrary library,
+        ImageMaker images,
+        CoverStyleLibrary styles,
+        Dictionary<string, string[]> errors)
+    {
+        var resolved = new List<(string Path, ImageReferenceUsed Used)>();
+        if (chosen.Count == 0)
+        {
+            return resolved;
+        }
+        var starts = chosen.Count(c => c.Role == ReferenceRoles.Start);
+        var looked = chosen.Count - starts;
+        if (starts > 0 && (!model.TakesStartImage || starts > 1 || looked > 0))
+        {
+            errors["references"] = [model.TakesStartImage
+                ? "One start picture, and nothing else beside it."
+                : $"{model.Label} paints over no start picture; give it pictures to look at."];
+            return resolved;
+        }
+        if (looked > 0 && looked > model.MaxReferences)
+        {
+            errors["references"] = [model.MaxReferences == 0
+                ? $"{model.Label} looks at no pictures; give it one start picture instead."
+                : $"{model.Label} looks at most at {model.MaxReferences} pictures."];
+            return resolved;
+        }
+        foreach (var choice in chosen)
+        {
+            var role = choice.Role ?? ReferenceRoles.Style;
+            if (!ReferenceRoles.All.Contains(role))
+            {
+                errors["references"] = [$"A role is one of {string.Join(", ", ReferenceRoles.All)}."];
+                return resolved;
+            }
+            if (role == ReferenceRoles.Start && choice.Strength is < 0.1 or > 0.9)
+            {
+                errors["references"] = ["The start picture's strength goes from 0.1 to 0.9."];
+                return resolved;
+            }
+            (string? path, string label) = choice.Source switch
+            {
+                "style" when choice.Id?.Split('/') is [var style, var picture] && long.TryParse(style, out var styleId)
+                    => (styles.ImagePath(styleId, picture), styles.Get(styleId)?.Name ?? "Stil"),
+                "image" when choice.Id is { } id && images.Get(id) is { Stage: "done" } && File.Exists(images.ImagePath(id))
+                    => (images.ImagePath(id), "Kandidat"),
+                "cover" => (library.CoverOf(run, song)?.Path, "Cover"),
+                "upload" when choice.Id is { } id => (images.UploadPath(id), "Hochgeladen"),
+                _ => (null, ""),
+            };
+            if (path is null || !File.Exists(path))
+            {
+                errors["references"] = [$"The reference {choice.Source} {choice.Id} is not there."];
+                return resolved;
+            }
+            resolved.Add((path, new ImageReferenceUsed(role, label, role == ReferenceRoles.Start ? choice.Strength ?? 0.5 : null)));
+        }
+        return resolved;
     }
 }

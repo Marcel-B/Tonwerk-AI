@@ -672,6 +672,17 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 32;
                     """);
             }
+            if (current < 33)
+            {
+                // How a painted cover was painted (Images/CoverPainting), as JSON; null for a photo.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    ALTER TABLE song_covers ADD COLUMN painting TEXT;
+                    PRAGMA user_version = 33;
+                    """);
+            }
             _ready = true;
         }
     }

@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Text.Json;
 using YueUI.Api.Export;
+using YueUI.Api.Images;
 
 namespace YueUI.Api.Data;
 
@@ -14,6 +16,8 @@ public sealed record SongCover(string SongId, string Path, string ContentType, D
 /// </summary>
 public sealed class SqliteCoverStore(SqliteDatabase database)
 {
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
     public string Folder => Path.Combine(database.Directory, "covers");
 
     /// <summary>When each song's cover was set.</summary>
@@ -47,8 +51,21 @@ public sealed class SqliteCoverStore(SqliteDatabase database)
         return File.Exists(path) ? new SongCover(songId, path, reader.GetString(1), Parse(reader.GetString(2))) : null;
     }
 
-    /// <summary>Replaces the song's cover; the old image is deleted once the row points at the new one.</summary>
-    public SongCover Set(string songId, CoverImage image)
+    /// <summary>How the song's cover was painted; null for a photo, the drawn cover or one taken before this was kept.</summary>
+    public CoverPainting? Painting(string songId)
+    {
+        using var connection = database.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT painting FROM song_covers WHERE song_id = $song";
+        command.Parameters.AddWithValue("$song", songId);
+        return command.ExecuteScalar() is string json ? JsonSerializer.Deserialize<CoverPainting>(json, Json) : null;
+    }
+
+    /// <summary>
+    /// Replaces the song's cover; the old image is deleted once the row points at the new one. A photo clears what the
+    /// painted cover before it was painted with.
+    /// </summary>
+    public SongCover Set(string songId, CoverImage image, CoverPainting? painting = null)
     {
         Directory.CreateDirectory(Folder);
         var file = $"{Guid.NewGuid():N}{(image.MimeType == "image/png" ? ".png" : ".jpg")}";
@@ -63,11 +80,14 @@ public sealed class SqliteCoverStore(SqliteDatabase database)
                 connection,
                 null,
                 """
-                INSERT INTO song_covers (song_id, file, content_type, updated_at) VALUES ($song, $file, $type, $updated)
+                INSERT INTO song_covers (song_id, file, content_type, updated_at, painting)
+                VALUES ($song, $file, $type, $updated, $painting)
                 ON CONFLICT (song_id) DO UPDATE SET
-                    file = excluded.file, content_type = excluded.content_type, updated_at = excluded.updated_at
+                    file = excluded.file, content_type = excluded.content_type, updated_at = excluded.updated_at,
+                    painting = excluded.painting
                 """,
                 ("$song", songId),
+                ("$painting", painting is null ? DBNull.Value : JsonSerializer.Serialize(painting, Json)),
                 ("$file", file),
                 ("$type", image.MimeType),
                 ("$updated", updated.ToString("O", CultureInfo.InvariantCulture)));

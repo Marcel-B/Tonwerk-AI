@@ -7,6 +7,7 @@ import { current, play, playing, versionTrack } from '../player'
 import { ratingOf } from '../ratings'
 import type { RunInfo, SongInfo, VersionState } from '../types'
 import { keyLabel, tempoTag, unclearBelow } from '../traits'
+import { imageFileName, openViewer } from '../imageViewer'
 import { openVideo } from '../video'
 import { octaveOptions, stepOptions, strengthOptions } from '../voiceChoices'
 import PlaylistToggle from './PlaylistToggle.vue'
@@ -26,6 +27,17 @@ const props = defineProps<{
   /** Versions as the event stream reports them, newer than the listing while they are in the works. */
   liveVersions: VersionState[]
 }>()
+
+/** The cover large, to download, with the text it was painted with when it was painted. */
+function viewCover(updatedAt: string): void {
+  const title = props.run.title || t('untitled')
+  openViewer({
+    src: coverUrl(props.song.id, updatedAt),
+    fileName: imageFileName(title, 'Cover'),
+    title,
+    coverOf: props.song.id,
+  })
+}
 
 /** Tempo and key as heard (or as the score asked), "92 BPM · A-Moll". */
 const sound = computed(() => {
@@ -200,13 +212,21 @@ const severityByQuality: Record<string, string> = {
 <template>
   <li :class="['song', { 'focused bg-emphasis': focused }]">
     <div class="flex flex-wrap gap-x-3 gap-y-1 items-center">
-      <img
+      <button
         v-if="song.coverUpdatedAt"
-        :src="coverUrl(song.id, song.coverUpdatedAt)"
-        alt=""
-        loading="lazy"
-        class="h-10 w-10 rounded-md object-cover"
-      />
+        type="button"
+        class="cover"
+        :aria-label="t('viewerOpen')"
+        :title="t('viewerOpen')"
+        @click="viewCover(song.coverUpdatedAt)"
+      >
+        <img
+          :src="coverUrl(song.id, song.coverUpdatedAt)"
+          alt=""
+          loading="lazy"
+          class="h-10 w-10 rounded-md object-cover"
+        />
+      </button>
       <Button
         v-if="song.hasAudio"
         :icon="isPlaying ? 'pi pi-pause' : 'pi pi-play'"
@@ -356,6 +376,13 @@ const severityByQuality: Record<string, string> = {
 </template>
 
 <style scoped>
+.cover {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
 .song {
   display: flex;
   flex-direction: column;

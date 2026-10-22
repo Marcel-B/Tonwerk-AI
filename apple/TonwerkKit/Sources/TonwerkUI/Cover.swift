@@ -134,15 +134,18 @@ extension AppModel {
         (try? await tonwerk?.api.listSongImages(path: .init(run: song.run, song: song.name)).ok.body.json) ?? []
     }
 
-    func paint(_ song: Song, prompt: String, model: String, machine: String = "", loras: [ImageLoras.Choice] = [])
-        async throws -> Components.Schemas.ImageState
+    func paint(
+        _ song: Song, prompt: String, model: String, machine: String = "", loras: [ImageLoras.Choice] = [],
+        references: [Components.Schemas.ImageReferenceChoice] = []
+    ) async throws -> Components.Schemas.ImageState
     {
         guard let tonwerk else { throw ServerError(String(localized: "Kein Server verbunden.")) }
         switch try await tonwerk.api.createSongImage(
             path: .init(run: song.run, song: song.name),
             body: .json(.init(
                 prompt: prompt, model: model, seed: nil, machine: machine.isEmpty ? nil : machine,
-                loras: loras.isEmpty ? nil : loras.map { .init(name: $0.name, strength: $0.strength) })))
+                loras: loras.isEmpty ? nil : loras.map { .init(name: $0.name, strength: $0.strength) },
+                references: references.isEmpty ? nil : references)))
         {
         case .accepted(let accepted):
             let image = try accepted.body.json
@@ -342,6 +345,13 @@ struct PaintCoverView: View {
     @State private var failed = false
     /// The LoRAs for the next picture; `CoverLorasSection` drops those that do not fit the model.
     @State private var loras: [ImageLoras.Choice] = []
+    /// Pictures to look at or paint over; `CoverReferences.fit` sends what the model takes.
+    @State private var references: [CoverReferences.Item] = []
+    @State private var startStrength = CoverReferences.defaultStartStrength
+    /// The cover style chosen; its text stands at the description's end while chosen.
+    @State private var style: Components.Schemas.CoverStyle?
+    @State private var styles: [Components.Schemas.CoverStyle] = []
+    @State private var keeping: String?
 
     var body: some View {
         NavigationStack {
@@ -356,6 +366,9 @@ struct PaintCoverView: View {
                 describe
                 modelSection
                 if let info, !info.models.isEmpty {
+                    CoverReferencesSection(
+                        items: $references, strength: $startStrength, style: $style, imageModel: chosen,
+                        cover: model.server.flatMap { song.coverURL(on: $0) }, choose: chooseStyle, styles: $styles)
                     CoverLorasSection(chosen: $loras, imageModel: chosen, models: info.models)
                 }
                 Section { start }
@@ -393,8 +406,44 @@ struct PaintCoverView: View {
 
     /// The suggestion with the blocks `text` holds, so that choosing blocks keeps a description the suggestion.
     private func suggestion(for text: String) -> String {
-        CoverPrompt.suggest(
-            title: song.title, style: song.style, withTitle: withTitle, blocks: CoverBlocks.blocks(in: text))
+        CoverReferences.withStyleText(
+            CoverPrompt.suggest(title: song.title, style: song.style, withTitle: withTitle, blocks: CoverBlocks.blocks(in: text)),
+            previous: nil, next: style?.prompt)
+    }
+
+    /// A style puts its text at the description's end, its model and LoRAs in place and its pictures before the
+    /// others; none takes the last one's text and pictures out again.
+    private func chooseStyle(_ previous: Components.Schemas.CoverStyle?, _ next: Components.Schemas.CoverStyle?) {
+        prompt = CoverReferences.withStyleText(prompt, previous: previous?.prompt, next: next?.prompt)
+        suggested = prompt == suggestion
+        let others = references.filter { $0.source != "style" }
+        let picked = next.map { kept in
+            CoverReferences.items(of: kept, url: { id, image in model.coverStyleImageURL(id, image) })
+        }
+        references = (picked ?? []) + others
+        if let wanted = next?.model, info?.models.contains(where: { $0.id == wanted }) == true {
+            modelId = wanted
+        }
+        if let next, !next.loras.isEmpty {
+            loras = next.loras.map { ImageLoras.Choice(name: $0.name, strength: $0.strength ?? 1) }
+        }
+    }
+
+    /// Keeps a candidate in the chosen style, for every later song of the project.
+    private func keep(_ image: Components.Schemas.ImageState) async {
+        guard let chosenStyle = style else { return }
+        keeping = image.id
+        defer { keeping = nil }
+        do {
+            let changed = try await model.addCoverStyleImage(chosenStyle.id, candidate: image.id)
+            style = changed
+            styles = styles.map { $0.id == changed.id ? changed : $0 }
+            failed = false
+            message = String(localized: "Im Stil „\(chosenStyle.name)“ gemerkt.")
+        } catch {
+            failed = true
+            message = error.localizedDescription
+        }
     }
 
     /// A block in or out; a description still the suggestion is written anew, so a medium can replace "painting".
@@ -564,6 +613,29 @@ struct PaintCoverView: View {
                 } else {
                     Spacer()
                 }
+                if image.stage == "done" {
+                    Menu {
+                        Button("Als Referenz", systemImage: "photo.on.rectangle.angled") {
+                            if !references.contains(where: { $0.source == "image" && $0.id == image.id }) {
+                                references.append(.init(
+                                    source: "image", id: image.id, role: "style", preview: model.imageURL(image),
+                                    label: image.modelLabel))
+                            }
+                        }
+                        if let style {
+                            Button("In „\(style.name)“ merken", systemImage: "bookmark") {
+                                Task { await keep(image) }
+                            }
+                            .disabled(keeping != nil)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.borderless)
+                    .fixedSize()
+                    .accessibilityLabel("Mehr")
+                }
                 Button(role: .destructive) {
                     Task { await model.deleteImage(image); loaded.removeAll { $0.id == image.id } }
                 } label: {
@@ -617,6 +689,9 @@ struct PaintCoverView: View {
         for lora in image.loras ?? [] {
             parts.append("\(lora.label) \(lora.strength.formatted(.number.precision(.fractionLength(2))))")
         }
+        for reference in image.references ?? [] {
+            parts.append("\(CoverReferences.roleLabel(reference.role)): \(reference.label)")
+        }
         parts.append("Seed \(image.seed.map(String.init) ?? "–")")
         parts.append(ranOn)
         return parts.compactMap { $0 }.joined(separator: " · ")
@@ -636,9 +711,11 @@ struct PaintCoverView: View {
         async let about = model.imageInfo()
         async let listed = model.images(of: song)
         async let helpers: Void = model.loadMachines()
-        let (info, images, _) = await (about, listed, helpers)
+        async let kept = try? model.coverStyles()
+        let (info, images, _, styles) = await (about, listed, helpers, kept)
         self.info = info
         loaded = images
+        self.styles = styles ?? []
         if let info, !info.models.contains(where: { $0.id == modelId }) {
             modelId = info.models.first?.id ?? ""
         }
@@ -649,7 +726,9 @@ struct PaintCoverView: View {
         message = nil
         Task {
             do {
-                let image = try await model.paint(song, prompt: prompt, model: modelId, machine: machine, loras: loras)
+                let image = try await model.paint(
+                    song, prompt: prompt, model: modelId, machine: machine, loras: loras,
+                    references: CoverReferences.fit(references, model: chosen, strength: startStrength))
                 loaded = [image] + loaded.filter { $0.id != image.id }
             } catch {
                 failed = true

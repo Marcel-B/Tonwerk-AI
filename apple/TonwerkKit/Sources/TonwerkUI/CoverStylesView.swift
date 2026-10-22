@@ -15,11 +15,15 @@ struct CoverStylesView: View {
     var body: some View {
         Form {
             Section {
-                Text("Ein Cover-Stil hält einen Look für alle Songs eines Projekts: einen Satz für die Beschreibung, das Modell, LoRAs und bis zu vier Referenzbilder. Unter „Cover malen“ oben bei den Referenzbildern wählen.")
+                Text("Ein Cover-Stil hält einen Look für alle Songs eines Projekts: einen Satz für die Beschreibung, das Modell, LoRAs und bis zu vier Referenzbilder. Namen eintragen, „Anlegen“ tippen, dann Satz, Modell und Bilder festlegen. Unter „Cover malen“ oben bei den Referenzbildern wählen.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                // A bordered field with its own placeholder: in a grouped form on the Mac a plain TextField shows
+                // only its title, and the field beside it looked like nothing to type into.
                 HStack {
-                    TextField("Neuer Stil", text: $newName)
+                    TextField("Name des neuen Stils", text: $newName, prompt: Text("Name des neuen Stils, z. B. Bleistift"))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
                         .onSubmit(create)
                     Button("Anlegen", systemImage: "plus", action: create)
                         .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)

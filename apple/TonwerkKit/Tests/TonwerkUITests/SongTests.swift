@@ -136,7 +136,7 @@ final class StagesTests: XCTestCase {
 
     func testDoneStepsTookUntilTheNextAndTheRestOfThePipelineWaits() {
         let steps = Stages.steps(
-            history: [("queued", start), ("planning", start.addingTimeInterval(5)), ("tokens", start.addingTimeInterval(65))],
+            history: [("queued", start, 0), ("planning", start.addingTimeInterval(5), 0), ("tokens", start.addingTimeInterval(65), 0)],
             current: "tokens", render: false, finished: false, now: start.addingTimeInterval(95))
         XCTAssertEqual(steps.map(\.stage), ["queued", "planning", "tokens", "synth", "decode"])
         XCTAssertEqual(steps.map(\.state), [.done, .done, .current, .pending, .pending])
@@ -144,13 +144,22 @@ final class StagesTests: XCTestCase {
     }
 
     func testARenderOnlySynthesizesAndAFinishedSongDropsItsEnd() {
-        let render = Stages.steps(history: [("queued", start)], current: "queued", render: true, finished: false, now: start)
+        let render = Stages.steps(history: [("queued", start, 0)], current: "queued", render: true, finished: false, now: start)
         XCTAssertEqual(render.map(\.stage), ["queued", "synth", "decode"])
         let done = Stages.steps(
-            history: [("synth", start), ("decode", start.addingTimeInterval(10)), ("ready", start.addingTimeInterval(12))],
+            history: [("synth", start, 0), ("decode", start.addingTimeInterval(10), 0), ("ready", start.addingTimeInterval(12), 0)],
             current: "ready", render: true, finished: true, now: start.addingTimeInterval(99))
         XCTAssertEqual(done.map(\.stage), ["synth", "decode"])
         XCTAssertEqual(done.map(\.seconds), [10, 2])
+    }
+
+    func testAStagesClockStopsWhileItWaitsForAnEngine() {
+        let steps = Stages.steps(
+            history: [("queued", start, 0), ("synth", start, 20), ("decode", start.addingTimeInterval(100), 0)],
+            current: "decode", render: true, finished: false,
+            waitingSince: start.addingTimeInterval(110), now: start.addingTimeInterval(130))
+        XCTAssertEqual(steps.map(\.seconds), [0, 80, 10])
+        XCTAssertEqual(steps.map(\.waited), [0, 20, 20])
     }
 
     func testStagesAreGerman() {

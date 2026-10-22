@@ -672,6 +672,27 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 32;
                     """);
             }
+            if (current < 33)
+            {
+                // YuE2's synthesis times and Neural Engine preparations as the worker logs them (Stats/SynthesisStats.cs).
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE synth_stats (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        kind TEXT NOT NULL,
+                        song_id TEXT NOT NULL,
+                        engine TEXT NOT NULL,
+                        steps INTEGER,
+                        seconds REAL NOT NULL,
+                        rate REAL,
+                        at TEXT NOT NULL
+                    );
+                    CREATE INDEX synth_stats_kind ON synth_stats (kind, at);
+                    PRAGMA user_version = 33;
+                    """);
+            }
             _ready = true;
         }
     }

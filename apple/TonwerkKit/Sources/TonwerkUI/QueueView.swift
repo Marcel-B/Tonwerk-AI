@@ -135,6 +135,7 @@ struct QueueView: View {
                 }
                 WorkerLog()
                     .padding(.top, 8)
+                SynthesisStatsView()
             }
             .padding()
             .frame(maxWidth: 760)
@@ -342,9 +343,28 @@ private struct WorkerLog: View {
                 }
             }
         } label: {
-            Text("Protokoll")
-                .font(.headline)
+            HStack {
+                Text("Protokoll")
+                    .font(.headline)
+                Spacer()
+                if open && !model.workerLog.isEmpty {
+                    Button(copied ? "Kopiert" : "Kopieren", systemImage: "doc.on.doc") {
+                        copied = Clipboard.copy(text)
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                }
+            }
         }
+    }
+
+    @State private var copied = false
+
+    /// The lines as text, to paste into a chat.
+    private var text: String {
+        model.workerLog
+            .map { "\($0.time.formatted(date: .omitted, time: .standard)) \($0.message)" }
+            .joined(separator: "\n")
     }
 
     private func line(_ entry: Components.Schemas.LogEntry) -> some View {
@@ -392,6 +412,11 @@ private struct StageTimeline: View {
                             .foregroundStyle(step.state == .pending ? .secondary : .primary)
                         if let seconds = step.seconds {
                             Text(Song.clock(seconds))
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        if step.waited >= 1 {
+                            Text("+\(Song.clock(step.waited)) gewartet")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }

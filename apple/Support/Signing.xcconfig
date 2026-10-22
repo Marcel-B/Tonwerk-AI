@@ -3,6 +3,13 @@
 //
 //     DEVELOPMENT_TEAM = ABCDE12345
 //
-// and leave the team empty in Xcode's "Signing & Capabilities", which would write it into the project. The Mac build
-// signs ad hoc and needs no team.
+// and leave the team empty in Xcode's "Signing & Capabilities", which would write it into the project.
+//
+// The Mac build signs ad hoc and needs no team. macOS then keys a privacy answer (the microphone) to the build's hash,
+// so every new build asks again; and it asks on the first sound already when the output is a device with inputs too
+// (an audio interface such as a Focusrite), since Core Audio opens its input side with the output. Signed by a team,
+// the answer stays with the app across builds: Local.xcconfig can say
+//
+//     CODE_SIGN_IDENTITY[sdk=macosx*] = Apple Development
+CODE_SIGN_IDENTITY[sdk=macosx*] = -
 #include? "Local.xcconfig"

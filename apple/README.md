@@ -13,6 +13,16 @@ Native Apps, die die Weboberfläche nach und nach ersetzen. Der Server bleibt un
 
 Der Mac-Build wird lokal ad hoc signiert und braucht kein Apple-Konto.
 
+Ad hoc signiert merkt sich macOS die Antwort auf die Mikrofonfrage nur für genau diesen Build; jeder neue fragt wieder.
+Läuft der Ton über ein Gerät, das auch Eingänge hat (ein Audio-Interface wie Focusrite), fragt macOS schon beim ersten
+Abspielen, weil Core Audio mit dem Ausgang auch die Eingangsseite öffnet; aufgenommen wird trotzdem nur auf
+„Aufnehmen“ hin. Mit dem eigenen Team signiert bleibt die Antwort über Builds hinweg, dafür in `Support/Local.xcconfig`:
+
+```
+DEVELOPMENT_TEAM = ABCDE12345
+CODE_SIGN_IDENTITY[sdk=macosx*] = Apple Development
+```
+
 ## iPhone
 
 Braucht ein Team (für mehr als 7 Tage Laufzeit, TestFlight, Push und CarPlay das Apple Developer Program). Das Repo

@@ -174,7 +174,7 @@
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Tonwerk-AI spielt Spuren auf Bluetooth-MIDI-Instrumenten.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Tonwerk-AI verbindet sich mit deinem Tonwerk-Server im lokalen Netz.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Tonwerk-AI nimmt im Sprachlabor eine Stimme auf, die die Sprachmodelle nachsprechen.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Tonwerk-AI nimmt deine Stimme nur auf, wenn du im Sprachlabor oder beim Singen „Aufnehmen“ wählst: als Vorlage für die Sprachmodelle oder als eigene Singstimme.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
@@ -270,7 +270,7 @@
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Tonwerk-AI spielt Spuren auf Bluetooth-MIDI-Instrumenten.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Tonwerk-AI verbindet sich mit deinem Tonwerk-Server im lokalen Netz.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Tonwerk-AI nimmt im Sprachlabor eine Stimme auf, die die Sprachmodelle nachsprechen.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Tonwerk-AI nimmt deine Stimme nur auf, wenn du im Sprachlabor oder beim Singen „Aufnehmen“ wählst: als Vorlage für die Sprachmodelle oder als eigene Singstimme.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (

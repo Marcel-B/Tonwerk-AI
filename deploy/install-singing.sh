@@ -16,9 +16,11 @@ REPOSITORY=https://github.com/Soul-AILab/SoulX-Singer.git
 REF=81aeb3ae772c70093c3de74dc23c92d983801ae4
 WEIGHTS=https://huggingface.co/Soul-AILab/SoulX-Singer/resolve/main/model.pt
 # transformers 4.41 is what SoulX-Singer's decoder layers were written against; later ones changed their arguments.
-# numpy below 2 for librosa's and PyTorch 2.5's wheels.
+# numpy below 2 for librosa's and PyTorch 2.5's wheels. Not scipy 1.15: eight of its macOS arm64 extensions
+# (PROPACK, ODE solvers, COBYLA; Fortran linked without an SDK version) have a __thread_bss with a file offset, which
+# macOS 27's loader refuses ("zero-fill section type, but offset field is not zero"); 1.14 and 1.16 have none.
 PACKAGES="torch==2.5.1 torchaudio==2.5.1 transformers==4.41.2 accelerate==1.11.0 omegaconf==2.3.0 einops==0.8.2
-librosa==0.11.0 scipy==1.15.3 numpy<2 soundfile==0.13.1 g2p_en==2.1.0 nltk==3.9.2 tqdm==4.70.1"
+librosa==0.11.0 scipy==1.16.3 numpy<2 soundfile==0.13.1 g2p_en==2.1.0 nltk==3.9.2 tqdm==4.70.1"
 
 # The server says where it looks; without a running server, its defaults.
 INFO="$(curl -fsS "$URL/api/singing" 2>/dev/null || true)"

@@ -141,6 +141,50 @@ public sealed class WritingTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync($"/api/writing/{chat}")).StatusCode);
     }
 
+    [Fact]
+    public async Task How_much_to_think_goes_to_the_native_chat_with_the_conversation_as_text()
+    {
+        var chat = await NewChat();
+        _app.LmStudio.Answer = "Schmerz, März";
+        await Send(chat, "Ein Reim auf Herz");
+        await Answered(chat, 2);
+
+        _app.LmStudio.StreamReasoning = "Silben zählen";
+        _app.LmStudio.Answer = "Scherz";
+        var reply = await Client.PostAsJsonAsync($"/api/writing/{chat}/messages", new { text = "Noch einer?", reasoning = "off" });
+        Assert.Equal("off", (string?)(await reply.Content.ReadFromJsonAsync<JsonObject>())!["reasoning"]);
+        var done = await Answered(chat, 4);
+
+        Assert.Equal("Scherz", (string?)done["messages"]![3]!["text"]);
+        Assert.Equal("off", (string?)done["reasoning"]);
+        var native = Assert.Single(_app.LmStudio.Requests, r => r.Path == "/api/v1/chat").Body!;
+        Assert.Equal("off", (string?)native["reasoning"]);
+        Assert.False((bool?)native["store"]);
+        Assert.True((bool?)native["stream"]);
+        Assert.Contains("songwriting partner", (string?)native["system_prompt"], StringComparison.Ordinal);
+        var input = (string)native["input"]!;
+        Assert.Contains("<songwriter>\nEin Reim auf Herz\n</songwriter>", input, StringComparison.Ordinal);
+        Assert.Contains("<you>\nSchmerz, März\n</you>", input, StringComparison.Ordinal);
+        Assert.EndsWith("Noch einer?", input, StringComparison.Ordinal);
+        // The first answer, without a choice, went the usual way.
+        Assert.Single(_app.LmStudio.Requests, r => r.Path == "/v1/chat/completions");
+    }
+
+    [Fact]
+    public async Task A_model_that_cannot_be_steered_answers_the_usual_way()
+    {
+        _app.LmStudio.RefusesReasoning = true;
+        _app.LmStudio.Answer = "Schmerz";
+        var chat = await NewChat();
+
+        await Client.PostAsJsonAsync($"/api/writing/{chat}/messages", new { text = "Ein Reim auf Herz", reasoning = "low" });
+        var done = await Answered(chat, 2);
+
+        Assert.Equal("Schmerz", (string?)done["messages"]![1]!["text"]);
+        Assert.Single(_app.LmStudio.Requests, r => r.Path == "/api/v1/chat");
+        Assert.Single(_app.LmStudio.Requests, r => r.Path == "/v1/chat/completions");
+    }
+
     private async Task<string> NewChat()
     {
         var response = await Client.PostAsJsonAsync("/api/writing", new { });

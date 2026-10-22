@@ -80,6 +80,17 @@ private struct WritingSessionView: View {
                 }
                 .labelsHidden()
                 .frame(maxWidth: 280)
+                // Steered through LM Studio's native chat; a model that cannot be answers as set there.
+                Picker("Nachdenken", selection: $session.reasoning) {
+                    Text("Denken: wie in LM Studio").tag("")
+                    Text("Denken: aus").tag(Components.Schemas.LyricsReasoning.off.rawValue)
+                    Text("Denken: wenig").tag(Components.Schemas.LyricsReasoning.low.rawValue)
+                    Text("Denken: mittel").tag(Components.Schemas.LyricsReasoning.medium.rawValue)
+                    Text("Denken: viel").tag(Components.Schemas.LyricsReasoning.high.rawValue)
+                    Text("Denken: an").tag(Components.Schemas.LyricsReasoning.on.rawValue)
+                }
+                .labelsHidden()
+                .fixedSize()
             }
             Menu {
                 if session.chat != nil {

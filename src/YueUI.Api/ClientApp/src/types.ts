@@ -1110,6 +1110,7 @@ export interface WritingReply {
   chatId: string
   stage: WritingStage
   model: string
+  reasoning?: LyricsReasoning | null
   text: string
   /** The model is thinking before (or between) its words. */
   thinking: boolean
@@ -1122,6 +1123,7 @@ export interface WritingChat {
   id: string
   title: string
   model?: string | null
+  reasoning?: LyricsReasoning | null
   messages: WritingMessage[]
   createdAt: string
   updatedAt: string

@@ -112,6 +112,108 @@ public sealed class LmStudio(
     }
 
     /// <summary>
+    /// Asks <see cref="LoadedModel"/> through LM Studio's native chat API, streamed, the only one of its APIs that
+    /// takes <c>reasoning</c>. It takes no earlier answers either, so a conversation goes in as text (see
+    /// <c>WritingDesk.Transcript</c>). Nothing is stored in LM Studio.
+    /// </summary>
+    /// <returns>The answer, or null if LM Studio refused the request (a setting the model does not support, a version
+    /// without this API), so that the caller asks the OpenAI-compatible way instead.</returns>
+    /// <exception cref="LyricsUnavailableException">LM Studio failed or stopped answering.</exception>
+    public static async Task<ChatAnswer?> StreamNativeChatAsync(
+        LoadedModel loaded, string systemPrompt, string input, double temperature, int maxTokens, LyricsReasoning reasoning,
+        Action<string, bool>? onPiece, ILogger logger, CancellationToken cancellationToken)
+    {
+        var request = new JsonObject
+        {
+            ["model"] = loaded.Instance,
+            ["system_prompt"] = systemPrompt,
+            ["input"] = input,
+            ["temperature"] = temperature,
+            ["max_output_tokens"] = maxTokens,
+            ["reasoning"] = reasoning.ToString().ToLowerInvariant(),
+            ["store"] = false,
+            ["stream"] = true,
+        };
+        using var message = new HttpRequestMessage(HttpMethod.Post, "api/v1/chat") { Content = Body(request) };
+        HttpResponseMessage response;
+        try
+        {
+            response = await loaded.Http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new LyricsUnavailableException($"LM Studio stopped answering: {exception.Message}");
+        }
+        using (response)
+        {
+            if ((int)response.StatusCode is >= 400 and < 500)
+            {
+                var refused = await ReadAsync(response, cancellationToken);
+                logger.LogWarning("LM Studio refused reasoning {Reasoning} for {Model} ({Status}: {Error}); asking without it",
+                    request["reasoning"], loaded.Model, (int)response.StatusCode, ErrorOf(refused));
+                return null;
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                var json = await ReadAsync(response, cancellationToken);
+                throw new LyricsUnavailableException($"LM Studio refused ({(int)response.StatusCode}): {ErrorOf(json)}");
+            }
+            var content = new System.Text.StringBuilder();
+            var reasoningText = new System.Text.StringBuilder();
+            string? error = null;
+            var ended = false;
+            try
+            {
+                using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(cancellationToken));
+                while (!ended && await reader.ReadLineAsync(cancellationToken) is { } line)
+                {
+                    if (!line.StartsWith("data:", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+                    JsonNode? data;
+                    try
+                    {
+                        data = JsonNode.Parse(line[5..].Trim());
+                    }
+                    catch (System.Text.Json.JsonException)
+                    {
+                        continue;
+                    }
+                    // Every event names itself in its data as well as in its event: line.
+                    switch (data?["type"]?.ToString())
+                    {
+                        case "reasoning.delta" when data["content"]?.ToString() is { Length: > 0 } piece:
+                            reasoningText.Append(piece);
+                            onPiece?.Invoke(piece, true);
+                            break;
+                        case "message.delta" when data["content"]?.ToString() is { Length: > 0 } said:
+                            content.Append(said);
+                            onPiece?.Invoke(said, false);
+                            break;
+                        // An error does not end the stream; chat.end still follows with what was written.
+                        case "error":
+                            error = data["error"]?["message"]?.ToString() ?? data["error"]?.ToString();
+                            break;
+                        case "chat.end":
+                            ended = true;
+                            break;
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is IOException or HttpRequestException)
+            {
+                throw new LyricsUnavailableException($"LM Studio stopped answering: {exception.Message}");
+            }
+            if (content.Length == 0 && error is not null)
+            {
+                throw new LyricsUnavailableException($"LM Studio: {error}");
+            }
+            return new ChatAnswer(content.ToString(), reasoningText.ToString(), null);
+        }
+    }
+
+    /// <summary>
     /// Stops an idle YuE worker (24 or 32 GB do not hold YuE2 beside a large text model), makes sure the server
     /// answers and loads <paramref name="model"/>. The caller holds <see cref="Memory.LargeModel.Lyrics"/> before.
     /// Disposing the result unloads the model if it was loaded here.

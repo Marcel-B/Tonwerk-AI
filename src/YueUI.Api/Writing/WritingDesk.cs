@@ -143,7 +143,7 @@ public sealed partial class WritingDesk(
     /// <summary>Adds the message to the chat and has the model answer it in the background.</summary>
     /// <exception cref="WritingBusyException">An answer is being written.</exception>
     /// <exception cref="KeyNotFoundException">There is no such chat.</exception>
-    public WritingReply Send(string chatId, string text, string? model)
+    public WritingReply Send(string chatId, string text, string? model, LyricsReasoning? reasoning = null)
     {
         lock (_gate)
         {
@@ -153,14 +153,14 @@ public sealed partial class WritingDesk(
                 Messages = [.. chat.Messages, new WritingMessage("user", text.Trim(), time.GetUtcNow())],
                 Title = chat.Title.Length > 0 ? chat.Title : TitleOf(text),
             });
-            return StartLocked(chat, model);
+            return StartLocked(chat, model, reasoning);
         }
     }
 
     /// <summary>Drops the last answer and has the model write it again, for another variant.</summary>
     /// <exception cref="WritingBusyException">An answer is being written.</exception>
     /// <exception cref="KeyNotFoundException">There is no such chat, or nothing to answer in it.</exception>
-    public WritingReply Retry(string chatId, string? model)
+    public WritingReply Retry(string chatId, string? model, LyricsReasoning? reasoning = null)
     {
         lock (_gate)
         {
@@ -174,7 +174,7 @@ public sealed partial class WritingDesk(
             {
                 throw new KeyNotFoundException("There is nothing to answer.");
             }
-            return StartLocked(Save(chat with { Messages = messages }), model);
+            return StartLocked(Save(chat with { Messages = messages }), model, reasoning);
         }
     }
 
@@ -224,7 +224,7 @@ public sealed partial class WritingDesk(
         return chat;
     }
 
-    private WritingReply StartLocked(WritingChat chat, string? model)
+    private WritingReply StartLocked(WritingChat chat, string? model, LyricsReasoning? reasoning)
     {
         var chosen = !string.IsNullOrWhiteSpace(model) ? model.Trim() : chat.Model ?? DefaultModel;
         var reply = new WritingReply
@@ -232,6 +232,7 @@ public sealed partial class WritingDesk(
             Id = Guid.NewGuid().ToString("N")[..12],
             ChatId = chat.Id,
             Model = chosen,
+            Reasoning = reasoning,
             Stage = "waiting",
             UpdatedAt = time.GetUtcNow(),
         };
@@ -271,13 +272,8 @@ public sealed partial class WritingDesk(
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(stopped);
             limit.CancelAfter(settings.Timeout);
             var (messages, promptTokens) = Conversation(chat, _loaded.Context);
-            var request = new JsonObject
-            {
-                ["messages"] = messages,
-                ["temperature"] = settings.Temperature,
-                ["max_tokens"] = Math.Max(1024, _loaded.Context - promptTokens),
-            };
-            var answer = await LmStudio.StreamChatAsync(_loaded, request, (piece, thinking) =>
+            var maxTokens = Math.Max(1024, _loaded.Context - promptTokens);
+            void Heard(string piece, bool thinking)
             {
                 if (!thinking)
                 {
@@ -290,7 +286,23 @@ public sealed partial class WritingDesk(
                     var shown = Visible(text.ToString());
                     reply = Publish(reply with { Text = shown.Text, Thinking = thinking || shown.Thinking });
                 }
-            }, limit.Token);
+            }
+            // Only the native API takes how much to think; a model that cannot be steered so answers the usual way.
+            var answer = reply.Reasoning is { } effort
+                ? await LmStudio.StreamNativeChatAsync(
+                    _loaded, SystemPrompt, Transcript(messages), settings.Temperature, maxTokens, effort, Heard, logger, limit.Token)
+                : null;
+            if (answer is null)
+            {
+                text.Clear();
+                var request = new JsonObject
+                {
+                    ["messages"] = messages,
+                    ["temperature"] = settings.Temperature,
+                    ["max_tokens"] = maxTokens,
+                };
+                answer = await LmStudio.StreamChatAsync(_loaded, request, Heard, limit.Token);
+            }
             var final = Visible(answer.Content).Text;
             if (final.Length == 0)
             {
@@ -357,6 +369,34 @@ public sealed partial class WritingDesk(
         return (messages, tokens + 64);
     }
 
+    /// <summary>
+    /// The conversation as one text for LM Studio's native chat, which takes no earlier answers: the messages before
+    /// the last in tags, then the last as it is. A first message goes in alone.
+    /// </summary>
+    internal static string Transcript(JsonArray messages)
+    {
+        var turns = messages
+            .Select(m => (Role: m?["role"]?.ToString() ?? "", Text: m?["content"]?.ToString() ?? ""))
+            .Where(m => m.Role is "user" or "assistant")
+            .ToList();
+        if (turns.Count == 0)
+        {
+            return "";
+        }
+        if (turns.Count == 1)
+        {
+            return turns[0].Text;
+        }
+        var text = new StringBuilder("Our conversation so far:\n\n");
+        foreach (var (role, said) in turns[..^1])
+        {
+            var tag = role == "user" ? "songwriter" : "you";
+            text.Append('<').Append(tag).Append(">\n").Append(said.Trim()).Append("\n</").Append(tag).Append(">\n\n");
+        }
+        text.Append("The songwriter's new message, to answer now:\n\n").Append(turns[^1].Text);
+        return text.ToString();
+    }
+
     internal const string SystemPrompt =
         """
         You are a songwriting partner. The songwriter makes songs with YuE2, a model that sings given lyrics to a style
@@ -384,6 +424,7 @@ public sealed partial class WritingDesk(
                 Save(chat with
                 {
                     Model = reply.Model,
+                    Reasoning = reply.Reasoning,
                     Messages = text is { Length: > 0 }
                         ? [.. chat.Messages, new WritingMessage("assistant", text, time.GetUtcNow(), reply.Model, stopped)]
                         : chat.Messages,

@@ -46,7 +46,11 @@ export async function referenceJpeg(file: Blob, pixels = 1_000_000): Promise<Blo
     }
     context.drawImage(image, 0, 0, canvas.width, canvas.height)
     return await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('The picture could not be encoded.'))), 'image/jpeg', 0.9),
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('The picture could not be encoded.'))),
+        'image/jpeg',
+        0.9,
+      ),
     )
   } finally {
     URL.revokeObjectURL(url)

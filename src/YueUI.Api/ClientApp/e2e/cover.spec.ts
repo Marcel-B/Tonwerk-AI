@@ -24,6 +24,7 @@ test.beforeEach(({ api }) => {
         available: true,
         lettering: false,
         loras: true,
+        references: 4,
       },
     ],
   }))
@@ -98,4 +99,36 @@ test('LoRAs of the chosen model go with the picture at their strength', async ({
     loras: { name: string; strength: number }[]
   }
   expect(body.loras).toEqual([{ name: 'MetroRose', strength: 0.95 }])
+})
+
+test('a cover style brings its sentence and pictures, which go with the picture as references', async ({
+  page,
+  api,
+}) => {
+  api.answers.set('GET /api/cover-styles', () => [
+    {
+      id: 7,
+      name: 'Nachtzug-Look',
+      prompt: 'Neon rain on wet asphalt.',
+      model: null,
+      loras: [],
+      images: [{ id: 'ab'.repeat(16), role: 'figure' }],
+      createdAt: '2026-10-22T12:00:00Z',
+      updatedAt: '2026-10-22T12:00:00Z',
+    },
+  ])
+  await page.goto('#/songs')
+  await page.getByRole('button', { name: 'Weitere Aktionen' }).first().click()
+  await page.getByRole('menuitem', { name: 'Cover malen' }).click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByText('FLUX.2 Klein 4B schaut sich bis zu 4 Bilder an')).toBeVisible()
+  await dialog.getByRole('combobox', { name: 'Cover-Stil' }).click()
+  await page.getByRole('option', { name: 'Nachtzug-Look' }).click()
+  await expect(dialog.getByRole('textbox')).toHaveValue(/Neon rain on wet asphalt\.$/)
+
+  await dialog.getByRole('button', { name: 'Malen' }).click()
+  await expect.poll(() => api.callsTo('POST', '/api/songs/run-1/song1/images').length).toBe(1)
+  const body = api.callsTo('POST', '/api/songs/run-1/song1/images')[0]!.body as { references: unknown[] }
+  expect(body.references).toEqual([{ source: 'style', id: `7/${'ab'.repeat(16)}`, role: 'figure', strength: null }])
 })

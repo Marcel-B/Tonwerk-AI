@@ -6,7 +6,8 @@ pins mlx, transformers and torch versions the others do not share, and flux3-mlx
 In: one JSON object on stdin
     {"runner": "mflux" | "flux3-mlx", "model": "flux2-klein-4b", "quantize": 8 | null, "steps": 4,
      "upsampler": "4bit" | null, "contentFilter": false, "prompt": "...", "seed": 42,
-     "width": 1024, "height": 1024, "output": "/abs/picture.jpg"}
+     "width": 1024, "height": 1024, "output": "/abs/picture.jpg",
+     "loras": [{"path": "/abs/style.safetensors", "strength": 1.0}]}
 Out: the picture as JPEG at "output", and lines starting with "YUEUI " on stdout, each a JSON event:
     {"event": "stage", "stage": "loading" | "painting", "fraction": 0.5}
     {"event": "done", "loadSeconds": 12.3, "paintSeconds": 30.1, "peakMemoryGb": 8.9, "paintedPrompt": "..." | null}
@@ -74,7 +75,14 @@ def load_mflux(request: dict):
         from mflux.models.krea2 import Krea2 as Model
     else:
         from mflux.models.flux2.variants import Flux2Klein as Model
-    return Model(model_config=ModelConfig.from_name(name), quantize=request.get("quantize"))
+    # LoRAs are applied when the weights load (mflux bakes them into the quantized layers), one strength each.
+    loras = request.get("loras") or []
+    return Model(
+        model_config=ModelConfig.from_name(name),
+        quantize=request.get("quantize"),
+        lora_paths=[lora["path"] for lora in loras] or None,
+        lora_scales=[float(lora["strength"]) for lora in loras] or None,
+    )
 
 
 def paint_mflux(model, request: dict, steps: int):
@@ -130,6 +138,9 @@ def flagged(image) -> bool:
 def main() -> int:
     request = json.load(sys.stdin)
     flux3 = request.get("runner") == "flux3-mlx"
+    if flux3 and request.get("loras"):
+        print("Error: FLUX 3 Klein takes no LoRAs; flux3-mlx has no loader for them.", flush=True)
+        return 1
     steps = int(request.get("steps") or 4)
     emit({"event": "stage", "stage": "loading", "fraction": 0})
     started = time.perf_counter()

@@ -109,6 +109,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeLoki Loki { get; } = new();
 
+    public FakeHuggingFace HuggingFace { get; } = new();
+
     /// <summary>Where the fake Loki is expected; null (the default) leaves shipping the log off.</summary>
     public string? LokiUrl { get; set; }
 
@@ -310,6 +312,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.Loki.BatchDelay = TimeSpan.FromMilliseconds(10);
             });
             services.AddHttpClient(Monitoring.LokiShipper.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeLoki.Handler(Loki));
+            services.AddHttpClient(YueUI.Api.Images.ImageLoraLibrary.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeHuggingFace.Handler(HuggingFace));
             if (_fakeWorker)
             {
                 services.AddSingleton<IWorkerLauncher>(Launcher);
@@ -1522,6 +1525,30 @@ public sealed class FakeLoki
                 loki._pushes.Add((request.RequestUri!.AbsolutePath, body));
             }
             return new HttpResponseMessage(HttpStatusCode.NoContent);
+        }
+    }
+}
+
+/// <summary>Hugging Face's file downloads: answers the files a test puts in, 404 for others.</summary>
+public sealed class FakeHuggingFace
+{
+    /// <summary>By path, e.g. <c>/krea/Krea-2-LoRA-neondrip/resolve/main/neondrip.safetensors</c>.</summary>
+    public Dictionary<string, byte[]> Files { get; } = [];
+
+    public List<string> Requests { get; } = [];
+
+    public sealed class Handler(FakeHuggingFace hub) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            lock (hub)
+            {
+                hub.Requests.Add(path);
+                return Task.FromResult(hub.Files.TryGetValue(path, out var bytes)
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) }
+                    : new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
         }
     }
 }

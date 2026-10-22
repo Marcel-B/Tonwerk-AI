@@ -35,7 +35,8 @@ public static class ImageEndpoints
                         machines.CanRun(Machines.Engines.ImageModel(m.Id), null, unavailable is null),
                         unavailable,
                         m.Lettering,
-                        m.MinSystemGb);
+                        m.MinSystemGb,
+                        m.TakesLoras);
                 })],
                 translator.Configured,
                 options.Value.ResolvedFlux3Python))
@@ -102,6 +103,7 @@ public static class ImageEndpoints
         SongLibrary library,
         ImageMaker images,
         IImageEngine engine,
+        ImageLoraLibrary loras,
         Machines.Machines machines,
         IOptions<ImageOptions> options)
     {
@@ -126,6 +128,42 @@ public static class ImageEndpoints
             errors["seed"] = [$"From 0 to {uint.MaxValue}."];
         }
         machines.TryNormalize(request.Machine, out var machine, errors);
+        var used = new List<ImageLoraUsed>();
+        if (request.Loras is { Count: > 0 } chosen && model is not null)
+        {
+            if (!model.TakesLoras)
+            {
+                errors["loras"] = [$"{model.Label} takes no LoRAs."];
+            }
+            else if (chosen.Count > ImageLoraLibrary.MaxPerPicture)
+            {
+                errors["loras"] = [$"At most {ImageLoraLibrary.MaxPerPicture}."];
+            }
+            else
+            {
+                foreach (var choice in chosen.DistinctBy(c => c.Name))
+                {
+                    if (loras.Get(choice.Name) is not { } lora)
+                    {
+                        errors["loras"] = [$"There is no LoRA {choice.Name}."];
+                    }
+                    else if (lora.Model != model.Id)
+                    {
+                        errors["loras"] = [lora.Model is null
+                            ? $"{lora.Label}: choose the model it was made for first."
+                            : $"{lora.Label} was made for another model, not {model.Label}."];
+                    }
+                    else if (choice.Strength is < 0 or > ImageLoraLibrary.MaxStrength)
+                    {
+                        errors["loras"] = [$"A strength from 0 to {ImageLoraLibrary.MaxStrength}."];
+                    }
+                    else
+                    {
+                        used.Add(new ImageLoraUsed(lora.Name, lora.Label, choice.Strength ?? lora.Strength, lora.Trigger));
+                    }
+                }
+            }
+        }
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -145,7 +183,7 @@ public static class ImageEndpoints
         }
         // The runners seed MLX's generator, which takes 32 bits.
         var seed = request.Seed ?? Random.Shared.NextInt64(0, (long)uint.MaxValue + 1);
-        var image = images.Enqueue($"{run}/{song}", library.TitleOf(run, directory), model!, prompt, seed, machine);
+        var image = images.Enqueue($"{run}/{song}", library.TitleOf(run, directory), model!, prompt, seed, machine, used);
         return Results.Accepted($"/api/images/{image.Id}", image);
     }
 }

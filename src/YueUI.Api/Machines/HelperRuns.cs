@@ -215,7 +215,7 @@ public sealed class HelperRuns(
             {
                 Engines.Lyrics => await LyricsAsync(Parse<LyricsHelperJob>(job), cancellationToken),
                 Engines.Speech => await SpeechAsync(Parse<SpeechHelperJob>(job), files, outputs, Send, cancellationToken),
-                Engines.Images => await ImagesAsync(Parse<ImageHelperJob>(job), outputs, Send, cancellationToken),
+                Engines.Images => await ImagesAsync(Parse<ImageHelperJob>(job), files, outputs, Send, cancellationToken),
                 Engines.Ace => await AceAsync(Parse<AceHelperJob>(job), files, outputs, Send, cancellationToken),
                 Engines.Singing => await SingingAsync(Parse<SingingHelperJob>(job), files, outputs, Send, cancellationToken),
                 Engines.Stems => await StemsAsync(Parse<StemsHelperJob>(job), files, outputs, cancellationToken),
@@ -263,12 +263,20 @@ public sealed class HelperRuns(
         return JsonSerializer.SerializeToNode(result, HelperClient.Json);
     }
 
-    private async Task<JsonNode?> ImagesAsync(ImageHelperJob job, string outputs, Action<HelperEvent> send, CancellationToken cancellationToken)
+    private async Task<JsonNode?> ImagesAsync(
+        ImageHelperJob job,
+        IReadOnlyDictionary<string, string> files,
+        string outputs,
+        Action<HelperEvent> send,
+        CancellationToken cancellationToken)
     {
         var model = services.GetRequiredService<IOptions<ImageOptions>>().Value.ResolvedModels.FirstOrDefault(m => m.Id == job.Model)
             ?? throw new HelperException($"The image model {job.Model} is not offered on this Mac.", StatusCodes.Status400BadRequest);
+        var loras = (job.Loras ?? []).Select((strength, index) => new ImageLoraFile(
+            files.GetValueOrDefault($"lora{index}") ?? throw new HelperException($"LoRA {index} is missing.", StatusCodes.Status400BadRequest),
+            strength)).ToList();
         var result = await services.GetRequiredService<IImageEngine>().PaintAsync(
-            new ImageJob(model, job.Prompt, job.Seed, job.Width, job.Height, Path.Combine(outputs, "image.jpg")),
+            new ImageJob(model, job.Prompt, job.Seed, job.Width, job.Height, Path.Combine(outputs, "image.jpg"), loras),
             (stage, share) => send(new HelperEvent("progress", Stage: stage, Share: Math.Round(share, 3))),
             cancellationToken);
         return JsonSerializer.SerializeToNode(result, HelperClient.Json);

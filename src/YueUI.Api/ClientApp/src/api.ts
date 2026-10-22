@@ -51,6 +51,9 @@ import type {
   VideoState,
   MediaInfo,
   ImageInfo,
+  ImageLora,
+  ImageLoraChoice,
+  ImageLoraList,
   ImageState,
   AceInfo,
   AceJob,
@@ -907,9 +910,42 @@ export async function listImages(songId: string): Promise<ImageState[]> {
 /** Queues a picture; its progress arrives as `image` events. Without a seed the server picks one. */
 export async function paintImage(
   songId: string,
-  request: { prompt: string; model: string; seed?: number; machine?: string | null },
+  request: { prompt: string; model: string; seed?: number; machine?: string | null; loras?: ImageLoraChoice[] },
 ): Promise<ImageState> {
   return (await send(`/api/songs/${songId}/images`, json('POST', request))).json() as Promise<ImageState>
+}
+
+/** The image models' LoRAs on the Mac, and Krea's not fetched yet. */
+export async function listImageLoras(): Promise<ImageLoraList> {
+  return (await send('/api/image-loras')).json() as Promise<ImageLoraList>
+}
+
+/** A `.safetensors` file of one's own; the server reads the model it fits from its header where it can. */
+export async function uploadImageLora(file: File, model: string | null): Promise<ImageLora> {
+  const form = new FormData()
+  form.append('file', file, file.name)
+  if (model) {
+    form.append('model', model)
+  }
+  return (await send('/api/image-loras', { method: 'POST', body: form })).json() as Promise<ImageLora>
+}
+
+/** Downloads one of the suggestions; null when it is already on its way. */
+export async function fetchImageLora(name: string): Promise<ImageLora | null> {
+  const response = await send(`/api/image-loras/suggestions/${encodeURIComponent(name)}`, { method: 'POST' })
+  return response.status === 202 ? null : ((await response.json()) as ImageLora)
+}
+
+/** What is null stays as it is; an empty text clears it. */
+export async function updateImageLora(
+  name: string,
+  update: { label?: string | null; model?: string | null; trigger?: string | null; strength?: number | null },
+): Promise<ImageLora> {
+  return (await send(`/api/image-loras/${encodeURIComponent(name)}`, json('PUT', update))).json() as Promise<ImageLora>
+}
+
+export async function deleteImageLora(name: string): Promise<void> {
+  await send(`/api/image-loras/${encodeURIComponent(name)}`, { method: 'DELETE' })
 }
 
 export function imageUrl(id: string): string {

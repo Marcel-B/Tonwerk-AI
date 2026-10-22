@@ -66,8 +66,9 @@ extension CoverPhoto {
 enum CoverPrompt {
     /// A description from the song's title and style, as `images.ts` `suggestPrompt` writes it. English, since Klein
     /// reads it through Qwen3; only what should be seen, since distilled Klein has no negative prompt and draws what a
-    /// prompt names ("no text" brings text). Tempo and vocal parts of the style have nothing to show.
-    static func suggest(title: String, style: String, withTitle: Bool) -> String {
+    /// prompt names ("no text" brings text). Tempo and vocal parts of the style have nothing to show. Chosen cover
+    /// blocks follow the mood; with a medium among them the first sentence stops saying painting, which would fight it.
+    static func suggest(title: String, style: String, withTitle: Bool, blocks: [String] = []) -> String {
         let skipped = try! NSRegularExpression(
             pattern: "\\d|bpm|tempo|vocal|voice|singer|sung|lyrics|language", options: .caseInsensitive)
         let mood = style.split(separator: ",", omittingEmptySubsequences: false)
@@ -79,11 +80,14 @@ enum CoverPrompt {
             }
             .joined(separator: ", ")
         var sentences = [
-            "A square painting, one striking scene with a strong central motif, rich colour and dramatic light, painterly, high detail."
+            CoverBlocks.hasMedium(blocks)
+                ? "A square picture, one striking scene with a strong central motif, high detail."
+                : "A square painting, one striking scene with a strong central motif, rich colour and dramatic light, painterly, high detail."
         ]
         if !mood.isEmpty {
             sentences.append("Its mood and colours evoke \(mood) music.")
         }
+        sentences += CoverBlocks.sentences(blocks)
         if withTitle && !title.isEmpty {
             sentences.append("The words \"\(title)\" are written once in elegant, legible lettering.")
         }
@@ -130,13 +134,15 @@ extension AppModel {
         (try? await tonwerk?.api.listSongImages(path: .init(run: song.run, song: song.name)).ok.body.json) ?? []
     }
 
-    func paint(_ song: Song, prompt: String, model: String, machine: String = "") async throws
-        -> Components.Schemas.ImageState
+    func paint(_ song: Song, prompt: String, model: String, machine: String = "", loras: [ImageLoras.Choice] = [])
+        async throws -> Components.Schemas.ImageState
     {
         guard let tonwerk else { throw ServerError(String(localized: "Kein Server verbunden.")) }
         switch try await tonwerk.api.createSongImage(
             path: .init(run: song.run, song: song.name),
-            body: .json(.init(prompt: prompt, model: model, seed: nil, machine: machine.isEmpty ? nil : machine)))
+            body: .json(.init(
+                prompt: prompt, model: model, seed: nil, machine: machine.isEmpty ? nil : machine,
+                loras: loras.isEmpty ? nil : loras.map { .init(name: $0.name, strength: $0.strength) })))
         {
         case .accepted(let accepted):
             let image = try accepted.body.json
@@ -324,6 +330,7 @@ struct PaintCoverView: View {
     @AppStorage("imageWithTitle") private var withTitle = false
     /// The Mac that paints; empty lets the server choose.
     @AppStorage("imageMachine") private var machine = ""
+    @AppStorage("coverBlocksOpen") private var blocksOpen = true
     @State private var prompt = ""
     /// Whether the description is still the suggestion, so that the title switch may rewrite it.
     @State private var suggested = true
@@ -333,6 +340,8 @@ struct PaintCoverView: View {
     @State private var taking: String?
     @State private var message: String?
     @State private var failed = false
+    /// The LoRAs for the next picture; `CoverLorasSection` drops those that do not fit the model.
+    @State private var loras: [ImageLoras.Choice] = []
 
     var body: some View {
         NavigationStack {
@@ -346,6 +355,9 @@ struct PaintCoverView: View {
                 }
                 describe
                 modelSection
+                if let info, !info.models.isEmpty {
+                    CoverLorasSection(chosen: $loras, imageModel: chosen, models: info.models)
+                }
                 Section { start }
                 if !candidates.isEmpty {
                     Section {
@@ -377,8 +389,18 @@ struct PaintCoverView: View {
         #endif
     }
 
-    private var suggestion: String {
-        CoverPrompt.suggest(title: song.title, style: song.style, withTitle: withTitle)
+    private var suggestion: String { suggestion(for: prompt) }
+
+    /// The suggestion with the blocks `text` holds, so that choosing blocks keeps a description the suggestion.
+    private func suggestion(for text: String) -> String {
+        CoverPrompt.suggest(
+            title: song.title, style: song.style, withTitle: withTitle, blocks: CoverBlocks.blocks(in: text))
+    }
+
+    /// A block in or out; a description still the suggestion is written anew, so a medium can replace "painting".
+    private func toggle(_ key: String) {
+        let next = CoverBlocks.toggle(key, in: prompt)
+        prompt = suggested ? suggestion(for: next) : next
     }
 
     private var chosen: Components.Schemas.ImageModelInfo? {
@@ -409,6 +431,10 @@ struct PaintCoverView: View {
                 .lineLimit(4...10)
                 .onChange(of: prompt) { suggested = prompt == suggestion }
             Toggle("Titel ins Bild schreiben", isOn: $withTitle)
+            DisclosureGroup("Bausteine", isExpanded: $blocksOpen) {
+                CoverBlocksView(chosen: CoverBlocks.blocks(in: prompt), songStyle: song.style, toggle: toggle)
+                    .padding(.top, 4)
+            }
         } header: {
             HStack {
                 CardHeading("Bildbeschreibung", systemImage: "text.quote")
@@ -505,8 +531,7 @@ struct PaintCoverView: View {
             picture(image)
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text(([image.modelLabel, "Seed \(image.seed.map(String.init) ?? "–")", model.ranOnNote(image.ranOn)]
-                as [String?]).compactMap { $0 }.joined(separator: " · "))
+            Text(Self.note(of: image, ranOn: model.ranOnNote(image.ranOn)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -586,7 +611,18 @@ struct PaintCoverView: View {
         }
     }
 
-    static func stage(of image: Components.Schemas.ImageState) -> String {
+    /// Model, LoRAs with their strengths, seed and where it ran, under the picture.
+    static func note(of image: Components.Schemas.ImageState, ranOn: String?) -> String {
+        var parts: [String?] = [image.modelLabel]
+        for lora in image.loras ?? [] {
+            parts.append("\(lora.label) \(lora.strength.formatted(.number.precision(.fractionLength(2))))")
+        }
+        parts.append("Seed \(image.seed.map(String.init) ?? "–")")
+        parts.append(ranOn)
+        return parts.compactMap { $0 }.joined(separator: " · ")
+    }
+
+        static func stage(of image: Components.Schemas.ImageState) -> String {
         switch image.stage ?? "" {
         case "painting": "\(Int(((image.fraction ?? 0) * 100).rounded())) %"
         case "loading": String(localized: "Lädt Modell")
@@ -613,7 +649,7 @@ struct PaintCoverView: View {
         message = nil
         Task {
             do {
-                let image = try await model.paint(song, prompt: prompt, model: modelId, machine: machine)
+                let image = try await model.paint(song, prompt: prompt, model: modelId, machine: machine, loras: loras)
                 loaded = [image] + loaded.filter { $0.id != image.id }
             } catch {
                 failed = true

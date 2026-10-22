@@ -156,6 +156,9 @@ builder.Services.AddHostedService(services => services.GetRequiredService<Singin
 builder.Services.Configure<ImageOptions>(builder.Configuration.GetSection(ImageOptions.Section));
 builder.Services.AddSingleton<IImageEngine, MfluxEngine>();
 builder.Services.AddSingleton<IPromptTranslator, ClaudePromptTranslator>();
+builder.Services.AddSingleton<ImageLoraLibrary>();
+// LoRAs from Hugging Face are a few hundred MB; the home line may take a while.
+builder.Services.AddHttpClient(ImageLoraLibrary.HttpClientName, client => client.Timeout = TimeSpan.FromHours(1));
 builder.Services.AddSingleton<ImageMaker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<ImageMaker>());
 // ACE-Step 1.5 through acestep.cpp: songs of a second engine, one job at a time, into a library folder of their own.
@@ -253,6 +256,7 @@ api.MapQueueEndpoints();
 api.MapSpeechEndpoints();
 api.MapSingingEndpoints();
 api.MapImageEndpoints();
+api.MapImageLoraEndpoints();
 api.MapAceEndpoints();
 api.MapSketchEndpoints();
 api.MapWritingEndpoints();

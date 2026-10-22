@@ -637,6 +637,22 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 30;
                     """);
             }
+            if (current < 31)
+            {
+                // What is known about the image models' LoRAs (Images/ImageLoras.cs): model, trigger, strength as JSON; the
+                // files lie in image-loras/.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE image_loras (
+                        name TEXT PRIMARY KEY,
+                        settings TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 31;
+                    """);
+            }
             _ready = true;
         }
     }

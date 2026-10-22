@@ -22,6 +22,7 @@ public sealed class ImageMaker(
     SqliteDatabase database,
     IImageEngine engine,
     IPromptTranslator translator,
+    ImageLoraLibrary loras,
     Machines.Machines machines,
     Machines.RemoteEngines remote,
     Status.StatusHub hub,
@@ -71,7 +72,9 @@ public sealed class ImageMaker(
     }
 
     /// <param name="machine">Where to paint, as <see cref="Machines.Machines.Normalize"/> stores it.</param>
-    public ImageState Enqueue(string songId, string? title, ImageModel model, string prompt, long seed, string? machine = null)
+    /// <param name="used">The LoRAs, as they are now, so that a later change to one leaves a waiting picture alone.</param>
+    public ImageState Enqueue(
+        string songId, string? title, ImageModel model, string prompt, long seed, string? machine = null, IReadOnlyList<ImageLoraUsed>? used = null)
     {
         var now = time.GetUtcNow();
         var image = new ImageState
@@ -84,6 +87,7 @@ public sealed class ImageMaker(
             Prompt = prompt,
             Seed = seed,
             Machine = machine,
+            Loras = used is { Count: > 0 } ? used : null,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -212,6 +216,9 @@ public sealed class ImageMaker(
                 image = Update(image, i => i with { PaintedPrompt = english });
             }
 
+            var files = (image.Loras ?? []).Select(l => new ImageLoraFile(
+                loras.PathFor(l.Name) ?? throw new ImageException($"The LoRA {l.Label} is no longer there."), l.Strength)).ToList();
+
             await using var placement = await machines.PlaceAsync(
                 LargeModel.Images, Machines.Engines.ImageModel(model.Id), image.Machine, options.Value.WaitInterval, cancel.Token,
                 engine.Unavailable(model) is null);
@@ -220,7 +227,7 @@ public sealed class ImageMaker(
             image = Update(image, i => i with { Stage = "loading", RanOn = placement.Name });
             var shown = 0.0;
             var result = await painter.PaintAsync(
-                new ImageJob(model, image.PaintedPrompt ?? image.Prompt, image.Seed, Size, Size, output),
+                new ImageJob(model, WithTriggers(image.PaintedPrompt ?? image.Prompt, image.Loras), image.Seed, Size, Size, output, files),
                 (stage, fraction) =>
                 {
                     if (stage != image.Stage || fraction - shown >= 0.1)
@@ -272,6 +279,24 @@ public sealed class ImageMaker(
                 logger.LogWarning(exception, "Could not delete {File}", output);
             }
         }
+    }
+
+    /// <summary>
+    /// The LoRAs' trigger words go last, after the translation, so that Claude cannot reword them: they were trained as
+    /// written, and Krea's model cards end the description with them the same way.
+    /// </summary>
+    public static string WithTriggers(string prompt, IReadOnlyList<ImageLoraUsed>? used)
+    {
+        var triggers = (used ?? []).Select(l => l.Trigger?.Trim().TrimEnd('.', ',')).OfType<string>()
+            .Where(t => t.Length > 0 && !prompt.Contains(t, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (triggers.Count == 0)
+        {
+            return prompt;
+        }
+        var text = prompt.TrimEnd();
+        return $"{text}{(text.Length > 0 && !".!?".Contains(text[^1]) ? "." : "")} {string.Join(", ", triggers).TrimEnd('.')}.";
     }
 
     /// <summary>Keeps the change unless the picture was deleted meanwhile, and tells the browsers.</summary>

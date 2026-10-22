@@ -149,4 +149,23 @@ final class CoverTests: XCTestCase {
         XCTAssertEqual(CoverReferences.withStyleText(first, previous: nil, next: "Neon rain."), first)
         XCTAssertEqual(CoverReferences.withStyleText(first, previous: "Neon rain.", next: nil), "A city at night.")
     }
+
+    func testTheViewerShowsEachTextOnceAndTheDetailsInOneLine() throws {
+        let json = Data("""
+            {"imageId": "i9", "modelId": "flux2-klein-4b", "modelLabel": "FLUX.2 Klein 4B",
+             "prompt": "Ein Zug bei Nacht", "paintedPrompt": "A train at night", "sentPrompt": "A train at night. metrorose.",
+             "seed": 42, "loras": [{"name": "MetroRose", "label": "MetroRose", "strength": 0.8, "trigger": "metrorose"}],
+             "references": [{"role": "figure", "label": "Kandidat"}], "createdAt": "2026-10-22T12:00:00Z"}
+            """.utf8)
+        let painting = ViewedImage.Painting(try JSONDecoder.tonwerk().decode(Components.Schemas.CoverPainting.self, from: json))
+
+        XCTAssertEqual(painting.texts.map(\.id), ["prompt", "english", "sent"])
+        XCTAssertTrue(painting.details.hasPrefix("FLUX.2 Klein 4B · MetroRose 0"))
+        XCTAssertTrue(painting.details.hasSuffix("Seed 42"))
+
+        var plain = painting
+        plain.paintedPrompt = "Ein Zug bei Nacht"
+        plain.sentPrompt = "Ein Zug bei Nacht"
+        XCTAssertEqual(plain.texts.map(\.id), ["prompt"])
+    }
 }

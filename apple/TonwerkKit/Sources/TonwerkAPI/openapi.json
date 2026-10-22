@@ -1165,6 +1165,44 @@
         }
       }
     },
+    "/api/songs/{run}/{song}/cover/painting": {
+      "get": {
+        "operationId": "GetSongCoverPainting",
+        "parameters": [
+          {
+            "name": "run",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "song",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoverPainting"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/transcriptions": {
       "get": {
         "operationId": "ListTranscriptions",
@@ -7607,6 +7645,70 @@
           }
         }
       },
+      "CoverPainting": {
+        "required": [
+          "imageId",
+          "modelId",
+          "modelLabel",
+          "prompt",
+          "paintedPrompt",
+          "sentPrompt",
+          "seed",
+          "loras",
+          "references",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "imageId": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "modelLabel": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "paintedPrompt": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sentPrompt": {
+            "type": "string"
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "loras": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ImageLoraUsed"
+            }
+          },
+          "references": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ImageReferenceUsed"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CoverStyle": {
         "required": [
           "id",
@@ -8375,6 +8477,12 @@
             "type": "string"
           },
           "paintedPrompt": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sentPrompt": {
             "type": [
               "null",
               "string"

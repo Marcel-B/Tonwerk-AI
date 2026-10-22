@@ -199,6 +199,7 @@ struct CoverEditor: View {
     @State private var importing = false
     @State private var painting: Song?
     @State private var confirmRemove = false
+    @State private var viewing: ViewedImage?
     @State private var working = false
     @State private var problem: String?
 
@@ -236,6 +237,7 @@ struct CoverEditor: View {
                     .accessibilityLabel("Cover")
                 }
                 .contextMenu { items }
+                .onTapGesture { viewCover() }
                 .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
             if let problem {
                 Label(problem, systemImage: "exclamationmark.triangle")
@@ -265,6 +267,14 @@ struct CoverEditor: View {
             Text("Der Song bekommt wieder das gezeichnete Cover.")
         }
         .paintSheet(for: $painting)
+        .imageViewer(for: $viewing)
+    }
+
+    /// The cover large, to share or save, with the text it was painted with when it was painted.
+    private func viewCover() {
+        guard let url = model.server.flatMap({ song.coverURL(on: $0) }) else { return }
+        viewing = ViewedImage(
+            url: url, fileName: AppModel.pictureName(song.displayTitle, "Cover"), title: song.displayTitle, coverOf: song)
     }
 
     @ViewBuilder
@@ -285,6 +295,11 @@ struct CoverEditor: View {
             Label("Cover malen …", systemImage: "paintbrush.pointed")
         }
         if ownCover {
+            Button {
+                viewCover()
+            } label: {
+                Label("Groß ansehen", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
             Divider()
             Button(role: .destructive) {
                 confirmRemove = true
@@ -352,6 +367,7 @@ struct PaintCoverView: View {
     @State private var style: Components.Schemas.CoverStyle?
     @State private var styles: [Components.Schemas.CoverStyle] = []
     @State private var keeping: String?
+    @State private var viewing: ViewedImage?
 
     var body: some View {
         NavigationStack {
@@ -393,6 +409,7 @@ struct PaintCoverView: View {
                 }
             }
             .task { await load() }
+            .imageViewer(for: $viewing)
             .onChange(of: withTitle) {
                 if suggested { prompt = suggestion }
             }
@@ -580,6 +597,10 @@ struct PaintCoverView: View {
             picture(image)
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .contentShape(Rectangle())
+                .onTapGesture { view(image) }
+                .accessibilityAddTraits(image.stage == "done" ? .isButton : [])
+                .accessibilityHint(image.stage == "done" ? "Groß ansehen" : "")
             Text(Self.note(of: image, ranOn: model.ranOnNote(image.ranOn)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -645,6 +666,15 @@ struct PaintCoverView: View {
                 .accessibilityLabel(image.finished == true ? "Löschen" : "Abbrechen")
             }
         }
+    }
+
+    /// The candidate large, with the text it was painted with.
+    private func view(_ image: Components.Schemas.ImageState) {
+        guard image.stage == "done", let url = model.imageURL(image) else { return }
+        let title = image.title ?? song.displayTitle
+        viewing = ViewedImage(
+            url: url, fileName: AppModel.pictureName(title, image.seed.map(String.init) ?? ""), title: title,
+            painting: .init(image))
     }
 
     @ViewBuilder

@@ -57,6 +57,7 @@ public sealed class ImageEndpointTests : IDisposable
         Assert.Contains("flux3-mlx is not installed", MfluxEngine.UnavailableOn(flux3, settings));
         Assert.True(krea.ContentFilter);
         Assert.True(flux3.ContentFilter);
+        Assert.True(ImageModel.Defaults.Single(m => m.Id == "klein-9b").ContentFilter);
         Assert.Equal("4bit", flux3.Upsampler);
     }
 

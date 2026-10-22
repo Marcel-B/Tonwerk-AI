@@ -19,7 +19,7 @@ import json
 import sys
 import time
 
-# Krea's licence asks for a content filter, FLUX 3's for a filter or a review; this is one of the classifiers Krea's
+# Krea's licence asks for a content filter, FLUX 3's and Klein 9B's for a filter or a review; this is one of the classifiers Krea's
 # names, the one the ComfyUI node and Black Forest Labs' FLUX 3 reference code use too.
 NSFW_REPO = "Falconsai/nsfw_image_detection"
 NSFW_THRESHOLD = 0.85

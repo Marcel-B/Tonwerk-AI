@@ -87,6 +87,7 @@ const AcePage = defineAsyncComponent(() => import('./components/AcePage.vue'))
 const LogPage = defineAsyncComponent(() => import('./components/LogPage.vue'))
 const StoragePage = defineAsyncComponent(() => import('./components/StoragePage.vue'))
 const TemplatesPage = defineAsyncComponent(() => import('./components/TemplatesPage.vue'))
+const CoverStylesPage = defineAsyncComponent(() => import('./components/CoverStylesPage.vue'))
 const InsightsPage = defineAsyncComponent(() => import('./components/InsightsPage.vue'))
 const SketchPage = defineAsyncComponent(() => import('./components/SketchPage.vue'))
 const WritingPage = defineAsyncComponent(() => import('./components/WritingPage.vue'))
@@ -333,6 +334,7 @@ const pages: Page[] = [
 ]
 const tools: Page[] = [
   { view: 'templates', label: 'menuTemplates', icon: 'pi pi-bookmark' },
+  { view: 'coverStyles', label: 'menuCoverStyles', icon: 'pi pi-palette' },
   { view: 'insights', label: 'menuInsights', icon: 'pi pi-chart-bar' },
   { view: 'write', label: 'menuWriting', icon: 'pi pi-comment' },
   { view: 'sketch', label: 'menuSketch', icon: 'pi pi-pencil' },
@@ -406,6 +408,7 @@ const labOpened = ref(view.value === 'lab')
 const logsOpened = ref(view.value === 'logs')
 const storageOpened = ref(view.value === 'storage')
 const templatesOpened = ref(view.value === 'templates')
+const coverStylesOpened = ref(view.value === 'coverStyles')
 const insightsOpened = ref(view.value === 'insights')
 const sketchOpened = ref(view.value === 'sketch')
 const writingOpened = ref(view.value === 'write')
@@ -440,6 +443,9 @@ watch(view, (value) => {
   }
   if (value === 'templates') {
     templatesOpened.value = true
+  }
+  if (value === 'coverStyles') {
+    coverStylesOpened.value = true
   }
   if (value === 'insights') {
     insightsOpened.value = true
@@ -1003,6 +1009,18 @@ async function useAsNewSong(songId: string): Promise<void> {
           @notice="show($event)"
           @error="show($event, true)"
         />
+      </template>
+    </Card>
+  </main>
+
+  <main v-if="coverStylesOpened" v-show="view === 'coverStyles'">
+    <Card>
+      <template #title>
+        <h2>{{ t('coverStyles') }}</h2>
+      </template>
+      <template #content>
+        <p class="muted mt-0">{{ t('coverStylesIntro') }}</p>
+        <CoverStylesPage :active="view === 'coverStyles'" @notice="show($event)" @error="show($event, true)" />
       </template>
     </Card>
   </main>

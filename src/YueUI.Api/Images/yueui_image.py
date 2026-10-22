@@ -7,7 +7,11 @@ In: one JSON object on stdin
     {"runner": "mflux" | "flux3-mlx", "model": "flux2-klein-4b", "quantize": 8 | null, "steps": 4,
      "upsampler": "4bit" | null, "contentFilter": false, "prompt": "...", "seed": 42,
      "width": 1024, "height": 1024, "output": "/abs/picture.jpg",
-     "loras": [{"path": "/abs/style.safetensors", "strength": 1.0}]}
+     "loras": [{"path": "/abs/style.safetensors", "strength": 1.0}],
+     "references": [{"path": "/abs/ref.jpg", "role": "style" | "figure" | "place" | "start", "strength": 0.5 | null}]}
+    References are pictures FLUX.2 Klein (mflux's edit pipeline) and FLUX 3 look at; the server has written what each is
+    for into the prompt as "image 1", "image 2", ... A "start" picture is one Z-Image or Krea 2 paints over (img2img),
+    keeping its layout by "strength".
 Out: the picture as JPEG at "output", and lines starting with "YUEUI " on stdout, each a JSON event:
     {"event": "stage", "stage": "loading" | "painting", "fraction": 0.5}
     {"event": "done", "loadSeconds": 12.3, "paintSeconds": 30.1, "peakMemoryGb": 8.9, "paintedPrompt": "..." | null}
@@ -64,6 +68,14 @@ class Progress:
         emit({"event": "stage", "stage": "painting", "fraction": round(min((t + 1) / self.steps, 1), 3)})
 
 
+def looked_at(request: dict) -> list[str]:
+    return [r["path"] for r in request.get("references") or [] if r.get("role") != "start"]
+
+
+def start_picture(request: dict) -> dict | None:
+    return next((r for r in request.get("references") or [] if r.get("role") == "start"), None)
+
+
 def load_mflux(request: dict):
     """The model's class by family; all take the same arguments and paint through generate_image."""
     from mflux.models.common.config import ModelConfig
@@ -73,6 +85,9 @@ def load_mflux(request: dict):
         from mflux.models.z_image import ZImage as Model
     elif name.startswith("krea-2"):
         from mflux.models.krea2 import Krea2 as Model
+    elif looked_at(request):
+        # The same weights; the edit pipeline adds the references' latents as tokens beside the picture's.
+        from mflux.models.flux2.variants import Flux2KleinEdit as Model
     else:
         from mflux.models.flux2.variants import Flux2Klein as Model
     # LoRAs are applied when the weights load (mflux bakes them into the quantized layers), one strength each.
@@ -97,6 +112,12 @@ def paint_mflux(model, request: dict, steps: int):
     # Distilled Klein and Krea 2 Turbo sample at guidance 1; Z-Image Turbo takes none and picks its own.
     if not request["model"].startswith("z-image"):
         arguments["guidance"] = 1.0
+    if looked_at(request):
+        arguments["image_paths"] = looked_at(request)
+    elif start := start_picture(request):
+        # mflux skips that share of the steps, so more strength keeps more of the start picture.
+        arguments["image_path"] = start["path"]
+        arguments["image_strength"] = float(start.get("strength") or 0.5)
     return model.generate_image(**arguments).image, None
 
 
@@ -112,8 +133,12 @@ def paint_flux3(pipe, request: dict, steps: int):
     def step(done: int, total: int) -> None:
         emit({"event": "stage", "stage": "painting", "fraction": round(min(done / max(total, 1), 1), 3)})
 
+    from PIL import Image
+
+    references = [Image.open(path).convert("RGB") for path in looked_at(request)]
     image, record = pipe(
         request["prompt"],
+        images=references or None,
         width=int(request.get("width") or 1024),
         height=int(request.get("height") or 1024),
         steps=steps,
@@ -140,6 +165,9 @@ def main() -> int:
     flux3 = request.get("runner") == "flux3-mlx"
     if flux3 and request.get("loras"):
         print("Error: FLUX 3 Klein takes no LoRAs; flux3-mlx has no loader for them.", flush=True)
+        return 1
+    if flux3 and start_picture(request):
+        print("Error: FLUX 3 Klein paints over no start picture; give it the picture as a reference.", flush=True)
         return 1
     steps = int(request.get("steps") or 4)
     emit({"event": "stage", "stage": "loading", "fraction": 0})

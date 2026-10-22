@@ -118,4 +118,35 @@ final class CoverTests: XCTestCase {
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         return data as Data
     }
+
+    private func imageModel(references: Int, startImage: Bool) throws -> Components.Schemas.ImageModelInfo {
+        let json = """
+            {"id":"m","label":"M","downloadGb":1,"memoryGb":1,"license":"x","commercial":true,"gated":false,
+             "downloaded":true,"tokenFound":true,"references":\(references),"startImage":\(startImage)}
+            """
+        return try JSONDecoder().decode(Components.Schemas.ImageModelInfo.self, from: Data(json.utf8))
+    }
+
+    func testReferencesFitWhatTheModelTakes() throws {
+        let items = ["a", "b", "c"].map {
+            CoverReferences.Item(source: "upload", id: $0, role: $0 == "a" ? "figure" : "style", preview: nil, label: $0)
+        }
+        let klein = CoverReferences.fit(items, model: try imageModel(references: 2, startImage: false))
+        XCTAssertEqual(klein.map(\.id), ["a", "b"])
+        XCTAssertEqual(klein.map(\.role), ["figure", "style"])
+        XCTAssertEqual(klein.map(\.strength), [nil, nil])
+        let zImage = CoverReferences.fit(items, model: try imageModel(references: 0, startImage: true), strength: 0.7)
+        XCTAssertEqual(zImage.map(\.id), ["a"])
+        XCTAssertEqual(zImage.first?.role, "start")
+        XCTAssertEqual(zImage.first?.strength, 0.7)
+        XCTAssertTrue(CoverReferences.fit(items, model: try imageModel(references: 0, startImage: false)).isEmpty)
+    }
+
+    func testStyleTextIsSwappedNeverDoubled() {
+        let first = CoverReferences.withStyleText("A city at night.", previous: nil, next: "Neon rain.")
+        XCTAssertEqual(first, "A city at night. Neon rain.")
+        XCTAssertEqual(CoverReferences.withStyleText(first, previous: "Neon rain.", next: "Pencil sketch."), "A city at night. Pencil sketch.")
+        XCTAssertEqual(CoverReferences.withStyleText(first, previous: nil, next: "Neon rain."), first)
+        XCTAssertEqual(CoverReferences.withStyleText(first, previous: "Neon rain.", next: nil), "A city at night.")
+    }
 }

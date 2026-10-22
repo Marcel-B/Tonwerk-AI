@@ -2,14 +2,25 @@
 import { computed, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Checkbox from 'primevue/checkbox'
-import { deleteImage, getImageInfo, imageUrl, listImages, paintImage, takeImage } from '../api'
+import {
+  addCoverStyleImage,
+  coverStyleImageUrl,
+  deleteImage,
+  getImageInfo,
+  imageUrl,
+  listImages,
+  paintImage,
+  takeImage,
+} from '../api'
 import { t } from '../i18n'
 import { blocksIn, toggleBlock } from '../coverBlocks'
+import { defaultStartStrength, fitReferences, styleReferences, withStyleText, type ReferenceItem } from '../coverStyles'
 import { imageTarget, loadImageSettings, saveImageSettings, suggestPrompt } from '../images'
 import { machineField, ranOnNote, storedMachine } from '../machines'
-import type { ImageInfo, ImageLoraChoice, ImageState } from '../types'
+import type { CoverStyle, ImageInfo, ImageLoraChoice, ImageState } from '../types'
 import CoverBlocks from './CoverBlocks.vue'
 import CoverLoras from './CoverLoras.vue'
+import CoverReferences from './CoverReferences.vue'
 import MachinePicker from './MachinePicker.vue'
 
 /**
@@ -36,6 +47,13 @@ const sending = ref(false)
 const taking = ref<string | null>(null)
 /** The LoRAs for the next picture, with their strengths; `CoverLoras` drops those that do not fit the model. */
 const loras = ref<ImageLoraChoice[]>([])
+/** Pictures to look at or paint over, for every picture until changed; `fitReferences` sends what the model takes. */
+const references = ref<ReferenceItem[]>([])
+const startStrength = ref(defaultStartStrength)
+/** The cover style chosen; its text stands at the description's end while chosen. */
+const styleId = ref<number | null>(null)
+const style = ref<CoverStyle | null>(null)
+const keeping = ref<string | null>(null)
 
 /** Whether the description is still the suggestion, so that the title switch may rewrite it. */
 const suggested = ref(true)
@@ -43,8 +61,66 @@ const suggested = ref(true)
 /** The suggestion with the blocks `text` holds, so that choosing blocks keeps a description the suggestion. */
 function suggestion(text = prompt.value): string {
   const target = imageTarget.value
-  return target ? suggestPrompt(target.title, target.style, withTitle.value, blocksIn(text)) : ''
+  return target
+    ? withStyleText(
+        suggestPrompt(target.title, target.style, withTitle.value, blocksIn(text)),
+        null,
+        style.value?.prompt ?? null,
+      )
+    : ''
 }
+
+/**
+ * A style puts its text at the description's end, its model and LoRAs in place and its pictures before the others;
+ * none takes the last one's text and pictures out again.
+ */
+function chooseStyle(next: CoverStyle | null): void {
+  const previous = style.value
+  style.value = next
+  prompt.value = withStyleText(prompt.value, previous?.prompt ?? null, next?.prompt ?? null)
+  edited()
+  const others = references.value.filter((item) => item.choice.source !== 'style')
+  references.value = [...(next ? styleReferences(next, coverStyleImageUrl) : []), ...others]
+  if (next?.model && info.value?.models.some((m) => m.id === next.model)) {
+    model.value = next.model
+  }
+  if (next && next.loras.length > 0) {
+    loras.value = next.loras.map((lora) => ({ ...lora }))
+  }
+}
+
+function addCandidate(image: ImageState): void {
+  if (!references.value.some((item) => item.choice.source === 'image' && item.choice.id === image.id)) {
+    references.value = [
+      ...references.value,
+      {
+        choice: { source: 'image', id: image.id, role: 'style' },
+        preview: imageUrl(image.id),
+        label: image.modelLabel,
+      },
+    ]
+  }
+}
+
+/** Keeps a candidate in the chosen style, for every later song of the project. */
+async function keep(image: ImageState): Promise<void> {
+  const chosenStyle = style.value
+  if (!chosenStyle) {
+    return
+  }
+  keeping.value = image.id
+  try {
+    style.value = await addCoverStyleImage(chosenStyle.id, { candidate: image.id }, 'style')
+    await referencesPanel.value?.reload()
+    emit('notice', t('coverReferenceKept', { style: chosenStyle.name }))
+  } catch (caught) {
+    emit('error', caught instanceof Error ? caught.message : String(caught))
+  } finally {
+    keeping.value = null
+  }
+}
+
+const referencesPanel = ref<InstanceType<typeof CoverReferences> | null>(null)
 
 const chosenBlocks = computed(() => blocksIn(prompt.value))
 
@@ -63,6 +139,10 @@ watch(
     prompt.value = suggestion('')
     suggested.value = true
     loaded.value = []
+    // Candidates and the cover belong to the last song; a style's and uploaded pictures carry over.
+    references.value = references.value.filter(
+      (item) => item.choice.source === 'style' || item.choice.source === 'upload',
+    )
     try {
       const [about, images] = await Promise.all([getImageInfo(), listImages(target.songId)])
       if (imageTarget.value !== target) {
@@ -99,6 +179,7 @@ function reset(): void {
 
 const modelOptions = computed(() => (info.value?.models ?? []).map((m) => ({ value: m.id, label: m.label })))
 const chosen = computed(() => info.value?.models.find((m) => m.id === model.value) ?? null)
+const sentReferences = computed(() => fitReferences(references.value, chosen.value, startStrength.value))
 
 /** What the server listed, with newer states from the event stream laid over it; deleted ones leave. */
 const images = computed(() => {
@@ -127,6 +208,7 @@ async function start(): Promise<void> {
       model: model.value,
       machine: machineField(machine.value),
       loras: loras.value.length > 0 ? loras.value : undefined,
+      references: sentReferences.value.length > 0 ? sentReferences.value : undefined,
     })
     if (imageTarget.value === target) {
       loaded.value = [image, ...loaded.value.filter((i) => i.id !== image.id)]
@@ -200,6 +282,16 @@ function close(): void {
         <small class="muted">{{ t(info?.translates ? 'imagePromptHintTranslated' : 'imagePromptHint') }}</small>
       </label>
       <CoverBlocks :chosen="chosenBlocks" :song-style="imageTarget?.style ?? ''" @toggle="toggle" />
+      <CoverReferences
+        ref="referencesPanel"
+        v-model="references"
+        v-model:strength="startStrength"
+        v-model:style-id="styleId"
+        :model="chosen"
+        :cover="imageTarget?.cover"
+        @style="chooseStyle"
+        @error="(m) => emit('error', m)"
+      />
       <CoverLoras v-model="loras" :model="chosen" :models="info?.models ?? []" @error="(m) => emit('error', m)" />
       <label class="flex items-center gap-2">
         <Checkbox v-model="withTitle" binary />
@@ -260,6 +352,7 @@ function close(): void {
             [
               image.modelLabel,
               ...(image.loras ?? []).map((lora) => `${lora.label} ${lora.strength.toFixed(2)}`),
+              ...(image.references ?? []).map((r) => `${t(`coverReferenceRole_${r.role}`)}: ${r.label}`),
               t('imageSeed', { seed: image.seed }),
               ranOnNote(image.ranOn),
             ]
@@ -277,6 +370,27 @@ function close(): void {
               @click="take(image)"
             />
             <span v-else class="flex-1" />
+            <Button
+              v-if="image.stage === 'done'"
+              icon="pi pi-images"
+              text
+              rounded
+              size="small"
+              :aria-label="t('coverReferenceCandidate')"
+              :title="t('coverReferenceCandidate')"
+              @click="addCandidate(image)"
+            />
+            <Button
+              v-if="image.stage === 'done' && style"
+              icon="pi pi-bookmark"
+              text
+              rounded
+              size="small"
+              :loading="keeping === image.id"
+              :aria-label="t('coverReferenceKeep', { style: style.name })"
+              :title="t('coverReferenceKeep', { style: style.name })"
+              @click="keep(image)"
+            />
             <Button
               icon="pi pi-trash"
               text

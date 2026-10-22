@@ -63,6 +63,21 @@ public sealed class ImageModel
     /// </summary>
     public bool TakesLoras => Runner == ImageRunners.Mflux;
 
+    /// <summary>
+    /// How many reference pictures it looks at (style, figure, place): FLUX.2 Klein through mflux's edit pipeline and
+    /// FLUX 3 through flux3-mlx's <c>images</c>; Z-Image and Krea 2 have no such input and take none.
+    /// </summary>
+    public int MaxReferences => Runner == ImageRunners.Flux3 || Model.StartsWith("flux2-klein", StringComparison.Ordinal)
+        ? CoverStyleLibrary.MaxImages
+        : 0;
+
+    /// <summary>
+    /// Whether it paints over a start picture instead (img2img, <see cref="ReferenceRoles.Start"/>): Z-Image and Krea 2
+    /// keep its layout and colours by a strength, which is all they can take of a picture.
+    /// </summary>
+    public bool TakesStartImage => Runner == ImageRunners.Mflux
+        && (Model.StartsWith("z-image", StringComparison.Ordinal) || Model.StartsWith("krea-2", StringComparison.Ordinal));
+
     /// <summary>Roughly what it downloads, in GB, so the dialog can say what the first picture costs.</summary>
     public double DownloadGb { get; set; }
 
@@ -227,6 +242,12 @@ public sealed record ImageState
     /// <summary>The LoRAs it is painted with, as they were when it was asked for; null or empty for none.</summary>
     public IReadOnlyList<ImageLoraUsed>? Loras { get; init; }
 
+    /// <summary>
+    /// The reference pictures it is painted with, in their order (image 1, 2, …); their files lie beside it as
+    /// <c>&lt;id&gt;.ref&lt;n&gt;.*</c>, copies, so that deleting a style or a candidate leaves the picture alone.
+    /// </summary>
+    public IReadOnlyList<ImageReferenceUsed>? References { get; init; }
+
     /// <summary>The name of the Mac that runs it, once one does.</summary>
     public string? RanOn { get; init; }
 
@@ -242,7 +263,15 @@ public sealed record ImageState
 /// <param name="Seed">Null for a new one each time.</param>
 /// <param name="Machine">The Mac to paint on: <c>local</c>, a helper's id, or null for whichever is free.</param>
 /// <param name="Loras">Up to <see cref="ImageLoraLibrary.MaxPerPicture"/> LoRAs made for the model.</param>
-public sealed record ImageRequest(string? Prompt, string? Model, long? Seed, string? Machine = null, IReadOnlyList<ImageLoraChoice>? Loras = null)
+/// <param name="References">Pictures to look at (<see cref="ImageModel.MaxReferences"/>) or one to paint over
+/// (<see cref="ImageModel.TakesStartImage"/>).</param>
+public sealed record ImageRequest(
+    string? Prompt,
+    string? Model,
+    long? Seed,
+    string? Machine = null,
+    IReadOnlyList<ImageLoraChoice>? Loras = null,
+    IReadOnlyList<ImageReferenceChoice>? References = null)
 {
     /// <summary>Klein reads its prompt through Qwen3 with 512 tokens; this stays well inside.</summary>
     public const int MaxPromptLength = 2000;
@@ -259,6 +288,8 @@ public sealed record ImageInfo(bool Installed, string Python, IReadOnlyList<Imag
 /// <param name="Unavailable">Why this Mac cannot (its runner missing, too little memory), even where a helper can.</param>
 /// <param name="Lettering">It can write a short title into the picture.</param>
 /// <param name="Loras">It can be painted with LoRAs made for it.</param>
+/// <param name="References">How many reference pictures it looks at; 0 for none.</param>
+/// <param name="StartImage">It paints over a start picture instead.</param>
 public sealed record ImageModelInfo(
     string Id,
     string Label,
@@ -273,4 +304,21 @@ public sealed record ImageModelInfo(
     string? Unavailable = null,
     bool Lettering = false,
     double? MinSystemGb = null,
-    bool Loras = false);
+    bool Loras = false,
+    int References = 0,
+    bool StartImage = false);
+
+/// <summary>A reference picture a new one asks for.</summary>
+/// <param name="Source">
+/// Where it comes from: <c>style</c> (<paramref name="Id"/> <c>&lt;style id&gt;/&lt;picture id&gt;</c>), <c>image</c> (an
+/// earlier candidate's id), <c>cover</c> (the song's own cover) or <c>upload</c> (an id from <c>POST /api/image-references</c>).
+/// </param>
+/// <param name="Role">One of <see cref="ReferenceRoles"/>; null for a style picture's own role, else style.</param>
+/// <param name="Strength">For <see cref="ReferenceRoles.Start"/>: how much of the start picture stays, 0.1 to 0.9.</param>
+public sealed record ImageReferenceChoice(string Source, string? Id = null, string? Role = null, double? Strength = null);
+
+/// <summary>A reference a picture was painted with, as the dialog shows it under the picture.</summary>
+public sealed record ImageReferenceUsed(string Role, string Label, double? Strength = null);
+
+/// <summary>A reference picture's file for the runner.</summary>
+public sealed record ImageReferenceFile(string Path, string Role, double? Strength = null);

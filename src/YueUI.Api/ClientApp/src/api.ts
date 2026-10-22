@@ -54,6 +54,9 @@ import type {
   ImageLora,
   ImageLoraChoice,
   ImageLoraList,
+  ImageReferenceChoice,
+  CoverStyle,
+  ReferenceRole,
   ImageState,
   AceInfo,
   AceJob,
@@ -910,7 +913,14 @@ export async function listImages(songId: string): Promise<ImageState[]> {
 /** Queues a picture; its progress arrives as `image` events. Without a seed the server picks one. */
 export async function paintImage(
   songId: string,
-  request: { prompt: string; model: string; seed?: number; machine?: string | null; loras?: ImageLoraChoice[] },
+  request: {
+    prompt: string
+    model: string
+    seed?: number
+    machine?: string | null
+    loras?: ImageLoraChoice[]
+    references?: ImageReferenceChoice[]
+  },
 ): Promise<ImageState> {
   return (await send(`/api/songs/${songId}/images`, json('POST', request))).json() as Promise<ImageState>
 }
@@ -946,6 +956,66 @@ export async function updateImageLora(
 
 export async function deleteImageLora(name: string): Promise<void> {
   await send(`/api/image-loras/${encodeURIComponent(name)}`, { method: 'DELETE' })
+}
+
+/** A picture for one cover only; its id goes into the painting's references as source `upload`. */
+export async function uploadImageReference(picture: Blob): Promise<string> {
+  const form = new FormData()
+  form.append('file', picture, 'reference.jpg')
+  return ((await (await send('/api/image-references', { method: 'POST', body: form })).json()) as { id: string }).id
+}
+
+export async function listCoverStyles(): Promise<CoverStyle[]> {
+  return (await send('/api/cover-styles')).json() as Promise<CoverStyle[]>
+}
+
+export async function createCoverStyle(style: {
+  name: string
+  prompt?: string | null
+  model?: string | null
+  loras?: ImageLoraChoice[]
+}): Promise<CoverStyle> {
+  return (await send('/api/cover-styles', json('POST', style))).json() as Promise<CoverStyle>
+}
+
+/** What is left out stays as it is; an empty text clears prompt or model. */
+export async function updateCoverStyle(
+  id: number,
+  change: { name?: string; prompt?: string; model?: string; loras?: ImageLoraChoice[] },
+): Promise<CoverStyle> {
+  return (await send(`/api/cover-styles/${id}`, json('PUT', change))).json() as Promise<CoverStyle>
+}
+
+export async function deleteCoverStyle(id: number): Promise<void> {
+  await send(`/api/cover-styles/${id}`, { method: 'DELETE' })
+}
+
+/** A picture of one's own, or with `candidate` a painted one, kept in the style. */
+export async function addCoverStyleImage(
+  id: number,
+  picture: { file: Blob } | { candidate: string },
+  role: ReferenceRole,
+): Promise<CoverStyle> {
+  const form = new FormData()
+  if ('file' in picture) {
+    form.append('file', picture.file, 'reference.jpg')
+  } else {
+    form.append('candidate', picture.candidate)
+  }
+  form.append('role', role)
+  return (await send(`/api/cover-styles/${id}/images`, { method: 'POST', body: form })).json() as Promise<CoverStyle>
+}
+
+export async function setCoverStyleImageRole(id: number, imageId: string, role: ReferenceRole): Promise<CoverStyle> {
+  return (await send(`/api/cover-styles/${id}/images/${imageId}`, json('PUT', { role }))).json() as Promise<CoverStyle>
+}
+
+export async function deleteCoverStyleImage(id: number, imageId: string): Promise<CoverStyle> {
+  return (await send(`/api/cover-styles/${id}/images/${imageId}`, { method: 'DELETE' })).json() as Promise<CoverStyle>
+}
+
+export function coverStyleImageUrl(id: number, imageId: string): string {
+  return `${apiBase}/api/cover-styles/${id}/images/${imageId}`
 }
 
 export function imageUrl(id: string): string {

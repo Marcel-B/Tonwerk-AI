@@ -653,6 +653,25 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 31;
                     """);
             }
+            if (current < 32)
+            {
+                // Cover styles (Images/CoverStyles.cs): a text, a model, LoRAs and reference pictures under a name, as JSON; the
+                // pictures lie in cover-styles/<id>/.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE cover_styles (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        name_key TEXT NOT NULL UNIQUE,
+                        settings TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 32;
+                    """);
+            }
             _ready = true;
         }
     }

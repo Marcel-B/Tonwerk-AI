@@ -21,6 +21,7 @@ enum Page: Hashable {
     case log
     case storage
     case templates
+    case coverStyles
     case playlist(Int64)
 }
 
@@ -82,6 +83,7 @@ struct MainView: View {
                     Label("Protokoll", systemImage: "doc.text.magnifyingglass").tag(Page.log)
                     Label("Speicher", systemImage: "internaldrive").tag(Page.storage)
                     Label("Vorlagen", systemImage: "bookmark").tag(Page.templates)
+                    Label("Cover-Stile", systemImage: "paintpalette").tag(Page.coverStyles)
                 }
                 Section("Playlists") {
                     ForEach(model.playlists, id: \.id) { playlist in
@@ -158,6 +160,8 @@ struct MainView: View {
                 StorageView()
             case .templates:
                 TemplatesView()
+            case .coverStyles:
+                CoverStylesView()
             case .playlist(let id):
                 if let playlist = model.playlists.first(where: { $0.id == id }) {
                     SongList(

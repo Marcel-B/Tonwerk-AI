@@ -191,6 +191,32 @@ public sealed class MachineTests : IDisposable
     }
 
     [Fact]
+    public async Task A_cover_painted_on_the_helper_takes_its_reference_pictures_along()
+    {
+        var client = _app.CreateClient();
+        _app.AddSong("20260922-101500-Neon-Night", "song1");
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 9, 9];
+        var upload = await client.PostAsync("/api/image-references", new MultipartFormDataContent { { new ByteArrayContent(png), "file", "ref.png" } });
+        var id = (await upload.Content.ReadFromJsonAsync<Images.ImageReferenceUpload>(TestApp.Json))!.Id;
+        // Held, so the helper's run folder with the reference is still there when it is read.
+        _helper.Images.Gate = new TaskCompletionSource();
+
+        var response = await client.PostAsJsonAsync("/api/songs/20260922-101500-Neon-Night/song1/images", new
+        {
+            prompt = "a neon city", model = "klein-4b", machine = "alt", references = new[] { new { source = "upload", id, role = "figure" } },
+        });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        await TestApp.WaitUntil(() => _helper.Images.Jobs.Count == 1);
+        var job = _helper.Images.Jobs[0];
+        Assert.Equal("a neon city. Featuring the character from image 1.", job.Prompt);
+        var reference = Assert.Single(job.References!);
+        Assert.Equal("figure", reference.Role);
+        Assert.Equal(png, File.ReadAllBytes(reference.Path));
+        _helper.Images.Gate.SetResult();
+    }
+
+    [Fact]
     public async Task A_model_too_large_for_the_helper_waits_for_this_Mac_instead()
     {
         _helper.Images.Missing["krea-2-turbo"] = "Krea 2 Turbo needs a Mac with 32 GB; this one has 24.";

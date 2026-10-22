@@ -45,6 +45,31 @@ public sealed class ImageMaker(
 
     public string ImagePath(string id) => Path.Combine(Folder, $"{id}.jpg");
 
+    /// <summary>Pictures handed in for one cover only, until a picture asks for them (and takes them along).</summary>
+    public string UploadFolder => Path.Combine(Folder, "uploads");
+
+    /// <summary>The picture's reference files, in the order of <see cref="ImageState.References"/>.</summary>
+    public IReadOnlyList<string> ReferencePaths(ImageState image) =>
+        [.. Enumerable.Range(0, image.References?.Count ?? 0)
+            .Select(n => Directory.Exists(Folder) ? Directory.EnumerateFiles(Folder, $"{image.Id}.ref{n}.*").FirstOrDefault() : null)
+            .OfType<string>()];
+
+    /// <summary>Keeps a picture handed in as a reference for one cover.</summary>
+    /// <returns>Its id, for <see cref="ImageReferenceChoice.Id"/>.</returns>
+    public async Task<string> UploadAsync(byte[] bytes, string extension, CancellationToken cancellationToken)
+    {
+        var id = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(UploadFolder);
+        await File.WriteAllBytesAsync(Path.Combine(UploadFolder, id + extension), bytes, cancellationToken);
+        return id;
+    }
+
+    /// <summary>An uploaded reference's file; null when there is none (which also keeps ids from leaving the folder).</summary>
+    public string? UploadPath(string id) =>
+        id.Length == 32 && id.All(Uri.IsHexDigit) && Directory.Exists(UploadFolder)
+            ? Directory.EnumerateFiles(UploadFolder, id + ".*").FirstOrDefault()
+            : null;
+
     /// <summary>The song's candidates, newest first.</summary>
     public IReadOnlyList<ImageState> Of(string songId)
     {
@@ -73,13 +98,42 @@ public sealed class ImageMaker(
 
     /// <param name="machine">Where to paint, as <see cref="Machines.Machines.Normalize"/> stores it.</param>
     /// <param name="used">The LoRAs, as they are now, so that a later change to one leaves a waiting picture alone.</param>
+    /// <param name="references">
+    /// The reference pictures, copied beside the picture now so that a style or candidate deleted meanwhile leaves it
+    /// alone; an upload is moved, since nothing else uses it.
+    /// </param>
     public ImageState Enqueue(
-        string songId, string? title, ImageModel model, string prompt, long seed, string? machine = null, IReadOnlyList<ImageLoraUsed>? used = null)
+        string songId,
+        string? title,
+        ImageModel model,
+        string prompt,
+        long seed,
+        string? machine = null,
+        IReadOnlyList<ImageLoraUsed>? used = null,
+        IReadOnlyList<(string Path, ImageReferenceUsed Used)>? references = null)
     {
         var now = time.GetUtcNow();
+        var id = Guid.NewGuid().ToString("N");
+        if (references is { Count: > 0 })
+        {
+            Directory.CreateDirectory(Folder);
+            for (var n = 0; n < references.Count; n++)
+            {
+                var source = references[n].Path;
+                var target = Path.Combine(Folder, $"{id}.ref{n}{Path.GetExtension(source)}");
+                if (Path.GetDirectoryName(source) == UploadFolder)
+                {
+                    File.Move(source, target);
+                }
+                else
+                {
+                    File.Copy(source, target);
+                }
+            }
+        }
         var image = new ImageState
         {
-            Id = Guid.NewGuid().ToString("N"),
+            Id = id,
             SongId = songId,
             Title = title,
             ModelId = model.Id,
@@ -88,6 +142,7 @@ public sealed class ImageMaker(
             Seed = seed,
             Machine = machine,
             Loras = used is { Count: > 0 } ? used : null,
+            References = references is { Count: > 0 } ? [.. references.Select(r => r.Used)] : null,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -150,6 +205,15 @@ public sealed class ImageMaker(
             if (!Directory.Exists(Folder))
             {
                 return;
+            }
+            // An upload no picture asked for within a day was a dialog closed without painting.
+            if (Directory.Exists(UploadFolder))
+            {
+                foreach (var upload in new DirectoryInfo(UploadFolder).EnumerateFiles()
+                    .Where(f => f.LastWriteTimeUtc < time.GetUtcNow().UtcDateTime.AddDays(-1)))
+                {
+                    upload.Delete();
+                }
             }
             foreach (var file in Directory.EnumerateFiles(Folder, "*.json"))
             {
@@ -218,6 +282,12 @@ public sealed class ImageMaker(
 
             var files = (image.Loras ?? []).Select(l => new ImageLoraFile(
                 loras.PathFor(l.Name) ?? throw new ImageException($"The LoRA {l.Label} is no longer there."), l.Strength)).ToList();
+            var paths = ReferencePaths(image);
+            if (paths.Count != (image.References?.Count ?? 0))
+            {
+                throw new ImageException("A reference picture is no longer there.");
+            }
+            var references = paths.Select((path, n) => new ImageReferenceFile(path, image.References![n].Role, image.References[n].Strength)).ToList();
 
             await using var placement = await machines.PlaceAsync(
                 LargeModel.Images, Machines.Engines.ImageModel(model.Id), image.Machine, options.Value.WaitInterval, cancel.Token,
@@ -227,7 +297,15 @@ public sealed class ImageMaker(
             image = Update(image, i => i with { Stage = "loading", RanOn = placement.Name });
             var shown = 0.0;
             var result = await painter.PaintAsync(
-                new ImageJob(model, WithTriggers(image.PaintedPrompt ?? image.Prompt, image.Loras), image.Seed, Size, Size, output, files),
+                new ImageJob(
+                    model,
+                    WithReferences(WithTriggers(image.PaintedPrompt ?? image.Prompt, image.Loras), image.References),
+                    image.Seed,
+                    Size,
+                    Size,
+                    output,
+                    files,
+                    references),
                 (stage, fraction) =>
                 {
                     if (stage != image.Stage || fraction - shown >= 0.1)
@@ -299,6 +377,28 @@ public sealed class ImageMaker(
         return $"{text}{(text.Length > 0 && !".!?".Contains(text[^1]) ? "." : "")} {string.Join(", ", triggers).TrimEnd('.')}.";
     }
 
+    /// <summary>
+    /// What each reference picture is for, as a sentence per picture after the description (and after the translation,
+    /// so Claude cannot turn "image 1" into something else). FLUX.2 Klein's and FLUX 3's edit prompts name references
+    /// by their place in the list the same way. A start picture needs no words: the model paints over it.
+    /// </summary>
+    public static string WithReferences(string prompt, IReadOnlyList<ImageReferenceUsed>? references)
+    {
+        var looked = (references ?? []).Where(r => r.Role != ReferenceRoles.Start).ToList();
+        if (looked.Count == 0)
+        {
+            return prompt;
+        }
+        var sentences = looked.Select((r, n) => r.Role switch
+        {
+            ReferenceRoles.Figure => $"Featuring the character from image {n + 1}.",
+            ReferenceRoles.Place => $"Set in the place shown in image {n + 1}.",
+            _ => $"In the visual style, palette and texture of image {n + 1}.",
+        });
+        var text = prompt.TrimEnd();
+        return $"{text}{(text.Length > 0 && !".!?".Contains(text[^1]) ? "." : "")} {string.Join(" ", sentences)}";
+    }
+
     /// <summary>Keeps the change unless the picture was deleted meanwhile, and tells the browsers.</summary>
     private ImageState Update(ImageState image, Func<ImageState, ImageState> change, bool persist = true)
     {
@@ -347,7 +447,8 @@ public sealed class ImageMaker(
 
     private void DeleteFiles(string id)
     {
-        foreach (var path in (string[])[Path.Combine(Folder, $"{id}.json"), ImagePath(id)])
+        var references = Directory.Exists(Folder) ? Directory.EnumerateFiles(Folder, $"{id}.ref*").ToList() : [];
+        foreach (var path in (IEnumerable<string>)[Path.Combine(Folder, $"{id}.json"), ImagePath(id), .. references])
         {
             try
             {

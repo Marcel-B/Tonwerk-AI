@@ -111,6 +111,8 @@ interface VisualSettings {
   nowPlayingEffects: boolean
   /** The full-screen player shows the lyrics instead of the large cover. */
   nowPlayingLyrics: boolean
+  /** The lyrics' performance directions in round brackets; off shows only what is sung, with the section tags. */
+  nowPlayingDirections: boolean
 }
 
 function load(): VisualSettings {
@@ -121,6 +123,7 @@ function load(): VisualSettings {
     nowPlayingAnalyzer: true,
     nowPlayingEffects: true,
     nowPlayingLyrics: false,
+    nowPlayingDirections: false,
   }
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Partial<VisualSettings>

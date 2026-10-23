@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lineAt, shownLines } from './timing'
+import { hasDirections, lineAt, shownLines } from './timing'
 import type { LyricsTiming } from './types'
 
 const timing: LyricsTiming = {
@@ -27,5 +27,59 @@ describe('lyrics timing', () => {
     expect(lineAt(timing, 25)).toBe(-1)
     expect(lineAt(timing, 31)).toBe(2)
     expect(lineAt(null, 31)).toBe(-1)
+  })
+})
+
+const paragraph =
+  '[Intro] (Heavy distorted synth bass intro, 140 BPM) (Sound of electronic glitches)\n\n' +
+  '[Verse 1] (Cold, robotic female vocals) Neon rain on carbon glass The ghosts of who we were, they pass ' +
+  'Where does the circuit end, and I begin? (Slightly more aggressive) I traded breath for silver veins\n\n' +
+  '[Chorus]\nHold on'
+
+describe('lyrics shown cleaned', () => {
+  it('hides directions, keeps the tags on lines of their own and breaks lost line ends', () => {
+    expect(shownLines(paragraph).map((line) => line.text)).toEqual([
+      '[Intro]',
+      '',
+      '[Verse 1]',
+      'Neon rain on carbon glass',
+      'The ghosts of who we were, they pass',
+      'Where does the circuit end, and I begin?',
+      'I traded breath for silver veins',
+      '',
+      '[Chorus]',
+      'Hold on',
+    ])
+  })
+
+  it('shows the directions apart on request, never lit by the timing', () => {
+    const lines = shownLines(paragraph, true)
+    expect(lines.filter((line) => line.direction).map((line) => line.text)).toEqual([
+      '(Heavy distorted synth bass intro, 140 BPM)',
+      '(Sound of electronic glitches)',
+      '(Cold, robotic female vocals)',
+      '(Slightly more aggressive)',
+    ])
+    expect(lines.filter((line) => line.direction).every((line) => line.timed === -1)).toBe(true)
+  })
+
+  it('keeps the server’s numbering: pieces of one line share it', () => {
+    const lines = shownLines(paragraph)
+    // The intro's line counts as sung on the server (it has letters), so the verse is line 1, the chorus line 2.
+    expect(lines.filter((line) => line.timed === 1)).toHaveLength(4)
+    expect(lines.find((line) => line.text === 'Hold on')!.timed).toBe(2)
+  })
+
+  it('leaves German capitals alone and short lines as they are', () => {
+    const german = 'Ich laufe durch die Stadt im Regen und der Wind singt mir ein Lied von Morgen'
+    expect(shownLines(german).map((line) => line.text)).toEqual([german])
+    expect(shownLines('Rain on the roof Nobody knows').map((line) => line.text)).toEqual([
+      'Rain on the roof Nobody knows',
+    ])
+  })
+
+  it('tells whether there is anything to show', () => {
+    expect(hasDirections(paragraph)).toBe(true)
+    expect(hasDirections('[Verse]\nRain on the roof')).toBe(false)
   })
 })

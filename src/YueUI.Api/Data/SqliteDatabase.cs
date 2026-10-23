@@ -704,6 +704,28 @@ public sealed class SqliteDatabase(IOptions<DataOptions> options)
                     PRAGMA user_version = 34;
                     """);
             }
+            if (current < 35)
+            {
+                // Logic page sessions (Data/SqliteLogicSessionStore.cs): the page's state for one song or uploaded score as
+                // JSON; uploaded files lie in logic-sessions/<id>/.
+                Execute(
+                    connection,
+                    null,
+                    """
+                    CREATE TABLE logic_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        song_id TEXT,
+                        score_file TEXT,
+                        audio_file TEXT,
+                        settings TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    CREATE INDEX logic_sessions_song ON logic_sessions (song_id);
+                    PRAGMA user_version = 35;
+                    """);
+            }
             _ready = true;
         }
     }

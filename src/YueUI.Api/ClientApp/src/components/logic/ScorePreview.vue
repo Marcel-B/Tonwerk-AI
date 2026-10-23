@@ -1,3 +1,11 @@
+<script lang="ts">
+/** Which tracks are muted and soloed, by name. */
+export interface Listening {
+  muted: string[]
+  solo: string[]
+}
+</script>
+
 <script setup lang="ts">
 import Checkbox from 'primevue/checkbox'
 import Panel from 'primevue/panel'
@@ -63,12 +71,16 @@ const props = defineProps<{
   assignments: Assignments
   /** The song's recording: the URL of a library song's audio.flac, or the FLAC brought along; null without one. */
   recording: string | File | null
+  /** Tracks a session had muted and soloed, laid over the routing whenever a score arrives; null leaves it as stored. */
+  listening?: Listening | null
 }>()
 
 const emit = defineEmits<{
   /** The user picked an instrument for a track, or none. */
   assign: [track: string, instrumentId: number | null]
   manageInstruments: []
+  /** Mute or solo changed, so a session can keep them. */
+  listening: [value: Listening]
 }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -201,6 +213,19 @@ const trackIds = computed(() => voices.value.map((voice) => voice.id))
  * page. A port stored by an older version is ignored.
  */
 const routings = ref<Routing[]>(loadRoutings(trackIds.value, defaultRoutings(voices.value)))
+/** Tracks on solo; while any is, only those play. Saved only with a session: a solo is otherwise for listening now. */
+const solos = ref<boolean[]>([])
+
+function applyListening(): void {
+  const listening = props.listening
+  if (listening) {
+    const muted = new Set(listening.muted)
+    const solo = new Set(listening.solo)
+    routings.value = routings.value.map((routing, index) => ({ ...routing, muted: muted.has(trackIds.value[index]!) }))
+    solos.value = trackIds.value.map((id) => solo.has(id))
+  }
+}
+applyListening()
 /**
  * Only browsers with Web MIDI (Chromium, Firefox) drive MIDI ports; elsewhere the choice offers browser sounds
  * only, and a track that has an instrument (chosen in another browser) keeps it, since it also decides the MIDI file's channel and the Logic project's
@@ -242,8 +267,6 @@ const pool = new OutputPool(null, (track) => patches.value.get(trackKey(track)) 
 // Fader and pan are heard at once; the schedule stays as it is.
 watch(mixer, () => pool.mixChanged(), { deep: true })
 
-/** Tracks on solo; while any is, only those play. Not saved: a solo is for listening now. */
-const solos = ref<boolean[]>([])
 /** The routing the player uses, with mute and solo applied; a muted track's notes are not scheduled at all. */
 const audible = computed(() => {
   const anySolo = solos.value.some(Boolean)
@@ -579,6 +602,7 @@ watch(
     lanes.value = lanesOf(voices.value, waveHeight.value)
     routings.value = loadRoutings(trackIds.value, defaultRoutings(voices.value))
     solos.value = []
+    applyListening()
     scrollTicks = 0
     if (viewport.value) {
       viewport.value.scrollLeft = 0
@@ -588,6 +612,15 @@ watch(
 )
 
 watch(routings, (value) => saveRoutings(trackIds.value, value), { deep: true })
+watch(
+  [routings, solos],
+  () =>
+    emit('listening', {
+      muted: trackIds.value.filter((_, index) => routings.value[index]?.muted),
+      solo: trackIds.value.filter((_, index) => solos.value[index]),
+    }),
+  { deep: true, immediate: true },
+)
 
 // Switched on while playing, the recording joins at the playhead.
 watch(

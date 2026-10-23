@@ -170,18 +170,45 @@ export function loadFormState(): FormState {
   try {
     const stored = localStorage.getItem(storageKey)
     if (stored) {
-      const state = { ...defaultFormState(), ...(JSON.parse(stored) as Partial<FormState>) }
-      // Settings saved before drum patterns existed stored the drum switch as a boolean.
-      const drums = state.drums as unknown
-      if (typeof drums === 'boolean') {
-        state.drums = drums ? 'FourOnTheFloor' : 'off'
-      }
-      return state
+      return formFrom(JSON.parse(stored))
     }
   } catch {
     // Unavailable or corrupt storage: start with the defaults.
   }
   return defaultFormState()
+}
+
+/**
+ * A form kept by an earlier version or another client (a session saved by the app knows fewer fields): what it lacks,
+ * or holds as another type, takes the default.
+ */
+export function formFrom(stored: unknown): FormState {
+  const defaults = defaultFormState()
+  const saved = stored && typeof stored === 'object' ? (stored as Record<string, unknown>) : {}
+  const state: Record<string, unknown> = { ...defaults }
+  for (const [key, fallback] of Object.entries(defaults)) {
+    const value = saved[key]
+    if (value === undefined) {
+      continue
+    }
+    // The defaults that are null are the octaves (a number when set) and the backing vocals' key (a name).
+    const fits =
+      key === 'harmonyKey'
+        ? value === null || typeof value === 'string'
+        : fallback === null
+          ? value === null || typeof value === 'number'
+          : Array.isArray(fallback)
+            ? Array.isArray(value)
+            : typeof value === typeof fallback && value !== null
+    if (fits) {
+      state[key] = value
+    }
+  }
+  // Settings saved before drum patterns existed stored the drum switch as a boolean.
+  if (typeof saved.drums === 'boolean') {
+    state.drums = saved.drums ? 'FourOnTheFloor' : 'off'
+  }
+  return state as unknown as FormState
 }
 
 export function clearFormState(): void {

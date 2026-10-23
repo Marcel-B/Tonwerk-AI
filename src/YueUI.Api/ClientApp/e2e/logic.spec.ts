@@ -29,6 +29,33 @@ test.beforeEach(({ api }) => {
   api.answers.set('GET /api/instruments/assignments', () => ({}))
   api.answers.set('GET /api/logic/presets', () => [])
   api.answers.set('POST /api/logic/convert', () => ({ success: false, score: null, midiBase64: null, diagnostics: [] }))
+  api.answers.set('GET /api/logic/sessions', () => [])
+})
+
+test("a song opened again goes on with its session's options", async ({ page, api }) => {
+  api.answers.set('GET /api/logic/synths/tracks', () => [])
+  api.answers.set('GET /api/logic/synths/presets', () => [])
+  api.answers.set('GET /api/logic/synths/mixer', () => ({ settings: null, updatedAt: null }))
+  api.answers.set('GET /api/logic/sessions', () => [
+    {
+      id: 7,
+      name: 'Nachtzug · Song 1',
+      songId: 'run-1/song1',
+      scoreFile: null,
+      audioFile: null,
+      settings: { form: { countIn: 2, bass: 'Walking' }, outputName: 'Nachtzug-Mix' },
+      createdAt: '2026-10-23T10:00:00Z',
+      updatedAt: '2026-10-23T10:00:00Z',
+    },
+  ])
+  await page.goto('#/logic/run-1/song1')
+
+  await expect(page.getByRole('combobox', { name: /^Nachtzug · Song 1 ·/ })).toBeVisible()
+  await expect(page.getByLabel('Name der Sitzung')).toHaveValue('Nachtzug · Song 1')
+  await expect.poll(() => api.callsTo('POST', '/api/logic/convert').length).toBeGreaterThan(0)
+  const form = String(api.callsTo('POST', '/api/logic/convert').at(-1)!.body)
+  expect(form).toContain('"countIn":{"bars":2')
+  expect(form).toContain('"pattern":"Walking"')
 })
 
 test("the song's newest stems with vocals go into the Logic project", async ({ page, api }) => {
@@ -84,4 +111,58 @@ test('without bass or drum stems the page says which models make them', async ({
 
   await expect(page.getByText(/z\. B\. BS-RoFormer-SW/)).toBeVisible()
   await expect(page.getByText('Aus den Stems als MIDI')).toHaveCount(0)
+})
+
+test('a converted song is saved as a session, and a muted track with it', async ({ page, api }) => {
+  api.answers.set('GET /api/logic/synths/tracks', () => [])
+  api.answers.set('GET /api/logic/synths/presets', () => [])
+  api.answers.set('GET /api/logic/synths/mixer', () => ({ settings: null, updatedAt: null }))
+  const voice = (id: string, kind: string, pitch: number) => ({
+    id,
+    displayName: id,
+    kind,
+    notes: [{ startTicks: 0, durationTicks: 480, noteNumber: pitch, velocity: 90 }],
+  })
+  api.answers.set('POST /api/logic/convert', () => ({
+    success: true,
+    midi: null,
+    diagnostics: [],
+    score: {
+      ticksPerQuarterNote: 480,
+      title: 'Nachtzug',
+      tempoBpm: 120,
+      timeSignatures: [{ startTicks: 0, numerator: 4, denominator: 4 }],
+      keySignatures: [],
+      sections: [],
+      voices: [voice('Vocal', 'Melody', 64), voice('Bass', 'Bass', 40)],
+      chords: [],
+      lengthTicks: 1920,
+      countInTicks: 0,
+      durationSeconds: 2,
+    },
+  }))
+  const stored = {
+    id: 9,
+    name: 'Nachtzug · Song 1',
+    songId: 'run-1/song1',
+    scoreFile: null,
+    audioFile: null,
+    settings: {},
+    createdAt: '2026-10-23T10:00:00Z',
+    updatedAt: '2026-10-23T10:00:00Z',
+  }
+  api.answers.set('POST /api/logic/sessions', () => stored)
+  api.answers.set('PUT /api/logic/sessions/9', () => stored)
+  await page.goto('#/logic/run-1/song1')
+
+  await expect.poll(() => api.callsTo('POST', '/api/logic/sessions').length).toBe(1)
+  const created = String(api.callsTo('POST', '/api/logic/sessions')[0]!.body)
+  expect(created).toMatch(/name="song"\r\n\r\nrun-1\/song1/)
+  expect(created).toMatch(/name="name"\r\n\r\nNachtzug · Song 1/)
+  await expect(page.getByText('Wird automatisch gespeichert')).toBeVisible()
+
+  await page.locator('#preview-track-1').uncheck()
+  await expect
+    .poll(() => api.callsTo('PUT', '/api/logic/sessions/9').map((call) => JSON.stringify(call.body)))
+    .toContainEqual(expect.stringContaining('"muted":["Bass"]'))
 })

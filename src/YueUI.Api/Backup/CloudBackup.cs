@@ -42,7 +42,7 @@ public sealed record BackupStatus(
 /// </summary>
 /// <remarks>
 /// The songs are too large to zip every night over a home upload, so they go as files into folders of their own
-/// (<c>songs/&lt;run&gt;/songN/…</c>, <c>versions/</c>, <c>stems/</c>, <c>covers/</c>, <c>cover-styles/</c>, <c>speech/voices/</c>,
+/// (<c>songs/&lt;run&gt;/songN/…</c>, <c>versions/</c>, <c>stems/</c>, <c>covers/</c>, <c>cover-styles/</c>, <c>logic-sessions/</c>, <c>speech/voices/</c>,
 /// <c>speech/takes/</c>, <c>singing/voices/</c>, <c>transcriptions/</c>, <c>loras/</c>) and only when new or changed since the last upload, by size and
 /// modification time remembered in <c>backup.json</c> next to the database. Nothing is deleted in the Nextcloud: a
 /// song deleted by mistake stays there. Left out on purpose: the streaming copies (made again from the FLAC), the
@@ -417,6 +417,11 @@ public sealed class CloudBackup(
             yield return file;
         }
         foreach (var file in Below(Path.Combine(database.Directory, "cover-styles"), "cover-styles"))
+        {
+            yield return file;
+        }
+        // The Logic page's uploaded scores and recordings; a session without them cannot be opened again.
+        foreach (var file in Below(Path.Combine(database.Directory, "logic-sessions"), "logic-sessions"))
         {
             yield return file;
         }

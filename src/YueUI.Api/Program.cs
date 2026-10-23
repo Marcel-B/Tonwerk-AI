@@ -104,6 +104,7 @@ builder.Services.AddSingleton<SqliteVideoStore>();
 builder.Services.AddSingleton<SqliteCoverStore>();
 builder.Services.AddSingleton<SqliteInstrumentStore>();
 builder.Services.AddSingleton<SqliteLogicPresetStore>();
+builder.Services.AddSingleton<SqliteLogicSessionStore>();
 builder.Services.AddSingleton<SqliteSynthStore>();
 
 // Songs sung with a reference voice: mlx-audio-separator separates, Seed-VC converts (both run here when installed,
@@ -250,6 +251,7 @@ api.MapSynthEndpoints();
 api.MapPushEndpoints();
 api.MapPlaylistEndpoints();
 api.MapTemplateEndpoints();
+api.MapLogicSessionEndpoints();
 api.MapVoiceEndpoints();
 api.MapStemEndpoints();
 api.MapSwapEndpoints();

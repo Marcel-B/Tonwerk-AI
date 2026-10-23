@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import Checkbox from 'primevue/checkbox'
+import { useConfirm } from 'primevue/useconfirm'
 import InputGroup from 'primevue/inputgroup'
 import InputGroupAddon from 'primevue/inputgroupaddon'
 import Message from 'primevue/message'
@@ -8,13 +9,20 @@ import {
   ApiError,
   assignInstrument,
   convertScore,
+  createSession,
+  deleteSession,
   exportLogicProject,
   exportMusicXml,
   type LogicProgress,
   listAssignments,
+  listSessions,
   LogicExportError,
   type ScoreSource,
+  sessionFile,
+  setSessionAudio,
   type StemParts,
+  type StoredSession,
+  updateSession,
 } from '../logic/api'
 import { t } from '../logic/i18n'
 import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from '../logic/instruments'
@@ -22,7 +30,19 @@ import { instruments, reloadInstruments } from '../logic/instrumentLibrary'
 import { navigate } from '../view'
 import { deletePreset, loadPresets, savePreset, type Preset } from '../logic/presets'
 import { clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from '../logic/options'
-import { baseName, download } from '../logic/score'
+import { baseName, download, playableVoices } from '../logic/score'
+import {
+  lastSession,
+  readSettings,
+  rememberSession,
+  sessionForm,
+  sessionOfSong,
+  settingsOf,
+  type PageState,
+  type SessionSettings,
+} from '../logic/sessions'
+import type { SynthPatch } from '../logic/synth'
+import { applyMixer, loadSounds, mixer, resetTrackSound, setTrackSound, trackKey, trackSounds } from '../logic/synths'
 import type { Assignments, ConversionResult, Diagnostic } from '../logic/types'
 import { audioUrl, listStems } from '../api'
 import { loadMidiInfo, midiInfo } from '../audioMidi'
@@ -32,7 +52,8 @@ import { handedMidi, logicSong, openStems, replaceLogicSong } from '../view'
 import FileDropZone from './logic/FileDropZone.vue'
 import OptionsForm from './logic/OptionsForm.vue'
 import ResultView from './logic/ResultView.vue'
-import ScorePreview from './logic/ScorePreview.vue'
+import ScorePreview, { type Listening } from './logic/ScorePreview.vue'
+import SessionBar from './logic/SessionBar.vue'
 
 /**
  * yue-to-logic-pro's page inside YuE UI: a score becomes a MIDI file and, with its audio, a Logic Pro project, with
@@ -88,6 +109,7 @@ function pickSong(id: string | null): void {
   if (found) {
     outputName.value = fileNameOf(found.run.title)
   }
+  followSong(id)
 }
 
 /** A song opened from the library is converted as soon as the page can, so its preview is there to adjust. */
@@ -113,17 +135,22 @@ watch(chosen, (found, before) => {
 
 const file = ref<File | null>(null)
 const audio = ref<File | null>(null)
+/** Counts the files chosen, so a session knows the upload it belongs to even when the same file is chosen again. */
+const uploadSerial = ref(0)
 
 function selectFile(selected: File): void {
   file.value = selected
+  uploadSerial.value++
   outputName.value = baseName(selected.name)
   forgetResult()
+  detach()
 }
 
 function selectAudio(selected: File | null): void {
   audio.value = selected
   logicError.value = null
   logicWarnings.value = []
+  void keepAudio(selected)
 }
 
 /** What the server is asked to convert, or null while the chosen way has nothing to offer. */
@@ -202,8 +229,24 @@ watch(
   { immediate: true },
 )
 
+/** The set a session being opened had chosen (null for none), taken once the song's sets are known. */
+let wantedStems: string | null | undefined = undefined
+
+function takeWantedStems(sets: StemSetState[]): boolean {
+  if (wantedStems === undefined || sets.length === 0) {
+    return false
+  }
+  const wanted = wantedStems
+  stemSetId.value = wanted === null ? null : sets.some((set) => set.id === wanted) ? wanted : sets[0]!.id
+  wantedStems = undefined
+  return true
+}
+
 // The newest set is taken, also one that finishes while the page is open; one deleted meanwhile is let go.
 watch(usableStems, (sets, before) => {
+  if (takeWantedStems(sets)) {
+    return
+  }
   const known = new Set((before ?? []).map((set) => set.id))
   const fresh = sets.find((set) => !known.has(set.id))
   if (fresh) {
@@ -305,7 +348,7 @@ function forgetResult(): void {
  */
 const assignments = ref<Assignments>({})
 const instrumentsError = ref<string | null>(null)
-void loadInstruments()
+const instrumentsLoaded = loadInstruments()
 
 async function loadInstruments(): Promise<void> {
   try {
@@ -566,6 +609,9 @@ async function downloadMusicXml(): Promise<void> {
 
 /** Back to a fresh start: no song or files, default parameters, no result. */
 function reset(): void {
+  detach()
+  declinedSource = null
+  rememberSession(null)
   forgetResult()
   file.value = null
   audio.value = null
@@ -578,6 +624,340 @@ function reset(): void {
   outputName.value = 'score'
   logicBusy.value = false
 }
+
+// ---- Sessions ---------------------------------------------------------------------------------------
+
+/**
+ * The page's state for one song or uploaded score, saved on the server as it changes (once the score was converted)
+ * and opened again from the list, in this browser or another, or in the app. Opening a library song goes on with its
+ * newest session; a reload opens the last one this browser worked on.
+ */
+const sessions = ref<StoredSession[]>([])
+const sessionsLoaded = ref(false)
+const sessionsError = ref<string | null>(null)
+const session = ref<StoredSession | null>(null)
+/** The source the session belongs to (`song:<id>` or `file:<n>`); a session is only saved while that is shown. */
+let sessionSource: string | null = null
+/** The source whose session was just deleted: none is made for it again until another source is chosen. */
+let declinedSource: string | null = null
+/** Mute and solo as the preview reports them; a session being opened hands its own to the preview. */
+const listening = ref<Listening | null>(null)
+let restoring = false
+let creating = false
+let lastSaved = ''
+let saveTimer = 0
+
+const sourceKey = computed(() =>
+  mode.value === 'library'
+    ? songId.value
+      ? `song:${songId.value}`
+      : null
+    : file.value
+      ? `file:${uploadSerial.value}`
+      : null,
+)
+const attached = computed(() => (session.value && sessionSource === sourceKey.value ? session.value : null))
+
+const trackIds = computed(() =>
+  result.value?.score ? playableVoices(result.value.score, form.value.includeChords).map((voice) => voice.id) : null,
+)
+const pageState = computed<PageState>(() => ({
+  form: form.value,
+  outputName: outputName.value,
+  stems: mode.value === 'library' && usableStems.value.length > 0 ? stemSetId.value : undefined,
+  stemParts: partChoice.value,
+  tracks:
+    trackIds.value && listening.value
+      ? {
+          ids: trackIds.value,
+          muted: listening.value.muted,
+          solo: listening.value.solo,
+          mixer: mixer.value,
+          sounds: trackSounds.value,
+          instruments: assignments.value,
+        }
+      : null,
+}))
+const settingsText = computed(() => JSON.stringify(settingsOf(pageState.value, attached.value?.settings)))
+
+watch([settingsText, () => result.value?.score], () => {
+  if (!restoring) {
+    window.clearTimeout(saveTimer)
+    saveTimer = window.setTimeout(() => void saveSession(), 1000)
+  }
+})
+
+function sessionsFailed(caught: unknown): void {
+  sessionsError.value =
+    caught instanceof ApiError && caught.status === 0
+      ? t('networkError')
+      : t('sessionsError', { message: caught instanceof Error ? caught.message : String(caught) })
+}
+
+function keepInList(stored: StoredSession): void {
+  sessions.value = [stored, ...sessions.value.filter((entry) => entry.id !== stored.id)]
+  if (session.value?.id === stored.id) {
+    session.value = stored
+  }
+}
+
+/** Saves into the attached session, or makes one once the score is converted; `keepalive` as the page goes away. */
+async function saveSession(keepalive = false): Promise<void> {
+  saveTimer = 0
+  const key = sourceKey.value
+  if (restoring || !sessionsLoaded.value || !key) {
+    return
+  }
+  const current = attached.value
+  const settings = settingsOf(pageState.value, current?.settings)
+  const text = JSON.stringify(settings)
+  try {
+    if (current) {
+      if (text === lastSaved) {
+        return
+      }
+      lastSaved = text
+      keepInList(await updateSession(current.id, { settings }, keepalive))
+    } else if (result.value?.score && key !== declinedSource && !creating) {
+      creating = true
+      try {
+        const name = sessionNameOf()
+        let created = await createSession(
+          name,
+          mode.value === 'library' ? { song: songId.value! } : { file: file.value! },
+          settings,
+        )
+        if (mode.value === 'upload' && audio.value) {
+          await setSessionAudio(created.id, audio.value)
+          created = { ...created, audioFile: audio.value.name }
+        }
+        sessions.value = [created, ...sessions.value]
+        if (sourceKey.value === key) {
+          session.value = created
+          sessionSource = key
+          lastSaved = text
+          rememberSession(created.id)
+        }
+      } finally {
+        creating = false
+      }
+    }
+    sessionsError.value = null
+  } catch (caught) {
+    lastSaved = ''
+    sessionsFailed(caught)
+  }
+}
+
+function sessionNameOf(): string {
+  if (mode.value === 'upload') {
+    return file.value ? baseName(file.value.name) : t('sessionUntitled')
+  }
+  return chosen.value
+    ? `${chosen.value.run.title || t('untitled')} · ${t('songN', { n: chosen.value.song.index })}`
+    : t('sessionUntitled')
+}
+
+function detach(): void {
+  if (restoring) {
+    return
+  }
+  session.value = null
+  sessionSource = null
+  listening.value = null
+  wantedStems = undefined
+}
+
+/** A library song picked by hand or by address goes on with its newest session, if it has one. */
+function followSong(id: string | null): void {
+  if (restoring) {
+    return
+  }
+  const found = id && sessionsLoaded.value ? sessionOfSong(sessions.value, id) : null
+  if (found) {
+    void openSession(found)
+  } else {
+    detach()
+  }
+}
+
+/** Sounds, instruments and mixer belong to track names for every song; a session lays its song's back over them. */
+async function layOver(settings: SessionSettings): Promise<void> {
+  await Promise.all([loadSounds(), instrumentsLoaded])
+  for (const [track, sound] of Object.entries(settings.sounds ?? {})) {
+    const current = trackSounds.value[trackKey(track)]
+    if (sound === null) {
+      if (current) {
+        void resetTrackSound(track)
+      }
+    } else if (JSON.stringify(current ?? null) !== JSON.stringify({ patch: sound.patch, preset: sound.preset })) {
+      setTrackSound(track, sound.patch as SynthPatch, sound.preset)
+    }
+  }
+  const known = new Set(instruments.value.map((instrument) => instrument.id))
+  for (const [track, id] of Object.entries(settings.instruments ?? {})) {
+    if ((assignments.value[track] ?? null) !== id && (id === null || known.has(id))) {
+      await assign(track, id)
+    }
+  }
+  if (settings.mixer) {
+    applyMixer(settings.mixer)
+  }
+}
+
+async function openSession(target: StoredSession): Promise<void> {
+  window.clearTimeout(saveTimer)
+  restoring = true
+  convertWhenReady = false
+  try {
+    const settings = readSettings(target.settings)
+    forgetResult()
+    if (target.songId) {
+      mode.value = 'library'
+      songId.value = target.songId
+      replaceLogicSong(target.songId)
+      sessionSource = `song:${target.songId}`
+    } else {
+      const [score, recorded] = await Promise.all([
+        sessionFile(target.id, 'file', target.scoreFile ?? 'score.abc'),
+        target.audioFile ? sessionFile(target.id, 'audio', target.audioFile) : Promise.resolve(null),
+      ])
+      mode.value = 'upload'
+      songId.value = null
+      replaceLogicSong(null)
+      file.value = score
+      audio.value = recorded
+      uploadSerial.value++
+      sessionSource = `file:${uploadSerial.value}`
+    }
+    form.value = sessionForm(settings)
+    presetName.value = ''
+    partChoice.value = settings.stemParts ?? { bass: false, drums: false }
+    listening.value = { muted: settings.muted ?? [], solo: settings.solo ?? [] }
+    outputName.value =
+      settings.outputName ||
+      (target.scoreFile ? baseName(target.scoreFile) : chosen.value ? fileNameOf(chosen.value.run.title) : 'score')
+    wantedStems = settings.stems
+    session.value = target
+    declinedSource = null
+    rememberSession(target.id)
+    await layOver(settings)
+    // The watchers of the mode and the song run first, so they neither forget this conversion nor reset the stems.
+    await nextTick()
+    takeWantedStems(usableStems.value)
+    lastSaved = settingsText.value
+  } catch (caught) {
+    restoring = false
+    detach()
+    sessionsFailed(caught)
+    return
+  } finally {
+    restoring = false
+  }
+  await convert()
+}
+
+async function openSessionById(id: number): Promise<void> {
+  const found = sessions.value.find((entry) => entry.id === id)
+  if (found && found.id !== attached.value?.id) {
+    await openSession(found)
+  }
+}
+
+async function renameSession(name: string): Promise<void> {
+  const current = attached.value
+  if (!current || !name || name === current.name) {
+    return
+  }
+  try {
+    keepInList(await updateSession(current.id, { name }))
+    sessionsError.value = null
+  } catch (caught) {
+    sessionsFailed(caught)
+  }
+}
+
+const confirm = useConfirm()
+
+function askDeleteSession(): void {
+  const current = attached.value
+  if (!current) {
+    return
+  }
+  confirm.require({
+    header: t('sessionDelete'),
+    message: t('sessionDeleteConfirm', { name: current.name }),
+    icon: 'pi pi-trash',
+    rejectProps: { label: t('sessionKeep'), severity: 'secondary', outlined: true },
+    acceptProps: { label: t('presetDelete'), severity: 'danger' },
+    accept: async () => {
+      try {
+        await deleteSession(current.id)
+        sessions.value = sessions.value.filter((entry) => entry.id !== current.id)
+        if (session.value?.id === current.id) {
+          // The page stays as it is; a session for it is only made again after another source was chosen.
+          declinedSource = sessionSource
+          session.value = null
+          sessionSource = null
+          rememberSession(null)
+        }
+        sessionsError.value = null
+      } catch (caught) {
+        sessionsFailed(caught)
+      }
+    },
+  })
+}
+
+/** An uploaded recording goes into the session too, so the preview plays it along when the session is opened again. */
+async function keepAudio(selected: File | null): Promise<void> {
+  const current = attached.value
+  if (restoring || !current || mode.value !== 'upload') {
+    return
+  }
+  try {
+    await setSessionAudio(current.id, selected)
+    keepInList({ ...current, audioFile: selected?.name ?? null })
+  } catch (caught) {
+    sessionsFailed(caught)
+  }
+}
+
+void (async () => {
+  try {
+    sessions.value = await listSessions()
+    sessionsLoaded.value = true
+  } catch (caught) {
+    sessionsFailed(caught)
+    return
+  }
+  if (session.value || (mode.value === 'upload' && file.value)) {
+    return
+  }
+  const remembered = lastSession()
+  const target = songId.value
+    ? sessionOfSong(sessions.value, songId.value)
+    : (sessions.value.find((entry) => entry.id === remembered) ?? null)
+  if (target) {
+    await openSession(target)
+  } else if (result.value?.score) {
+    // The song by address was converted before the list arrived; it gets its session now.
+    void saveSession()
+  }
+})()
+
+/** What was changed in the last second still reaches the server when the page goes away. */
+function flushSession(): void {
+  if (saveTimer) {
+    window.clearTimeout(saveTimer)
+    void saveSession(true)
+  }
+}
+window.addEventListener('pagehide', flushSession)
+onBeforeUnmount(() => {
+  flushSession()
+  window.removeEventListener('pagehide', flushSession)
+})
 
 // A track turned into MIDI on the transcription or voices page arrives as the score to upload; last in
 // setup, since taking it touches state declared further up.
@@ -592,6 +972,13 @@ watch(
   },
   { immediate: true },
 )
+
+// The page is loaded on first use, often after the library: a song by address may be there already, which the
+// watcher above would never see arrive.
+if (convertWhenReady && source.value && mode.value === 'library') {
+  convertWhenReady = false
+  void convert()
+}
 </script>
 
 <template>
@@ -624,6 +1011,16 @@ watch(
         </div>
       </template>
       <template #content>
+        <SessionBar
+          :sessions="sessions"
+          :current="attached"
+          :error="sessionsError"
+          :can-save="sourceKey !== null"
+          class="mb-4"
+          @open="openSessionById"
+          @rename="renameSession"
+          @remove="askDeleteSession"
+        />
         <SelectButton
           v-model="mode"
           :options="modes"
@@ -810,8 +1207,10 @@ watch(
       :instruments="instruments"
       :assignments="assignments"
       :recording="recording"
+      :listening="listening"
       @assign="assign"
       @manage-instruments="openInstruments"
+      @listening="(value) => (listening = value)"
     />
 
     <ResultView

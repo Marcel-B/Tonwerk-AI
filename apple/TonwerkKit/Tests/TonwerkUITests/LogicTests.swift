@@ -87,4 +87,69 @@ final class LogicTests: XCTestCase {
         XCTAssertEqual(picked.baseName, "Melodie")
         XCTAssertNil(picked.song)
     }
+
+    func testASessionFormReadsTheWebPagesNamesBothWays() {
+        var form = LogicForm()
+        form.bass = "Walking"
+        form.countIn = 2
+        form.harmonyParts = ["Alto", "Tenor"]
+        form.bassFromStems = true
+        let json = form.sessionJSON
+        XCTAssertEqual(json["chordPattern"] as? String, "as-written")
+        XCTAssertEqual(json["drums"] as? String, "off")
+        XCTAssertTrue(json["harmonyKey"] is NSNull)
+        let read = LogicForm(session: json, stemParts: ["bass": true, "drums": false])
+        XCTAssertEqual(read, form)
+        // What the app does not know or that has the wrong type takes the default.
+        let web = LogicForm(session: ["bass": "off", "countIn": "zwei", "chordPattern": "Sixteenths", "swing": 40], stemParts: nil)
+        XCTAssertEqual(web.bass, "")
+        XCTAssertEqual(web.countIn, 0)
+        XCTAssertEqual(web.chordPattern, "Sixteenths")
+    }
+
+    func testSessionSettingsKeepTheWebPagesFieldsAndThisSongsTracksOnly() {
+        var mixer = LogicMixer()
+        mixer["Bass"] = .init(volume: 0.5, pan: 0)
+        mixer["Other"] = .init(volume: 2, pan: 1)
+        let before: [String: Any] = ["form": ["swing": 40, "countIn": 4], "fromWeb": true]
+        var form = LogicForm()
+        form.countIn = 1
+        let settings = LogicSessionSettings.json(
+            form: form, stems: "", tracks: ["Vocal", "Bass"], muted: ["Bass", "Gone"], soloed: [], mixer: mixer,
+            sounds: ["BASS": SoundLibrary.TrackSound(patch: ["engine": "fm"], preset: "Sub")],
+            assignments: ["Vocal": 3], over: before)
+        XCTAssertEqual(settings["fromWeb"] as? Bool, true)
+        let stored = settings["form"] as? [String: Any]
+        XCTAssertEqual(stored?["swing"] as? Int, 40)
+        XCTAssertEqual(stored?["countIn"] as? Int, 1)
+        XCTAssertTrue(settings["stems"] is NSNull)
+        XCTAssertEqual(settings["muted"] as? [String], ["Bass"])
+        let tracks = (settings["mixer"] as? [String: Any])?["tracks"] as? [String: Any]
+        XCTAssertEqual(tracks.map { Set($0.keys) }, ["BASS"])
+        let sounds = settings["sounds"] as? [String: Any]
+        XCTAssertTrue(sounds?["Vocal"] is NSNull)
+        XCTAssertEqual((sounds?["Bass"] as? [String: Any])?["preset"] as? String, "Sub")
+        XCTAssertEqual((settings["instruments"] as? [String: Any])?["Vocal"] as? Int64, 3)
+        XCTAssertTrue((settings["instruments"] as? [String: Any])?["Bass"] is NSNull)
+
+        let read = LogicSessionSettings(json: settings)
+        XCTAssertEqual(read.stems, "")
+        XCTAssertEqual(read.muted, ["Bass"])
+        XCTAssertEqual(read.instruments["Vocal"], .some(3))
+        XCTAssertEqual(read.instruments["Bass"], .some(nil))
+        XCTAssertEqual(read.sounds["Bass"]??.preset, "Sub")
+        XCTAssertEqual(read.mixer?["Bass"].volume, 0.5)
+    }
+
+    func testTheNewestSessionOfASongIsTakenUp() {
+        let sessions = [
+            SavedLogicSession(json: ["id": 1, "name": "A", "songId": "run/song1", "updatedAt": "2026-10-23T10:00:00.1234567+00:00"] as [String: Any]),
+            SavedLogicSession(json: ["id": 2, "name": "B", "songId": "run/song1", "updatedAt": "2026-10-23T12:00:00.1234567+00:00"] as [String: Any]),
+            SavedLogicSession(json: ["id": 3, "name": "C", "songId": "run/song2", "updatedAt": "2026-10-23T13:00:00.1234567+00:00"] as [String: Any]),
+        ].compactMap { $0 }
+        XCTAssertEqual(SavedLogicSession.newest(of: "run/song1", in: sessions)?.id, 2)
+        XCTAssertNil(SavedLogicSession.newest(of: "run/song3", in: sessions))
+        XCTAssertNotNil(sessions[0].updated)
+        XCTAssertNil(SavedLogicSession(json: ["name": "ohne id"] as [String: Any]))
+    }
 }

@@ -44,6 +44,7 @@ final class LogicSession {
         didSet {
             guard form != oldValue else { return }
             form.save(to: defaults)
+            scheduleSave()
         }
     }
     private(set) var conversion: LogicConversion?
@@ -69,6 +70,19 @@ final class LogicSession {
     /// Set by the picker; until then the newest set with vocals is taken, as on the web page. Empty for none.
     private var pickedStems: String?
     private(set) var stemsConfigured = false
+
+    /// The saved session the page saves into (`logic/sessions.ts`), and the list to open one from.
+    private(set) var saved: SavedLogicSession?
+    private(set) var savedSessions: [SavedLogicSession] = []
+    private var sessionsLoaded = false
+    /// The source the saved session belongs to; it is only saved into while that source is open.
+    private var savedSource: String?
+    /// The source whose session was just deleted: none is made for it again until another source is opened.
+    private var declinedSource: String?
+    private var restoring = false
+    private var creating = false
+    private var lastSaved = ""
+    private var saveTask: Task<Void, Never>?
     /// Basic Pitch, which bass and drums from the stems need.
     private(set) var midiInstalled = false
 
@@ -107,8 +121,12 @@ final class LogicSession {
 
     // MARK: Song and conversion
 
-    func open(_ source: ScoreSource) {
-        guard source.id != self.source?.id else { return }
+    /// A source to work on; a library song goes on with its newest saved session, `saved` opens that one.
+    func open(_ source: ScoreSource, saved session: SavedLogicSession? = nil) {
+        guard source.id != self.source?.id || session != nil else { return }
+        saveTask?.cancel()
+        saved = nil
+        savedSource = nil
         self.source = source
         conversion = nil
         player.stop()
@@ -118,6 +136,11 @@ final class LogicSession {
         pickedStems = nil
         Task {
             await library?.value
+            await loadSessions()
+            guard source.id == self.source?.id else { return }
+            if let found = session ?? source.song.flatMap({ SavedLogicSession.newest(of: $0.id, in: savedSessions) }) {
+                await restore(found, for: source)
+            }
             await loadStems()
             await convert()
             await loadRecording()
@@ -136,6 +159,7 @@ final class LogicSession {
             guard source.id == self.source?.id else { return }
             conversion = result
             convertedForm = asked
+            scheduleSave()
             if let score = result.score {
                 await player.load(score, tracks: tracks, mixer: mixer)
             } else if let error = result.diagnostics.first(where: { $0.severity == "Error" }) {
@@ -193,6 +217,7 @@ final class LogicSession {
         }
         set {
             pickedStems = newValue ?? ""
+            scheduleSave()
             if form.bassFromStems || form.drumsFromStems {
                 Task { await convert() }
             }
@@ -278,6 +303,7 @@ final class LogicSession {
             problem = error.localizedDescription
             return
         }
+        scheduleSave()
         await convert()
     }
 
@@ -300,6 +326,7 @@ final class LogicSession {
         }
         await model.soundLibrary.give(track, named: name)
         reroute()
+        scheduleSave()
     }
 
     /// After a device came or went, a mute or solo or a sound changed.
@@ -311,11 +338,13 @@ final class LogicSession {
         muted.formSymmetricDifference([track])
         defaults.set(Array(muted), forKey: "logicMuted")
         reroute()
+        scheduleSave()
     }
 
     func toggleSolo(_ track: String) {
         soloed.formSymmetricDifference([track])
         reroute()
+        scheduleSave()
     }
 
     // MARK: Mixer
@@ -337,6 +366,163 @@ final class LogicSession {
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
             await model.saveLogicMixer(settings)
+        }
+        scheduleSave()
+    }
+
+    // MARK: Saved sessions
+
+    /// The saved session while its source is open.
+    var attachedSaved: SavedLogicSession? {
+        guard let saved, savedSource == source?.id else { return nil }
+        return saved
+    }
+
+    func loadSessions(again: Bool = false) async {
+        guard again || !sessionsLoaded, let list = try? await model.logicSessions() else { return }
+        savedSessions = list
+        sessionsLoaded = true
+    }
+
+    /// A saved session from the list: its song from the library, or its uploaded score fetched again.
+    func openSaved(_ session: SavedLogicSession) async {
+        if let songId = session.songId {
+            guard let song = model.song(songId) else {
+                problem = String(localized: "Den Song dieser Sitzung gibt es nicht mehr.")
+                return
+            }
+            open(.song(song), saved: session)
+        } else {
+            do {
+                open(.file(try await model.logicSessionFile(session)), saved: session)
+            } catch {
+                problem = error.localizedDescription
+            }
+        }
+    }
+
+    /// Sounds, instruments and mixer belong to track names for every song; a session lays its song's back over them.
+    private func restore(_ session: SavedLogicSession, for source: ScoreSource) async {
+        restoring = true
+        defer { restoring = false }
+        let settings = LogicSessionSettings(json: session.settings)
+        form = settings.form
+        pickedStems = settings.stems
+        muted = settings.muted
+        soloed = settings.soloed
+        defaults.set(Array(muted), forKey: "logicMuted")
+        if let stored = settings.mixer {
+            mixer.master = stored.master
+            mixer.tracks.merge(stored.tracks) { _, new in new }
+            player.apply(mixer)
+            let mix = mixer
+            Task { [model] in await model.saveLogicMixer(mix) }
+        }
+        if !model.soundLibrary.loaded {
+            await model.soundLibrary.load()
+        }
+        for (track, sound) in settings.sounds {
+            await model.soundLibrary.restore(track, to: sound)
+        }
+        for (track, id) in settings.instruments where assignments[track] != id {
+            if let id, !instruments.contains(where: { $0.id == id }) {
+                continue
+            }
+            assignments[track] = id
+            try? await model.setLogicAssignment(track, id)
+        }
+        saved = session
+        savedSource = source.id
+        declinedSource = nil
+        lastSaved = Self.text(of: snapshot())
+    }
+
+    private func snapshot() -> [String: Any] {
+        LogicSessionSettings.json(
+            form: form, stems: song != nil && !vocalStems.isEmpty ? (stemSetId ?? "") : nil,
+            tracks: conversion?.score == nil ? nil : voices.map(\.id), muted: muted, soloed: soloed, mixer: mixer,
+            sounds: model.soundLibrary.tracks, assignments: assignments, over: attachedSaved?.settings ?? [:])
+    }
+
+    private static func text(of settings: [String: Any]) -> String {
+        (try? JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys]))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
+
+    /// Saved a second after the last change, so a fader drag sends one request.
+    private func scheduleSave() {
+        guard !restoring else { return }
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            await self?.saveSession()
+        }
+    }
+
+    /// Into the attached session, or a new one once the score is converted.
+    private func saveSession() async {
+        guard !restoring, sessionsLoaded, let source else { return }
+        let settings = snapshot()
+        let text = Self.text(of: settings)
+        do {
+            if let current = attachedSaved {
+                guard text != lastSaved else { return }
+                lastSaved = text
+                keep(try await model.updateLogicSession(current.id, settings: settings))
+            } else if conversion?.score != nil, source.id != declinedSource, !creating {
+                creating = true
+                defer { creating = false }
+                let stored = try await model.createLogicSession(name: Self.name(of: source), source: source, settings: settings)
+                savedSessions.insert(stored, at: 0)
+                if self.source?.id == source.id {
+                    saved = stored
+                    savedSource = source.id
+                    lastSaved = text
+                }
+            }
+        } catch {
+            lastSaved = ""
+            problem = error.localizedDescription
+        }
+    }
+
+    private static func name(of source: ScoreSource) -> String {
+        switch source {
+        case .song(let song): song.displayTitle
+        case .file(let file): file.baseName
+        }
+    }
+
+    private func keep(_ stored: SavedLogicSession) {
+        savedSessions.removeAll { $0.id == stored.id }
+        savedSessions.insert(stored, at: 0)
+        if saved?.id == stored.id {
+            saved = stored
+        }
+    }
+
+    func renameSaved(_ name: String) async {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let current = attachedSaved, !trimmed.isEmpty, trimmed != current.name else { return }
+        do {
+            keep(try await model.updateLogicSession(current.id, name: trimmed))
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    /// The page stays as it is; a session for it is only made again after another source was opened.
+    func deleteSaved() async {
+        guard let current = attachedSaved else { return }
+        do {
+            try await model.deleteLogicSession(current.id)
+            savedSessions.removeAll { $0.id == current.id }
+            declinedSource = savedSource
+            saved = nil
+            savedSource = nil
+        } catch {
+            problem = error.localizedDescription
         }
     }
 

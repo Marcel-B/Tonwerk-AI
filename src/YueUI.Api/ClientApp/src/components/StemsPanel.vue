@@ -17,6 +17,7 @@ import { machineField, ranOnNote, storedMachine } from '../machines'
 import MachinePicker from './MachinePicker.vue'
 import { playing as songPlaying, toggle as toggleSong } from '../player'
 import type { RunInfo, StemFile, StemModel, StemSetState } from '../types'
+import { stemModelLabel } from '../stemModels'
 import { showSong, songHref, stemSong } from '../view'
 import MidiOptions from './MidiOptions.vue'
 import MidiResult from './MidiResult.vue'
@@ -456,7 +457,14 @@ const stageSeverity: Record<string, string | undefined> = { done: 'success', fai
       </div>
       <div class="flex min-w-0 flex-[1_1_12rem] flex-col gap-1">
         <label for="stems-model" class="muted text-sm">{{ t('stemsModel') }}</label>
-        <Select v-model="model" input-id="stems-model" :options="models" option-label="name" option-value="id" fluid />
+        <Select
+          v-model="model"
+          input-id="stems-model"
+          :options="models"
+          :option-label="stemModelLabel"
+          option-value="id"
+          fluid
+        />
       </div>
       <div class="flex items-center gap-2 py-2">
         <Checkbox v-model="dereverb" input-id="stems-dereverb" binary />

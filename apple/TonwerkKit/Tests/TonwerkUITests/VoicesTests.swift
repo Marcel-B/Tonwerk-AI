@@ -28,6 +28,14 @@ final class VoicesTests: XCTestCase {
         XCTAssertEqual(VoicesSession.stemName("synth"), "synth", "an unknown stem keeps its name")
     }
 
+    func testModelMenuSaysWhatAModelSplits() {
+        XCTAssertEqual(VoicesSession.splits(["Instrumental", "Vocals"]), "Gesang / Instrumental")
+        XCTAssertEqual(VoicesSession.splits(["vocals", "karaoke"]), "Leadgesang / Rest")
+        XCTAssertEqual(VoicesSession.splits(["vocals", "drums", "bass", "guitar", "piano", "other"]), "Gesang + 5 Instrumente")
+        XCTAssertEqual(VoicesSession.splits(["kick", "snare", "toms", "hh", "ride", "crash"]), "Schlagzeug in 6 Teile")
+        XCTAssertEqual(VoicesSession.splits(nil), "")
+    }
+
     func testStagesHaveGermanNames() {
         XCTAssertEqual(VoiceStages.name(nil), "Wartet")
         XCTAssertEqual(VoiceStages.name("converting"), "Singt")

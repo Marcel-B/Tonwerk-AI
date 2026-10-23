@@ -467,6 +467,30 @@ final class VoicesSession {
         }
     }
 
+    /// What a model splits a song into, short enough for the model menu, so one can tell a model that only takes the
+    /// voice out from one that also parts the instruments. Mirrors `stemModelSplits` in the web UI's `stemModels.ts`.
+    nonisolated static func splits(_ stems: [String]?) -> String {
+        let names = (stems ?? []).map { $0.lowercased() }
+        guard !names.isEmpty else { return "" }
+        let voiceParts: Set<String> = ["vocals", "instrumental", "no_vocals", "karaoke"]
+        let drumParts: Set<String> = ["kick", "snare", "toms", "hh", "ride", "crash"]
+        if names.allSatisfy(voiceParts.contains) {
+            return names.contains("karaoke")
+                ? String(localized: "Leadgesang / Rest") : String(localized: "Gesang / Instrumental")
+        }
+        if names.allSatisfy(drumParts.contains) {
+            return String(localized: "Schlagzeug in \(names.count) Teile")
+        }
+        let instruments = names.filter { !voiceParts.contains($0) }.count
+        return String(localized: "Gesang + \(instruments) Instrumente")
+    }
+
+    /// The model's name with what it splits, for the menu.
+    nonisolated static func menuLabel(_ model: Components.Schemas.StemModel) -> String {
+        let parts = splits(model.stems)
+        return parts.isEmpty ? model.name : "\(model.name) · \(parts)"
+    }
+
     /// How the list names a set: run title and song, or the uploaded file.
     func name(of set: Components.Schemas.StemSetState) -> String {
         if set.upload == true { return set.title ?? String(localized: "Datei") }

@@ -23,6 +23,7 @@ public sealed class WorkerHost(
     StatusHub hub,
     TimeProvider time,
     Logs.LogStore logs,
+    Stats.SynthesisStats synthesisStats,
     ILogger<WorkerHost> logger) : IHostedService, IAsyncDisposable, IWorkerStatus
 {
     private const int LogCapacity = 300;
@@ -477,19 +478,18 @@ public sealed class WorkerHost(
                 Started(message);
                 break;
             case "stage":
-                Update(message, song => song.Entering(Text(message["stage"]) ?? song.Stage, time.GetUtcNow()) with
+                Update(message, song => song.Entering(Text(message["stage"]) ?? song.Stage, time.GetUtcNow())
+                    .Saying(Text(message["detail"]) ?? "", time.GetUtcNow()) with
                 {
-                    Detail = Text(message["detail"]) ?? "",
                     Engine = Text(message["engine"]) ?? song.Engine,
                     // A new stage starts from zero; the worker's progress events follow.
                     Fraction = Text(message["stage"]) == "ready" ? 1 : 0,
                 });
                 break;
             case "progress":
-                Update(message, song => song with
+                Update(message, song => song.Saying(Text(message["detail"]) ?? song.Detail, time.GetUtcNow()) with
                 {
                     Fraction = Number(message["fraction"]) ?? song.Fraction,
-                    Detail = Text(message["detail"]) ?? song.Detail,
                 }, throttle: true);
                 break;
             case "song":
@@ -723,6 +723,7 @@ public sealed class WorkerHost(
             }
         }
         Publish("log", entry);
+        synthesisStats.Observe(text, entry.Time);
         // Only the last few hundred lines stay in memory for the queue page; the log page keeps them for days.
         logs.Add(Logs.LogSources.Worker, level switch
         {

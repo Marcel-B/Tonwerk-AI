@@ -37,6 +37,8 @@ export interface SongState {
   updatedAt: string
   /** The stages so far, each with when it began, oldest first; the last one is `stage`. */
   stages: StageTime[]
+  /** Since when the current stage waits for an engine ("waiting", "paused · …"); null while it works. */
+  waitingSince: string | null
   /** A render from saved tokens: no planning or composing ahead of it. */
   render: boolean
   /** The voice chosen in the form: a version with it is queued once the song is ready. */
@@ -47,6 +49,42 @@ export interface SongState {
 export interface StageTime {
   stage: Stage
   startedAt: string
+  /** Seconds the stage waited for an engine; its working time is its length minus these. */
+  waited: number
+}
+
+/** One finished synthesis as the worker logged it (Stats/SynthesisStats.cs). */
+export interface SynthesisRecord {
+  at: string
+  song: string
+  engine: string
+  steps: number
+  seconds: number
+  /** Seconds of work per second of audio. */
+  rate: number
+}
+
+export interface EngineStats {
+  engine: string
+  steps: number
+  count: number
+  meanRate: number
+  bestRate: number
+  meanSeconds: number
+  lastAt: string
+}
+
+export interface AneProgramStats {
+  count: number
+  meanSeconds: number
+  longestSeconds: number
+  lastAt: string | null
+}
+
+export interface SynthesisOverview {
+  engines: EngineStats[]
+  anePrograms: AneProgramStats
+  recent: SynthesisRecord[]
 }
 
 export interface LogEntry {

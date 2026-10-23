@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watchEffect } from 'vue'
-import { formatDuration, stageLabel, stepLabel } from '../i18n'
+import { formatDuration, stageLabel, stepLabel, t } from '../i18n'
 import type { SongState, Stage } from '../types'
 
 const props = defineProps<{ song: SongState }>()
@@ -16,8 +16,10 @@ const RENDER_PIPELINE: Stage[] = ['synth', 'decode']
 type Step = {
   stage: Stage
   state: 'done' | 'current' | 'pending'
-  /** Seconds the stage took, or has taken so far. */
+  /** Seconds the stage worked, or has worked so far: its clock stops while it waits for an engine. */
   seconds?: number
+  /** Seconds it waited meanwhile, shown apart. */
+  waited?: number
 }
 
 // The current stage's time runs while the page is open; one tick a second is enough for m:ss.
@@ -45,9 +47,16 @@ const steps = computed<Step[]>(() => {
   const shown = song.finished ? history.slice(0, -1) : history
   const steps: Step[] = shown.map((entry, i) => {
     const next = history[i + 1]
-    return next
-      ? { stage: entry.stage, state: 'done', seconds: seconds(entry.startedAt, next.startedAt) }
-      : { stage: entry.stage, state: 'current', seconds: seconds(entry.startedAt, now.value) }
+    // A wait still running belongs to the current stage; a server from before waits were counted sends none.
+    const open = !next && song.waitingSince ? seconds(song.waitingSince, now.value) : 0
+    const waited = (entry.waited ?? 0) + open
+    const length = next ? seconds(entry.startedAt, next.startedAt) : seconds(entry.startedAt, now.value)
+    return {
+      stage: entry.stage,
+      state: next ? 'done' : 'current',
+      seconds: Math.max(0, length - waited),
+      waited,
+    }
   })
   if (!song.finished) {
     const pipeline = song.render ? RENDER_PIPELINE : PIPELINE
@@ -119,6 +128,9 @@ function iconColor(step: Step): string {
         </div>
         <div v-if="item.seconds !== undefined" class="text-muted-color tabular-nums">
           {{ formatDuration(item.seconds) }}
+        </div>
+        <div v-if="(item.waited ?? 0) >= 1" class="text-muted-color tabular-nums text-xs">
+          {{ t('stageWaited', { time: formatDuration(item.waited!) }) }}
         </div>
       </div>
     </template>

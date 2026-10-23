@@ -19,6 +19,8 @@ import {
 import { formatDuration, formatTime, stageLabel, t, versionProgress } from '../i18n'
 import QueueOverview from './QueueOverview.vue'
 import SongTimeline from './SongTimeline.vue'
+import SynthesisStats from './SynthesisStats.vue'
+import { copyText } from '../clipboard'
 import { holderOf, speechWaitReason, transcribing, waitReason } from '../queueModels'
 import { navigate, showSong, songHref } from '../view'
 import { loadMachines, ranOnNote } from '../machines'
@@ -357,6 +359,19 @@ async function run(action: () => Promise<void>): Promise<void> {
     emit('error', caught instanceof Error ? caught.message : String(caught))
   }
 }
+
+/** The worker's lines as text, to paste into a chat. */
+const copied = ref(false)
+async function copyLog(): Promise<void> {
+  const text = props.log.map((entry) => `${formatTime(entry.time)} ${entry.message}`).join('\n')
+  if (await copyText(text)) {
+    copied.value = true
+    setTimeout(() => (copied.value = false), 2000)
+  }
+}
+
+/** Counted so the statistics read again when a song is done. */
+const finishedSongs = computed(() => props.songs.filter((song) => song.finished).length)
 
 /** The log opens scrolled to its end, and stays there while new lines come in. */
 const logOpen = ref(false)
@@ -807,6 +822,9 @@ watch(
     <details class="log" @toggle="logOpen = ($event.target as HTMLDetailsElement).open">
       <summary>{{ t('log') }}</summary>
       <!-- Only while open: the worker's stderr can bring several lines a second, and each one shifts all the lines. -->
+      <div v-if="logOpen && log.length > 0" class="flex justify-end">
+        <Button :label="copied ? t('logCopied') : t('copyLog')" icon="pi pi-copy" text size="small" @click="copyLog" />
+      </div>
       <div v-if="logOpen" ref="logBox" class="text-sm">
         <p v-if="log.length === 0" class="muted">{{ t('logEmpty') }}</p>
         <div v-for="(entry, i) in log" :key="i" :class="['entry', entry.level]">
@@ -814,6 +832,7 @@ watch(
         </div>
       </div>
     </details>
+    <SynthesisStats :finished="finishedSongs" />
   </section>
 </template>
 

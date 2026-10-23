@@ -5,6 +5,7 @@ import type {
   CoverPainting,
   GenerateRequest,
   LogEntry,
+  SynthesisOverview,
   LogLevel,
   LogPage,
   LogSource,
@@ -141,6 +142,11 @@ export async function reviseLyrics(
 export async function getLyricsModels(machine: string | null = null): Promise<LyricsModels> {
   const query = machine ? `?machine=${encodeURIComponent(machine)}` : ''
   return (await send(`/api/lyrics/models${query}`)).json() as Promise<LyricsModels>
+}
+
+/** What YuE2's synthesis took per engine, for the queue page's statistics. */
+export async function getSynthesisStats(): Promise<SynthesisOverview> {
+  return (await send('/api/stats/synthesis')).json() as Promise<SynthesisOverview>
 }
 
 /** This Mac and the helpers a job may run on, for the pickers. */

@@ -65,16 +65,63 @@ public sealed record SongState
 
     public bool Finished => Stage is "ready" or "failed" or "cancelled";
 
+    /// <summary>
+    /// Since when the current stage waits for an engine (the worker's detail "waiting" or "paused · …"), so its clock
+    /// can stop meanwhile; null while it works. Closed waits are in the stage's <see cref="StageTime.Waited"/>.
+    /// </summary>
+    public DateTimeOffset? WaitingSince { get; init; }
+
     /// <summary>Moves on to <paramref name="stage"/>; the worker repeats a stage's event when only its detail changes.</summary>
-    public SongState Entering(string stage, DateTimeOffset at) =>
-        stage == Stage ? this : this with { Stage = stage, Stages = [.. Stages, new StageTime(stage, at)] };
+    public SongState Entering(string stage, DateTimeOffset at)
+    {
+        if (stage == Stage)
+        {
+            return this;
+        }
+        var song = StopWaiting(at);
+        return song with { Stage = stage, Stages = [.. song.Stages, new StageTime(stage, at)] };
+    }
+
+    /// <summary>
+    /// Takes the worker's new detail and starts or ends a wait with it. Waiting in the queue is that stage's whole
+    /// point, so only the stages after it count their waits.
+    /// </summary>
+    public SongState Saying(string detail, DateTimeOffset at)
+    {
+        var waiting = Stage != "queued" && !Finished && IsWaiting(detail);
+        var song = waiting ? this : StopWaiting(at);
+        return song with { Detail = detail, WaitingSince = waiting ? WaitingSince ?? at : null };
+    }
+
+    /// <summary>
+    /// What YuE Studio's scheduler says while a song holds no engine: "waiting" for one, "paused · the GPU is busy …"
+    /// while another song has it.
+    /// </summary>
+    public static bool IsWaiting(string detail) =>
+        detail == "waiting" || detail.StartsWith("paused", StringComparison.Ordinal);
+
+    private SongState StopWaiting(DateTimeOffset at)
+    {
+        if (WaitingSince is not { } since || Stages.Count == 0)
+        {
+            return this with { WaitingSince = null };
+        }
+        var last = Stages[^1];
+        var waited = Math.Max(0, (at - since).TotalSeconds);
+        return this with
+        {
+            WaitingSince = null,
+            Stages = [.. Stages.Take(Stages.Count - 1), last with { Waited = last.Waited + waited }],
+        };
+    }
 
     /// <summary>The worker addresses songs by this path (cancel).</summary>
     [JsonIgnore]
     public string AudioPath { get; init; } = "";
 }
 
-public sealed record StageTime(string Stage, DateTimeOffset StartedAt);
+/// <param name="Waited">Seconds the stage spent waiting for an engine; its working time is its length minus these.</param>
+public sealed record StageTime(string Stage, DateTimeOffset StartedAt, double Waited = 0);
 
 public sealed record LogEntry(DateTimeOffset Time, string Level, string Message);
 

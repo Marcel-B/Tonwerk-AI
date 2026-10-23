@@ -91,6 +91,7 @@ builder.Services.AddHostedService<PushNotifier>();
 builder.Services.Configure<DataOptions>(builder.Configuration.GetSection(DataOptions.Section));
 builder.Services.AddSingleton<SqliteDatabase>();
 builder.Services.AddSingleton<SqlitePlaylistStore>();
+builder.Services.AddSingleton<YueUI.Api.Stats.SynthesisStats>();
 builder.Services.AddSingleton<SqliteRunTitleStore>();
 builder.Services.AddSingleton<SqliteSongRatingStore>();
 builder.Services.AddSingleton<SqliteSongNoteStore>();

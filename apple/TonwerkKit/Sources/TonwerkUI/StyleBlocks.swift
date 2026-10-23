@@ -95,6 +95,47 @@ public enum StyleBlocks {
         }
     }
 
+    /// One German sentence per voice block, shown as a tooltip on the Mac: the timbre words are singers' and
+    /// producers' jargon, and what YuE2 makes of them follows how they are used in the songs it learned from.
+    public static func explanation(of tag: String) -> String? {
+        explanations[tag.lowercased()]
+    }
+
+    private static let explanations: [String: String] = [
+        "male vocal": "Ein Mann singt die Hauptstimme.",
+        "female vocal": "Eine Frau singt die Hauptstimme.",
+        "male and female duet": "Ein Mann und eine Frau singen im Wechsel oder zusammen.",
+        "choir": "Viele Stimmen singen gemeinsam, wie ein Chor.",
+        "child vocal": "Eine Kinderstimme: hoch, hell und unverbraucht.",
+        "bright vocal": "Hell und strahlend, mit viel Glanz in den Höhen.",
+        "airy vocal": "Luftig und leicht, mit hörbarem Atem um den Ton.",
+        "warm vocal": "Warm und rund, mit Fülle in der Tiefe und weichen Höhen.",
+        "mellow vocal": "Sanft und gedämpft, ohne Schärfe, entspannt gesungen.",
+        "rich vocal": "Voll und obertonreich, eine Stimme mit viel Substanz.",
+        "clear vocal": "Klar und rein, ohne Rauheit oder Hauch, gut verständlich.",
+        "soft vocal": "Leise und zart gesungen, mit wenig Druck.",
+        "sweet vocal": "Lieblich und süß, freundlich und eher hell.",
+        "smooth vocal": "Geschmeidig und glatt, mit fließenden Übergängen zwischen den Tönen.",
+        "breathy vocal": "Hauchig: viel Atemluft im Ton, intim und nah.",
+        "whispery vocal": "Fast geflüstert, noch mehr Luft als Ton.",
+        "powerful vocal": "Kraftvoll und laut, mit viel Stütze und Volumen.",
+        "soulful vocal": "Gefühlvoll wie im Soul, mit Verzierungen und viel Ausdruck.",
+        "husky vocal": "Belegt und etwas heiser, dunkel und rauchig.",
+        "raspy vocal": "Kratzig: ein reibendes Geräusch liegt auf dem Ton, wie bei Rockstimmen.",
+        "gritty vocal": "Körnig und angeraut, mit Biss und etwas Verzerrung.",
+        "raw vocal": "Roh und ungeschliffen, direkt statt poliert.",
+        "gravelly vocal": "Wie Schotter: tief, stark angeraut und knarzend.",
+        "gruff vocal": "Barsch und brummig, rau und tief.",
+        "harsh vocal": "Hart und schneidend, bewusst unschön, wie im Metal.",
+        "screamy vocal": "Geschrien statt gesungen, wie im Metalcore oder Punk.",
+        "deep vocal": "Tief und dunkel, aus der unteren Stimmlage.",
+        "high-pitched vocal": "Hoch gesungen, aus der oberen Stimmlage.",
+        "soprano vocal": "Sopran: die höchste Frauenstimmlage.",
+        "alto vocal": "Alt: die tiefe Frauenstimmlage.",
+        "tenor vocal": "Tenor: die hohe Männerstimmlage.",
+        "baritone vocal": "Bariton: die mittlere Männerstimmlage, zwischen Tenor und Bass.",
+    ]
+
     private static let byTag: [String: Category] = {
         var map: [String: Category] = [:]
         for category in Category.allCases {

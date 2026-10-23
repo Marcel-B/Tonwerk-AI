@@ -529,7 +529,7 @@ mkdir -p /tmp/sparkle && curl -fsSL https://github.com/sparkle-project/Sparkle/r
 
 Den öffentlichen Schlüssel als Secret `SPARKLE_PUBLIC_ED_KEY`, den Inhalt von `~/sparkle.key` als `SPARKLE_PRIVATE_KEY` anlegen, danach die Datei löschen. Der Schlüssel im Schlüsselbund ist die Sicherung: Geht er verloren, nimmt keine installierte App mehr ein Update an, bis man sie einmal von Hand neu lädt. Eine App, die aus Xcode gebaut ist, hat keinen Schlüssel und kein Update-Menü.
 
-**iPhone und iPad:** über TestFlight (`.github/workflows/testflight.yml`).
+**iPhone und iPad:** über TestFlight (`.github/workflows/testflight.yml`). Nach jedem Mac-Release lädt derselbe Lauf die iPhone-App mit derselben Version hoch; von Hand lässt sich der Workflow weiter starten.
 
 ## Konfiguration
 

@@ -1,5 +1,6 @@
-# Builds Tonwerk-AI for iPhone and iPad, signs it for the App Store and uploads it to TestFlight. Started by hand
-# (Actions → TestFlight → Run workflow), like the Synth repository's workflow for the plugin app. Needs the repository
+# Builds Tonwerk-AI for iPhone and iPad, signs it for the App Store and uploads it to TestFlight. release-mac.yml calls
+# it after each Mac release with that release's version and commit, so iPhone and Mac move together; by hand (Actions →
+# TestFlight → Run workflow) it uploads main with the version given. Needs the repository
 # secrets (the same values as in Marcel-B/Synth)
 #   APPLE_TEAM_ID   the team id of the developer account
 #   ASC_KEY_ID      the App Store Connect API key's id (the ten characters in AuthKey_<id>.p8)
@@ -17,6 +18,19 @@ on:
         description: "Version (leer: MARKETING_VERSION aus dem Projekt)"
         required: false
         type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      # A called workflow sees the caller's github.sha, which after workflow_run is main's newest commit, not the
+      # one the release was planned for.
+      ref:
+        required: true
+        type: string
+      build:
+        required: true
+        type: string
 
 jobs:
   upload:
@@ -28,6 +42,8 @@ jobs:
         working-directory: apple
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       # App Store Connect takes only apps built with the iOS 26 SDK or later (ITMS-90725); the runner's default Xcode
       # may be older, so the newest Xcode 26 or later it carries is chosen.
       - name: Xcode 26
@@ -56,8 +72,10 @@ jobs:
             version=$(grep -m1 -oE 'MARKETING_VERSION = [^;]+' Tonwerk.xcodeproj/project.pbxproj | cut -d' ' -f3)
           fi
           # TestFlight takes each upload only with a new build number. Builds archived by hand in Xcode use small
-          # numbers (CURRENT_PROJECT_VERSION), so the workflow's start far above them and grow with every run.
-          build=$((1000 + ${{ github.run_number }}))
+          # numbers (CURRENT_PROJECT_VERSION), so the workflow's start far above them and grow with every run; the
+          # Mac release hands in its own (2000 + its run number), so the two counters never meet.
+          build="${{ inputs.build }}"
+          [[ -n "$build" ]] || build=$((1000 + ${{ github.run_number }}))
           echo "TONWERK_VERSION=$version" >> "$GITHUB_ENV"
           echo "TONWERK_BUILD_NUMBER=$build" >> "$GITHUB_ENV"
           echo "Tonwerk-AI $version ($build)"

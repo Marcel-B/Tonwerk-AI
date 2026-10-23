@@ -68,8 +68,7 @@ struct StyleBlocksView: View {
                 Chip(title: tag, chosen: StyleBlocks.has(tag, in: style)) {
                     style = StyleBlocks.toggle(tag, in: style)
                 }
-                // Hovering exists on the Mac (and an iPad with a pointer); the iPhone shows nothing.
-                .help(StyleBlocks.explanation(of: tag) ?? "")
+                .blockHelp(StyleBlocks.explanation(of: tag))
             }
         }
     }
@@ -105,3 +104,43 @@ struct SectionTagsView: View {
         }
     }
 }
+
+extension View {
+    /// The block's explanation on hover. On the Mac `.help` showed nothing inside the grouped form (Marcel,
+    /// 2026-10-23), so there an AppKit view carries the tooltip over the chip; it takes no clicks. On an iPad with a
+    /// pointer `.help` is enough, the iPhone has no hover.
+    @ViewBuilder
+    func blockHelp(_ text: String?) -> some View {
+        if let text {
+            #if os(macOS)
+            overlay(ToolTipArea(text: text))
+            #else
+            help(text)
+            #endif
+        } else {
+            self
+        }
+    }
+}
+
+#if os(macOS)
+
+private struct ToolTipArea: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSView {
+        let view = PassThroughView()
+        view.toolTip = text
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        view.toolTip = text
+    }
+
+    /// Hit testing skips it, so clicks reach the chip below; AppKit's tooltip rectangles do not depend on it.
+    private final class PassThroughView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+#endif

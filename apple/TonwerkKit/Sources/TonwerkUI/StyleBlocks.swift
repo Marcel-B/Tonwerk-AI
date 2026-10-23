@@ -95,8 +95,9 @@ public enum StyleBlocks {
         }
     }
 
-    /// One German sentence per voice block, shown as a tooltip on the Mac: the timbre words are singers' and
-    /// producers' jargon, and what YuE2 makes of them follows how they are used in the songs it learned from.
+    /// One German sentence per voice block, shown on hover: the timbre words are singers' and producers' jargon, and
+    /// what YuE2 makes of them follows how they are used in the songs it learned from. The web page's
+    /// `styleBlockHelp.ts` holds the same sentences; change both together.
     public static func explanation(of tag: String) -> String? {
         explanations[tag.lowercased()]
     }

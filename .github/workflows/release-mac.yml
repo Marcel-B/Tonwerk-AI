@@ -86,17 +86,20 @@ jobs:
           echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
       # Signed in the archive itself: the app's entitlements (sandbox, network, microphone, Bluetooth, chosen files)
-      # need no provisioning profile under Developer ID, so no export step with profiles is needed. The bracketed
-      # setting overrides Signing.xcconfig's ad-hoc identity for macOS. The build number is the run number, so every
-      # release counts up for the update check.
+      # need no provisioning profile under Developer ID, so no export step with profiles is needed. The identity
+      # goes in through -xcconfig, since xcodebuild cannot take a conditional setting on its command line (it read
+      # "CODE_SIGN_IDENTITY[sdk=macosx*]=…" as the identity "macosx*]=…"), and only a conditional one at a level
+      # above Signing.xcconfig surely beats its ad-hoc "[sdk=macosx*] = -". The build number is the run number, so
+      # every release counts up for the update check.
       - name: Archive
         working-directory: apple
         run: |
+          printf 'CODE_SIGN_IDENTITY = %s\nCODE_SIGN_IDENTITY[sdk=macosx*] = %s\n' "$SIGN_IDENTITY" "$SIGN_IDENTITY" \
+            > "$RUNNER_TEMP/signing.xcconfig"
           xcodebuild archive -project Tonwerk.xcodeproj -scheme Tonwerk -configuration Release \
             -destination 'generic/platform=macOS' -archivePath "$RUNNER_TEMP/Tonwerk-AI.xcarchive" \
-            -skipPackagePluginValidation \
+            -skipPackagePluginValidation -xcconfig "$RUNNER_TEMP/signing.xcconfig" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER= \
-            CODE_SIGN_IDENTITY="$SIGN_IDENTITY" "CODE_SIGN_IDENTITY[sdk=macosx*]=$SIGN_IDENTITY" \
             OTHER_CODE_SIGN_FLAGS="--timestamp --keychain $KEYCHAIN" ENABLE_HARDENED_RUNTIME=YES \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             SPARKLE_PUBLIC_ED_KEY="$SPARKLE_PUBLIC_ED_KEY" \

@@ -104,4 +104,32 @@ final class StyleBlocksTests: XCTestCase {
         XCTAssertEqual(SectionTags.append("[Chorus]", to: "[Verse]\nHallo\n"), "[Verse]\nHallo\n\n[Chorus]\n")
         XCTAssertEqual(SectionTags.append("[Outro]", to: "[Intro]\n"), "[Intro]\n[Outro]\n")
     }
+
+    func testASectionTagGoesWhereTheCaretWas() {
+        let lyrics = "[Verse]\nHallo\nWelt\n"
+        let caret = Array(lyrics).firstIndex(of: "W")!
+        XCTAssertEqual(SectionTags.insert("[Chorus]", into: lyrics, at: caret).text, "[Verse]\nHallo\n\n[Chorus]\nWelt\n")
+        // Mid-line, the tag waits for the line's end.
+        XCTAssertEqual(SectionTags.insert("[Chorus]", into: lyrics, at: 10).text, "[Verse]\nHallo\n\n[Chorus]\nWelt\n")
+    }
+
+    func testDirectionsStayInTheirSectionAndJoin() {
+        let first = SectionTags.insert("(screaming)", into: "[Verse]\n", at: nil)
+        XCTAssertEqual(first.text, "[Verse]\n(screaming)\n")
+        let second = SectionTags.insert("(full power)", into: first.text, at: first.caret)
+        XCTAssertEqual(second.text, "[Verse]\n(screaming, full power)\n")
+        let lines = "Line one\nLine two\n"
+        XCTAssertEqual(SectionTags.insert("(belting)", into: lines, at: 9).text, "Line one\n(belting)\nLine two\n")
+    }
+
+    func testShoutingWritesCapitalsAndTurnsBack() {
+        let lyrics = "[Chorus]\nCold chrome, hollow heart\nTearing every nerve apart!"
+        let loud = SectionTags.shout(lyrics, from: 9, to: 42)
+        XCTAssertEqual(loud.text, "[Chorus]\nCOLD CHROME, HOLLOW HEART\nTEARING every nerve apart!")
+        let back = SectionTags.shout(loud.text, from: loud.start, to: loud.end)
+        XCTAssertEqual(back.text, lyrics)
+        let line = "[Chorus]\n(Screaming) I am a ghost\nnext"
+        XCTAssertEqual(SectionTags.shout(line, from: 25, to: 25).text, "[Chorus]\n(Screaming) I AM A GHOST\nnext")
+        XCTAssertEqual(SectionTags.shout("heiß", from: 0, to: 4).end, 5)
+    }
 }

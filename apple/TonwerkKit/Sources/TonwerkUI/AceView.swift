@@ -23,6 +23,7 @@ private struct AceSessionView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: AceSession
     @AppStorage("aceAdvancedOpen") private var advancedOpen = false
+    @State private var lyricsCaret = LyricsCaret()
 
     private var auto: Text { Text("automatisch") }
 
@@ -157,7 +158,7 @@ private struct AceSessionView: View {
             Toggle("Instrumental", isOn: $model.aceForm.instrumental)
             if !model.aceForm.instrumental {
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: $model.aceForm.lyrics)
+                    LyricsTextEditor(text: $model.aceForm.lyrics, caret: lyricsCaret)
                         .font(.body.monospaced())
                         .frame(minHeight: 200)
                         .scrollContentBackground(.hidden)
@@ -169,7 +170,7 @@ private struct AceSessionView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                SectionTagsView(lyrics: $model.aceForm.lyrics)
+                SectionTagsView(lyrics: $model.aceForm.lyrics, caret: lyricsCaret)
                 Picker("Sprache des Gesangs", selection: $model.aceForm.language) {
                     Text("automatisch").tag("")
                     ForEach(AceForm.languages, id: \.self) { code in

@@ -193,27 +193,135 @@ public enum StyleBlocks {
     }
 }
 
-/// Section tags for the lyrics, from the web page's `lyricsTags.ts`. YuE2 passes the lyrics to the model as plain
-/// text, so a tag counts by what the model learned: the sections its own scores name, plus the four YuE v1 documented.
+/// Section tags for the lyrics, from the web page's `lyricsTags.ts`; change both together. YuE2 passes the lyrics to
+/// the model as plain text, so a tag counts by what the model learned: the sections its own scores name, plus the four
+/// YuE v1 documented.
 public enum SectionTags {
     public static let known = ["[Intro]", "[Verse]", "[Pre-Chorus]", "[Chorus]", "[Bridge]", "[Interlude]", "[Outro]"]
     /// Common in lyric sheets, but neither YuE documents them: they reach the model as words.
     public static let other = ["[Hook]", "[Solo]", "[Break]", "[Build-Up]", "[Drop]"]
 
-    /// Puts the tag on a line of its own at the end: after a sung line with an empty line before it, as sections are
-    /// written; tags in a row (an instrumental's structure) stay together.
+    /// Directions in parentheses, the way chatbots write them for Suno. YuE2 documents none of this, but in Marcel's
+    /// test (2026-10-23) they were not sung, and screamed and controlled vocals came where the directions asked for
+    /// them. Kept in English, as the style is.
+    public static let voiceDirections = [
+        "(screaming)", "(aggressive vocals)", "(controlled vocals)", "(whispered vocals)", "(spoken word)",
+        "(robotic vocals)", "(soft vocals)", "(belting)", "(falsetto)", "(echoing vocals)",
+    ]
+    public static let musicDirections = [
+        "(building tension)", "(full power)", "(half-time beat)", "(minimal beat)", "(breakdown)",
+        "(distorted synth bass)", "(glitches)", "(slowing tempo)", "(fade out)", "(abrupt silence)",
+    ]
+
+    private static func isTagLine(_ line: String) -> Bool {
+        line.range(of: #"^\s*\[[^\]]+\]\s*$"#, options: .regularExpression) != nil
+    }
+
+    private static func isDirectionLine(_ line: String) -> Bool {
+        line.range(of: #"^\s*\([^)]*\)\s*$"#, options: .regularExpression) != nil
+    }
+
+    private static func lastLine(_ text: String) -> String {
+        text.components(separatedBy: "\n").last ?? ""
+    }
+
+    /// Puts the tag at the end, for a text the caret does not belong to.
     public static func append(_ tag: String, to lyrics: String) -> String {
-        var before = lyrics
+        insert(tag, into: lyrics, at: nil).text
+    }
+
+    /// Puts the tag on a line of its own at the caret (a character offset; nil is the end): before the caret's line
+    /// when it sits at a line's start, else after that line, since a tag must not split a sung line. A tag after a
+    /// sung line gets an empty line before it, as sections are written; tags in a row stay together. A direction in
+    /// parentheses stays inside its section, without an empty line, and joins a direction line right before it:
+    /// "(a)" and "(b)" become "(a, b)". Answers the text and the caret after the tag.
+    public static func insert(_ tag: String, into lyrics: String, at caret: Int?) -> (text: String, caret: Int) {
+        let characters = Array(lyrics)
+        var at = min(max(caret ?? characters.count, 0), characters.count)
+        if at > 0 && characters[at - 1] != "\n" {
+            at = characters[at...].firstIndex(of: "\n") ?? characters.count
+        }
+        var before = String(characters[..<at])
+        let after = String(characters[at...])
+        let direction = isDirectionLine(tag)
+        var trimmed = before
+        while trimmed.hasSuffix("\n") {
+            trimmed.removeLast()
+        }
+        if direction && isDirectionLine(lastLine(trimmed)) && trimmed.count == before.count - 1 {
+            var open = trimmed
+            while open.last?.isWhitespace == true {
+                open.removeLast()
+            }
+            if open.hasSuffix(")") {
+                open.removeLast()
+            }
+            let joined = open + ", " + String(tag.trimmingCharacters(in: .whitespaces).dropFirst()) + "\n"
+            return (joined + after, joined.count)
+        }
         if before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             before = ""
         } else {
-            while before.hasSuffix("\n") {
-                before.removeLast()
-            }
-            let previous = before.components(separatedBy: "\n").last ?? ""
-            let isTag = previous.range(of: #"^\s*\[[^\]]+\]\s*$"#, options: .regularExpression) != nil
-            before += isTag ? "\n" : "\n\n"
+            before = trimmed + (direction || isTagLine(lastLine(trimmed)) ? "\n" : "\n\n")
         }
-        return before + tag + "\n"
+        let inserted = tag + "\n"
+        // Text after the caret's line already starts on a line of its own.
+        let rest = after.hasPrefix("\n") ? String(after.dropFirst()) : after
+        return (before + inserted + rest, before.count + inserted.count)
+    }
+
+    /// Writes the selection (character offsets) in capitals, which YuE2 tends to sing with more force (Marcel's test,
+    /// 2026-10-23; not documented). Without a selection it takes the caret's line. A stretch already in capitals goes
+    /// back to lower case, a line's first letter and the English "I" kept up. Tags in [ ] and directions in ( ) stay
+    /// as written. Answers the text and the changed stretch, so it stays selected and a second tap turns it back.
+    public static func shout(_ lyrics: String, from start: Int, to end: Int) -> (text: String, start: Int, end: Int) {
+        let characters = Array(lyrics)
+        var from = min(max(min(start, end), 0), characters.count)
+        var to = min(max(max(start, end), 0), characters.count)
+        if from == to {
+            from = (characters[..<from].lastIndex(of: "\n") ?? -1) + 1
+            to = characters[to...].firstIndex(of: "\n") ?? characters.count
+        }
+        let part = Array(characters[from..<to])
+        var depth = 0
+        var loud = false
+        for character in part {
+            if character == "[" || character == "(" {
+                depth += 1
+            } else if character == "]" || character == ")" {
+                depth = max(0, depth - 1)
+            } else if depth == 0 && character.isLowercase {
+                loud = true
+            }
+        }
+        var out = ""
+        var lineStart = from == 0 || characters[from - 1] == "\n"
+        depth = 0
+        for (index, character) in part.enumerated() {
+            if character == "[" || character == "(" {
+                depth += 1
+            }
+            if depth == 0 && character.isLetter {
+                let previous = index > 0 ? part[index - 1] : (from > 0 ? characters[from - 1] : nil)
+                let next = index + 1 < part.count ? part[index + 1] : (to < characters.count ? characters[to] : nil)
+                let pronoun = character == "I" && previous?.isLetter != true && next?.isLetter != true
+                if loud {
+                    out += character.uppercased()
+                } else {
+                    out += lineStart || pronoun ? String(character) : character.lowercased()
+                }
+                lineStart = false
+            } else {
+                out.append(character)
+            }
+            if character == "]" || character == ")" {
+                depth = max(0, depth - 1)
+            }
+            if character == "\n" {
+                lineStart = true
+            }
+        }
+        let text = String(characters[..<from]) + out + String(characters[to...])
+        return (text, from, from + out.count)
     }
 }

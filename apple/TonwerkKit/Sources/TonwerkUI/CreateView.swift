@@ -6,6 +6,7 @@ import TonwerkKit
 struct CreateView: View {
     @Environment(AppModel.self) private var model
     @State private var models: Components.Schemas.LyricsModels?
+    @State private var lyricsCaret = LyricsCaret()
     @State private var sending = false
     @State private var sent: String?
     @State private var error: String?
@@ -39,11 +40,11 @@ struct CreateView: View {
 
             Section {
                 Toggle("Instrumental", isOn: $model.form.instrumental)
-                TextEditor(text: $model.form.lyrics)
+                LyricsTextEditor(text: $model.form.lyrics, caret: lyricsCaret)
                     .font(.body.monospaced())
                     .frame(minHeight: model.form.instrumental ? 60 : 220)
                     .scrollContentBackground(.hidden)
-                SectionTagsView(lyrics: $model.form.lyrics)
+                SectionTagsView(lyrics: $model.form.lyrics, caret: lyricsCaret)
                 if !model.form.instrumental {
                     draft
                 }

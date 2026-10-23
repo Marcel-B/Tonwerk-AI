@@ -5,7 +5,7 @@ import { ApiError, draftLyrics, generate, getLyricsModels, listVoices, reviseLyr
 import { defaultFormState, toGenerateRequest, usesScore, type FormState } from '../form'
 import { formatBytes, t } from '../i18n'
 import { photoDataUrl } from '../photo'
-import { insertSectionTag } from '../lyricsTags'
+import { insertSectionTag, shout } from '../lyricsTags'
 import { hasTag } from '../styleTags'
 import type { LyricsModels, LyricsReasoning, LyricsState, ReferenceVoice } from '../types'
 import { octaveOptions, stepOptions, strengthOptions } from '../voiceChoices'
@@ -37,11 +37,11 @@ const sectionsOpen = ref(false)
  * Where the caret last was in the lyrics, with the text it belongs to: tapping a tag blurs the field first, and a
  * draft or "use everything" replacing the text makes the position meaningless, so a tag then goes to the end.
  */
-const lyricsCaret = ref<{ text: string; at: number } | null>(null)
+const lyricsCaret = ref<{ text: string; start: number; at: number } | null>(null)
 
 function rememberCaret(event: Event): void {
   const field = event.target as HTMLTextAreaElement
-  lyricsCaret.value = { text: field.value, at: field.selectionEnd }
+  lyricsCaret.value = { text: field.value, start: field.selectionStart, at: field.selectionEnd }
 }
 
 function insertTag(tag: string): void {
@@ -49,7 +49,16 @@ function insertTag(tag: string): void {
   const inserted = insertSectionTag(form.value.lyrics, tag, caret)
   form.value.lyrics = inserted.text
   // Not focused again: on a phone that would raise the keyboard after every tag. The next tag follows this one.
-  lyricsCaret.value = { text: inserted.text, at: inserted.caret }
+  lyricsCaret.value = { text: inserted.text, start: inserted.caret, at: inserted.caret }
+}
+
+/** Capitals for the selection (or the caret's line), kept selected so a second tap turns them back. */
+function shoutLyrics(): void {
+  const caret = lyricsCaret.value?.text === form.value.lyrics ? lyricsCaret.value : null
+  if (caret === null) return
+  const shouted = shout(form.value.lyrics, caret.start, caret.at)
+  form.value.lyrics = shouted.text
+  lyricsCaret.value = { text: shouted.text, start: shouted.start, at: shouted.end }
 }
 const message = ref<{ text: string; error: boolean } | null>(null)
 
@@ -559,7 +568,7 @@ const batchOptions = Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label
       aria-controls="gen-section-tags"
       @click="sectionsOpen = !sectionsOpen"
     />
-    <SectionTags v-if="sectionsOpen" id="gen-section-tags" @pick="insertTag" />
+    <SectionTags v-if="sectionsOpen" id="gen-section-tags" @pick="insertTag" @shout="shoutLyrics" />
     <!-- Enter here revises; it must not submit the form and start a song. -->
     <div v-if="form.lyrics.trim() !== '' && !form.instrumental" class="mt-2 flex items-center gap-2">
       <InputText

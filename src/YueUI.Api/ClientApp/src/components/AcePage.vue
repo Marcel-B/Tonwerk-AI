@@ -6,7 +6,7 @@ import { computed, ref, watch } from 'vue'
 import { ApiError, composeAce, deleteAceJob, getAce } from '../api'
 import { aceForm, aceKeys, aceLanguages, defaultAceForm, fromAceRequest, toAceRequest, usesLm } from '../ace'
 import { formatDateTime, formatDuration, t } from '../i18n'
-import { insertSectionTag } from '../lyricsTags'
+import { insertSectionTag, shout } from '../lyricsTags'
 import type { AceInfo, AceJob, AceStage, AceTask, RunInfo } from '../types'
 import { showSong, songHref } from '../view'
 import { ranOnNote } from '../machines'
@@ -154,18 +154,27 @@ watch(info, (value) => {
 
 const blocksOpen = ref(false)
 const sectionsOpen = ref(false)
-const lyricsCaret = ref<{ text: string; at: number } | null>(null)
+const lyricsCaret = ref<{ text: string; start: number; at: number } | null>(null)
 
 function rememberCaret(event: Event): void {
   const field = event.target as HTMLTextAreaElement
-  lyricsCaret.value = { text: field.value, at: field.selectionEnd }
+  lyricsCaret.value = { text: field.value, start: field.selectionStart, at: field.selectionEnd }
 }
 
 function insertTag(tag: string): void {
   const caret = lyricsCaret.value?.text === form.value.lyrics ? lyricsCaret.value.at : null
   const inserted = insertSectionTag(form.value.lyrics, tag, caret)
   form.value.lyrics = inserted.text
-  lyricsCaret.value = { text: inserted.text, at: inserted.caret }
+  lyricsCaret.value = { text: inserted.text, start: inserted.caret, at: inserted.caret }
+}
+
+/** Capitals for the selection (or the caret's line), kept selected so a second tap turns them back. */
+function shoutLyrics(): void {
+  const caret = lyricsCaret.value?.text === form.value.lyrics ? lyricsCaret.value : null
+  if (caret === null) return
+  const shouted = shout(form.value.lyrics, caret.start, caret.at)
+  form.value.lyrics = shouted.text
+  lyricsCaret.value = { text: shouted.text, start: shouted.start, at: shouted.end }
 }
 
 // ---- Advanced ----------------------------------------------------------------------------------------
@@ -466,7 +475,7 @@ function message(caught: unknown): string {
                   aria-controls="ace-section-tags"
                   @click="sectionsOpen = !sectionsOpen"
                 />
-                <SectionTags v-if="sectionsOpen" id="ace-section-tags" @pick="insertTag" />
+                <SectionTags v-if="sectionsOpen" id="ace-section-tags" @pick="insertTag" @shout="shoutLyrics" />
               </div>
               <div class="flex flex-col gap-1">
                 <label for="ace-language" class="muted text-sm">{{ t('aceLanguage') }}</label>

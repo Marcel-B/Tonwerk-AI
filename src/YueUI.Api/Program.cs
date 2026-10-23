@@ -212,6 +212,8 @@ builder.Services.AddSingleton<YueUI.Api.Storage.StorageScanner>();
 builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection(MonitoringOptions.Section));
 builder.Services.AddSingleton<JobMetrics>();
 builder.Services.AddHostedService(services => services.GetRequiredService<JobMetrics>());
+builder.Services.AddSingleton<YueUI.Api.Status.IdleClock>();
+builder.Services.AddHostedService(services => services.GetRequiredService<YueUI.Api.Status.IdleClock>());
 builder.Services.AddHostedService<LokiShipper>();
 // Without its loggers: each push would log four lines of its own, which the next push would send, forever.
 builder.Services.AddHttpClient(LokiShipper.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30)).RemoveAllLoggers();

@@ -558,6 +558,23 @@ public sealed class WorkerEndpointTests : IDisposable
             await _client.GetStringAsync("/api/busy"));
     }
 
+    [Fact]
+    public async Task Idle_counts_quiet_time_and_names_what_runs()
+    {
+        var idle = (await _client.GetFromJsonAsync<JsonObject>("/api/idle"))!;
+        Assert.True(idle["idle"]!.GetValue<bool>());
+        Assert.True(idle["idleSeconds"]!.GetValue<double>() >= 0);
+        Assert.NotNull(idle["idleSince"]);
+
+        await StartSong();
+
+        idle = (await _client.GetFromJsonAsync<JsonObject>("/api/idle"))!;
+        Assert.False(idle["idle"]!.GetValue<bool>());
+        Assert.Equal(0, idle["idleSeconds"]!.GetValue<double>());
+        Assert.Null(idle["idleSince"]);
+        Assert.Contains("songs", idle["busy"]!.AsArray().Select(reason => reason!.GetValue<string>()));
+    }
+
     private async Task<JsonObject> Generate()
     {
         var response = await _client.PostAsJsonAsync("/api/generate", new { style = "Dark synthwave", lyrics = "[verse]\nNeon", title = "Neon Night" });

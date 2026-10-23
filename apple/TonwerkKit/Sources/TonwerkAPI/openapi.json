@@ -62,6 +62,23 @@
         }
       }
     },
+    "/api/idle": {
+      "get": {
+        "operationId": "GetIdle",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdleInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/stats/synthesis": {
       "get": {
         "operationId": "GetSynthesisStats",
@@ -8405,6 +8422,44 @@
               "items": {
                 "type": "string"
               }
+            }
+          }
+        }
+      },
+      "IdleInfo": {
+        "required": [
+          "idle",
+          "idleSeconds",
+          "idleSince",
+          "busy",
+          "waiting"
+        ],
+        "type": "object",
+        "properties": {
+          "idle": {
+            "type": "boolean"
+          },
+          "idleSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "idleSince": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "busy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "waiting": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }

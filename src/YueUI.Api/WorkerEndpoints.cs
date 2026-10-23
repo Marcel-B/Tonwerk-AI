@@ -26,6 +26,10 @@ public static class WorkerEndpoints
             .WithName("GetStatus");
         api.MapGet("/busy", Busy)
             .WithName("GetBusy");
+        // For a guard that pauses other models' work while Tonwerk needs the Mac (scripts repo, bin/yue-guard).
+        api.MapGet("/idle", (Status.IdleClock clock, Monitoring.JobMetrics metrics, WorkerHost host, Memory.ModelMemory memory, Video.VideoMaker videos) =>
+                clock.Read(Busy(host, memory, videos), metrics))
+            .WithName("GetIdle");
         // What YuE2's synthesis took per engine, so GPU and Neural Engine can be compared without Grafana.
         api.MapGet("/stats/synthesis", (Stats.SynthesisStats stats) => stats.Overview())
             .WithName("GetSynthesisStats");

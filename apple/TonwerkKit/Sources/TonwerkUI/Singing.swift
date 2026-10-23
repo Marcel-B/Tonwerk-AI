@@ -42,7 +42,7 @@ final class SingSession {
     /// Public domain, one syllable per note on steady notes, which is what the server reads best from a recording.
     nonisolated static let suggestedPhrase = "Twinkle, twinkle, little star, how I wonder what you are"
 
-    private unowned let model: AppModel
+    unowned let model: AppModel
 
     init(model: AppModel) {
         self.model = model

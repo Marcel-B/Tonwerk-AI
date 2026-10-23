@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import type { SingHandOff } from './singing'
 
 /** The pages the menu bar switches between. */
 export type View =
@@ -158,4 +159,15 @@ export function openStems(songId: string): void {
   view.value = 'voices'
   stemSong.value = songId
   window.scrollTo({ top: 0 })
+}
+
+/**
+ * A track of the Logic page handed to the singing page with the song's words. The singing page loads on first use, so
+ * it reads it when it mounts as well as when it changes, and clears it once taken.
+ */
+export const handedSinging = ref<SingHandOff | null>(null)
+
+export function openOnSingPage(handOff: SingHandOff): void {
+  handedSinging.value = handOff
+  navigate('sing')
 }

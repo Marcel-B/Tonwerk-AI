@@ -30,7 +30,7 @@ struct SingMelodyAnswer: Decodable {
         let lyric: String?
     }
 
-    let notes: [Note]
+    var notes: [Note]
     let tempoBpm: Double
     let lyrics: String
     let title: String
@@ -67,7 +67,7 @@ final class SingEditor {
     /// The pronunciation of the word starting on a note, as the server reads it (``SingAlignAnswer``).
     private(set) var phonemes: [SingNote.ID: String] = [:]
     /// Syllables of the last spread text that found no note.
-    private(set) var leftover = 0
+    var leftover = 0
     /// Counts changes of notes and tempo.
     private(set) var revision = 0
     /// The length the next drawn note gets: the last one drawn or stretched.

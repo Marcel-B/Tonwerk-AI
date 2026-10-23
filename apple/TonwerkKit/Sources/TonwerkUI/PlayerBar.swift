@@ -19,6 +19,13 @@ struct PlayerBar: View {
                     }
                     .buttonStyle(.plain)
                     .help("Player groß öffnen")
+                    .contextMenu {
+                        Button {
+                            model.reveal(song)
+                        } label: {
+                            Label("In der Bibliothek zeigen", systemImage: "music.note.list")
+                        }
+                    }
                     Spacer(minLength: 8)
                     // The small analyzer, as in the web player's bar; a tap opens the large one.
                     SpectrumBars(analyzer: player.analyzer, bars: 10, colour: barColour, active: player.isPlaying)

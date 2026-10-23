@@ -34,6 +34,8 @@ public final class AppModel {
     public private(set) var libraryError: String?
     /// The page in the sidebar; here rather than in the view, so "use in the form" can switch to the form.
     var page: Page? = .library
+    /// The song the library is asked to show selected, from the player (``reveal(_:)``); the library takes it back.
+    var revealing: String?
     /// The song the share dialog is open for, from a song's menu.
     var sharing: Song?
     /// The Logic page's state, made when it is first opened.

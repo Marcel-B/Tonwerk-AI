@@ -86,6 +86,18 @@ struct NowPlayingView: View {
             .accessibilityLabel("Schließen")
             Spacer()
             Button {
+                dismiss()
+                model.reveal(song)
+            } label: {
+                Image(systemName: "music.note.list")
+                    .font(.title3)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("In der Bibliothek zeigen")
+            .accessibilityLabel("In der Bibliothek zeigen")
+            Button {
                 sharing = song
             } label: {
                 Image(systemName: "square.and.arrow.up")

@@ -127,7 +127,7 @@ struct MainView: View {
             case .create:
                 CreateView()
             case .library:
-                SongList(title: "Bibliothek", songs: model.songs)
+                SongList(title: "Bibliothek", songs: model.songs, reveals: true)
             case .review:
                 SongList(title: "Zum Anhören", songs: model.unrated, empty: "Alle Songs sind bewertet.")
             case .queue:
@@ -249,6 +249,12 @@ private struct Dialogs: ViewModifier {
 }
 
 extension AppModel {
+    /// Opens the library with the song selected and scrolled into view, as the player's "In der Bibliothek zeigen".
+    func reveal(_ song: Song) {
+        page = .library
+        revealing = song.id
+    }
+
     /// Unrated songs older than a week, as the web page's review filter (`review.ts`, default 7 days) collects them.
     var unrated: [Song] {
         let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)

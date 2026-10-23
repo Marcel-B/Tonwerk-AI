@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasDirections, lineAt, shownLines } from './timing'
+import { hasDirections, lineAt, shownAt, shownLines, shownStart } from './timing'
 import type { LyricsTiming } from './types'
 
 const timing: LyricsTiming = {
@@ -76,6 +76,28 @@ describe('lyrics shown cleaned', () => {
     expect(shownLines('Rain on the roof Nobody knows').map((line) => line.text)).toEqual([
       'Rain on the roof Nobody knows',
     ])
+  })
+
+  it('lights a paragraph line by line, by its share of the words', () => {
+    const lines = shownLines(paragraph)
+    // The verse is timed line 1 from 10 s to 37 s: 27 words, a second each.
+    const paragraphTiming: LyricsTiming = {
+      ...timing,
+      lines: [
+        { text: 'intro', section: 'Intro', start: 0, end: 5, heard: 0 },
+        { text: 'verse', section: 'Verse 1', start: 10, end: 37, heard: 27 },
+        { text: 'Hold on', section: 'Chorus', start: 40, end: 42, heard: 2 },
+      ],
+    }
+    const at = (seconds: number) => lines[shownAt(lines, paragraphTiming, seconds)]?.text
+    expect(at(12)).toBe('Neon rain on carbon glass')
+    expect(at(16)).toBe('The ghosts of who we were, they pass')
+    expect(at(33)).toBe('I traded breath for silver veins')
+    expect(at(39)).toBe('I traded breath for silver veins')
+    expect(at(41)).toBe('Hold on')
+    expect(shownAt(lines, paragraphTiming, 8)).toBe(-1)
+    const third = lines.find((line) => line.text.startsWith('Where does'))!
+    expect(shownStart(third, paragraphTiming)).toBe(23)
   })
 
   it('tells whether there is anything to show', () => {

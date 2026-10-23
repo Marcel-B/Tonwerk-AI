@@ -20,7 +20,7 @@ import {
 } from '../player'
 import { getTiming, requestTiming } from '../api'
 import { rate, ratingOf } from '../ratings'
-import { hasDirections, lineAt, shownLines } from '../timing'
+import { hasDirections, shownAt, shownLines, shownStart, type ShownLine } from '../timing'
 import type { LyricsTiming } from '../types'
 import { readBands, reducedMotion, setVisual, visuals } from '../spectrum'
 import { coverColour } from '../video'
@@ -123,7 +123,7 @@ const showLyrics = computed(() => visuals.value.nowPlayingLyrics)
  */
 const timing = ref<{ songId: string; value: LyricsTiming } | null>(null)
 const currentTiming = computed(() => (timing.value?.songId === current.value?.songId ? timing.value!.value : null))
-const activeLine = computed(() => lineAt(currentTiming.value, elapsed.value))
+const activeLine = computed(() => shownAt(lyricLines.value, currentTiming.value, elapsed.value))
 let timingPoll: number | undefined
 
 async function loadTiming(songId: string, ask: boolean): Promise<void> {
@@ -170,15 +170,15 @@ watch(activeLine, async (index) => {
   if (index < 0 || Date.now() - scrolledByHand < 4000) {
     return
   }
-  const line = lyricsPanel.value?.querySelector<HTMLElement>(`[data-timed="${index}"]`)
+  const line = lyricsPanel.value?.querySelector<HTMLElement>(`[data-shown="${index}"]`)
   line?.scrollIntoView({ block: 'center', behavior: reducedMotion.value ? 'auto' : 'smooth' })
 })
 
-function seekLine(timed: number): void {
-  const line = currentTiming.value?.lines[timed]
-  if (line) {
+function seekLine(line: ShownLine): void {
+  const start = shownStart(line, currentTiming.value)
+  if (start !== null) {
     scrolledByHand = 0
-    seek(line.start)
+    seek(start)
   }
 }
 
@@ -382,9 +382,9 @@ onBeforeUnmount(() => {
             <p v-else-if="line.direction" class="direction">{{ line.text.slice(1, -1) }}</p>
             <p
               v-else-if="line.text"
-              :class="['line', { active: line.timed >= 0 && line.timed === activeLine }]"
-              :data-timed="line.timed >= 0 ? line.timed : undefined"
-              @click="currentTiming && line.timed >= 0 && seekLine(line.timed)"
+              :class="['line', { active: index === activeLine }]"
+              :data-shown="index"
+              @click="currentTiming && line.timed >= 0 && seekLine(line)"
             >
               {{ line.text }}
             </p>

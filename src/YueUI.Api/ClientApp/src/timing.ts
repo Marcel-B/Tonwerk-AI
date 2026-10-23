@@ -4,7 +4,9 @@ import type { LyricsTiming } from './types'
  * The lyrics as NowPlaying shows them, line by line, with the index of the timed line each sung line is: the server
  * times only lines with a letter or digit, outside the section tags, in order (Timing/LyricsAligner.cs `SungLines`).
  * The shown lines are cut finer than that (a tag on its own line, directions apart, long paragraphs broken), so
- * several may share one timed line; they then light together. The app's `Lyrics.swift` does the same, keep both alike.
+ * several may share one timed line. Whisper's timing only knows the whole line, so its pieces divide its time by their
+ * share of its words (`from`, `to`): a paragraph then lights line by line instead of all at once. The app's
+ * `Lyrics.swift` does the same, keep both alike.
  */
 export interface ShownLine {
   text: string
@@ -13,6 +15,9 @@ export interface ShownLine {
   direction: boolean
   /** Index into the timing's lines, or -1 for a tag, a direction or an empty line. */
   timed: number
+  /** Where in its timed line's time this piece starts and ends, as shares of it (0 and 1 for a whole line). */
+  from: number
+  to: number
 }
 
 /** Longer than this, a line is a paragraph whose line breaks were lost (as a chatbot's lyrics often come). */
@@ -79,7 +84,8 @@ function looksGerman(lyrics: string): boolean {
 export function shownLines(lyrics: string, directions = false): ShownLine[] {
   const english = !looksGerman(lyrics)
   const shown: ShownLine[] = []
-  const add = (line: ShownLine) => {
+  const add = (part: Omit<ShownLine, 'from' | 'to'>) => {
+    const line: ShownLine = { ...part, from: 0, to: 1 }
     const last = shown[shown.length - 1]
     // A line left empty by hidden directions must not leave a gap of two, nor one at the start.
     if (!line.text && !line.section && (!last || (!last.text && !last.section))) {
@@ -98,6 +104,7 @@ export function shownLines(lyrics: string, directions = false): ShownLine[] {
     }
     const parts = pieces(line)
     const hadDirection = parts.some((piece) => piece.kind === 'direction')
+    const firstPiece = shown.length
     for (const piece of parts) {
       if (piece.kind === 'tag') {
         add({ text: piece.text, section: true, direction: false, timed: -1 })
@@ -112,11 +119,50 @@ export function shownLines(lyrics: string, directions = false): ShownLine[] {
         }
       }
     }
+    shareTime(shown.slice(firstPiece).filter((piece) => piece.timed >= 0))
   }
   while (shown.length && !shown[shown.length - 1]!.text) {
     shown.pop()
   }
   return shown
+}
+
+/** Gives the sung pieces of one line their share of its time, by words. */
+function shareTime(sung: ShownLine[]): void {
+  const words = sung.map((piece) => piece.text.split(' ').length)
+  const total = words.reduce((sum, count) => sum + count, 0)
+  let before = 0
+  sung.forEach((piece, i) => {
+    piece.from = before / total
+    before += words[i]!
+    piece.to = before / total
+  })
+}
+
+/**
+ * The shown line sung at `seconds`, an index into `lines`, or -1: the timed line from `lineAt`, then the piece of it
+ * whose share of its time has begun.
+ */
+export function shownAt(lines: ShownLine[], timing: LyricsTiming | null, seconds: number): number {
+  const timed = lineAt(timing, seconds)
+  if (timed < 0) {
+    return -1
+  }
+  const line = timing!.lines[timed]!
+  const share = line.end > line.start ? (seconds - line.start) / (line.end - line.start) : 0
+  let found = -1
+  lines.forEach((piece, i) => {
+    if (piece.timed === timed && (found < 0 || piece.from <= share)) {
+      found = i
+    }
+  })
+  return found
+}
+
+/** Where a shown line starts, for a tap on it: its timed line's start plus its share. */
+export function shownStart(piece: ShownLine, timing: LyricsTiming | null): number | null {
+  const line = piece.timed >= 0 ? timing?.lines[piece.timed] : undefined
+  return line ? line.start + piece.from * (line.end - line.start) : null
 }
 
 /** Whether the lyrics hold directions in round brackets, so the player offers to show them. */

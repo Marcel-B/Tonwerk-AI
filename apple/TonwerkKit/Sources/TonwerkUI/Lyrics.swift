@@ -4,7 +4,8 @@ import TonwerkKit
 /// The lyrics as the full-screen player shows them, the web page's `timing.ts`. The server times only the sung lines
 /// (a letter or digit, outside the section tags), in order (`LyricsAligner.SungLines`), so each shown line knows which
 /// timed line it is. The shown lines are cut finer than that (a tag on its own line, directions apart, long paragraphs
-/// broken), so several may share one timed line; they then light together. Keep both sides alike.
+/// broken), so several may share one timed line. Whisper's timing only knows the whole line, so its pieces divide its
+/// time by their share of its words (`from`, `to`): a paragraph then lights line by line. Keep both sides alike.
 struct ShownLine: Equatable {
     let text: String
     let section: Bool
@@ -12,6 +13,9 @@ struct ShownLine: Equatable {
     var direction = false
     /// Index into the timing's lines, or nil for a tag, a direction or an empty line.
     let timed: Int?
+    /// Where in its timed line's time this piece starts and ends, as shares of it (0 and 1 for a whole line).
+    var from = 0.0
+    var to = 1.0
 
     /// Longer than this, a line is a paragraph whose line breaks were lost (as a chatbot's lyrics often come).
     static let paragraph = 60
@@ -40,6 +44,7 @@ struct ShownLine: Equatable {
             }
             let parts = pieces(of: line)
             let hadDirection = parts.contains { $0.kind == .direction }
+            let firstPiece = shown.count
             for piece in parts {
                 switch piece.kind {
                 case .tag:
@@ -54,9 +59,38 @@ struct ShownLine: Equatable {
                     }
                 }
             }
+            // The sung pieces of this line get their share of its time, by words.
+            let sung = shown.indices.dropFirst(firstPiece).filter { shown[$0].timed != nil }
+            let words = sung.map { shown[$0].text.split(separator: " ").count }
+            let total = Double(words.reduce(0, +))
+            var before = 0
+            for (index, count) in zip(sung, words) {
+                shown[index].from = Double(before) / total
+                before += count
+                shown[index].to = Double(before) / total
+            }
         }
         while shown.last?.text.isEmpty == true { shown.removeLast() }
         return shown
+    }
+
+    /// The shown line sung at `seconds`, an index into `lines`: the timed line from `LineTimes.line`, then the piece
+    /// of it whose share of its time has begun.
+    static func shown(at seconds: Double, in lines: [ShownLine], times: [LineTimes]) -> Int? {
+        guard let timed = LineTimes.line(at: seconds, in: times) else { return nil }
+        let line = times[timed]
+        let share = line.end > line.start ? (seconds - line.start) / (line.end - line.start) : 0
+        var found: Int?
+        for (index, piece) in lines.enumerated() where piece.timed == timed && (found == nil || piece.from <= share) {
+            found = index
+        }
+        return found
+    }
+
+    /// Where this line starts, for a tap on it: its timed line's start plus its share.
+    func start(in times: [LineTimes]) -> Double? {
+        guard let timed, times.indices.contains(timed) else { return nil }
+        return times[timed].start + from * (times[timed].end - times[timed].start)
     }
 
     /// Whether the lyrics hold directions in round brackets, so the player offers to show them.

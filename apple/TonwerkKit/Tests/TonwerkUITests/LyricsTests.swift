@@ -46,6 +46,23 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(lines.last?.timed, 2)
     }
 
+    func testAParagraphLightsLineByLineByItsShareOfTheWords() {
+        let lines = ShownLine.lines(of: paragraph)
+        // The verse is timed line 1 from 10 s to 37 s: 27 words, a second each.
+        let times = [LineTimes(start: 0, end: 5), LineTimes(start: 10, end: 37), LineTimes(start: 40, end: 42)]
+        func at(_ seconds: Double) -> String? {
+            ShownLine.shown(at: seconds, in: lines, times: times).map { lines[$0].text }
+        }
+        XCTAssertEqual(at(12), "Neon rain on carbon glass")
+        XCTAssertEqual(at(16), "The ghosts of who we were, they pass")
+        XCTAssertEqual(at(33), "I traded breath for silver veins")
+        XCTAssertEqual(at(39), "I traded breath for silver veins")
+        XCTAssertEqual(at(41), "Hold on")
+        XCTAssertNil(at(8))
+        let third = lines.first { $0.text.hasPrefix("Where does") }
+        XCTAssertEqual(third?.start(in: times), 23)
+    }
+
     func testGermanCapitalsAndShortLinesStay() {
         let german = "Ich laufe durch die Stadt im Regen und der Wind singt mir ein Lied von Morgen"
         XCTAssertEqual(ShownLine.lines(of: german).map(\.text), [german])

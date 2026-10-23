@@ -101,7 +101,8 @@ public sealed partial class SongLibrary(
     SqliteDatabase database,
     Microsoft.Extensions.Options.IOptions<Ace.AceOptions> ace,
     Timing.TimingFiles timings,
-    SqliteSongTraitStore traits)
+    SqliteSongTraitStore traits,
+    SqliteLogicSessionStore logicSessions)
 {
     public string OutputDir => paths.OutputDir;
 
@@ -208,6 +209,7 @@ public sealed partial class SongLibrary(
             notes.Remove($"{run}/{song}");
             videos.RemoveSong($"{run}/{song}");
             traits.Remove($"{run}/{song}");
+            logicSessions.RemoveSong($"{run}/{song}");
         });
         streams.ForgetSong(run, song);
         timings.ForgetSong(run, song);
@@ -451,6 +453,7 @@ public sealed partial class SongLibrary(
         notes.RemoveRun(run);
         videos.RemoveRun(run);
         traits.RemoveRun(run);
+        logicSessions.RemoveRun(run);
         streams.ForgetRun(run);
         timings.ForgetRun(run);
     });

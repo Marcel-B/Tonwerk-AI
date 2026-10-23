@@ -82,6 +82,33 @@ final class SoundLibrary {
         }
     }
 
+    /// A session's sound for the track laid back: its copy and the named sound it followed, or the default with nil.
+    /// Unchanged sounds send nothing.
+    func restore(_ track: String, to sound: TrackSound?) async {
+        let key = track.uppercased()
+        do {
+            if let sound {
+                if let current = tracks[key], current.preset == sound.preset, Self.same(current.patch, sound.patch) {
+                    return
+                }
+                tracks[key] = sound
+                try await model.setTrackSynth(track, patch: sound.patch, preset: sound.preset)
+            } else if tracks[key] != nil {
+                tracks[key] = nil
+                try await model.deleteTrackSynth(track)
+            }
+            problem = nil
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    private static func same(_ a: [String: Any], _ b: [String: Any]) -> Bool {
+        let options: JSONSerialization.WritingOptions = [.sortedKeys]
+        return (try? JSONSerialization.data(withJSONObject: a, options: options))
+            == (try? JSONSerialization.data(withJSONObject: b, options: options))
+    }
+
     /// Saves under a name; the server keeps a name's spelling as first saved.
     func save(_ sound: SynthSound, as name: String) async -> Bool {
         do {

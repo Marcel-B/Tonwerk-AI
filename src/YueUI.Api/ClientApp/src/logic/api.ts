@@ -291,6 +291,79 @@ export async function putMixer(settings: unknown): Promise<void> {
   await request('/api/logic/synths/mixer', json('PUT', { settings }))
 }
 
+// ---- Sessions ----------------------------------------------------------------------------------
+
+/**
+ * The page's state for one library song or one uploaded score, kept on the server so the work goes on later or in
+ * another browser or the app. `settings` is what `sessions.ts` writes; the server never reads it.
+ */
+export interface StoredSession {
+  id: number
+  name: string
+  /** The library song (`run/songN`), or null for an uploaded score. */
+  songId: string | null
+  /** The uploaded score's and recording's file names as they were chosen; the files lie with the session. */
+  scoreFile: string | null
+  audioFile: string | null
+  settings: unknown
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listSessions(): Promise<StoredSession[]> {
+  return (await request('/api/logic/sessions')).json() as Promise<StoredSession[]>
+}
+
+/** A session for a library song, or for an uploaded score whose file goes along. */
+export async function createSession(
+  name: string,
+  source: { song: string } | { file: File },
+  settings: unknown,
+): Promise<StoredSession> {
+  const form = new FormData()
+  form.append('name', name)
+  if ('song' in source) {
+    form.append('song', source.song)
+  } else {
+    form.append('file', source.file)
+  }
+  form.append('settings', JSON.stringify(settings))
+  return (await request('/api/logic/sessions', { method: 'POST', body: form })).json() as Promise<StoredSession>
+}
+
+/** Renames the session, replaces its settings, or both. */
+export async function updateSession(
+  id: number,
+  change: { name?: string; settings?: unknown },
+  keepalive = false,
+): Promise<StoredSession> {
+  // keepalive: the last change before the page goes away still arrives, as with a song's note.
+  return (
+    await request(`/api/logic/sessions/${id}`, { ...json('PUT', change), keepalive })
+  ).json() as Promise<StoredSession>
+}
+
+export async function deleteSession(id: number): Promise<void> {
+  await request(`/api/logic/sessions/${id}`, { method: 'DELETE' })
+}
+
+/** Keeps the uploaded recording with the session, or takes it away with `null`. */
+export async function setSessionAudio(id: number, audio: File | null): Promise<void> {
+  if (audio) {
+    const form = new FormData()
+    form.append('audio', audio)
+    await request(`/api/logic/sessions/${id}/audio`, { method: 'PUT', body: form })
+  } else {
+    await request(`/api/logic/sessions/${id}/audio`, { method: 'DELETE' })
+  }
+}
+
+/** The session's uploaded score or recording as a file again, under the name it was chosen with. */
+export async function sessionFile(id: number, which: 'file' | 'audio', name: string): Promise<File> {
+  const blob = await (await request(`/api/logic/sessions/${id}/${which}`)).blob()
+  return new File([blob], name, { type: blob.type })
+}
+
 // ---- Instruments -------------------------------------------------------------------------------
 
 export async function listInstruments(): Promise<Instrument[]> {

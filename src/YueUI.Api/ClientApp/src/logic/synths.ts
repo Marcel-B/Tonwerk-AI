@@ -97,6 +97,13 @@ export function setMasterVolume(volume: number): void {
   saveMixer()
 }
 
+/** A session's tracks laid over the mixer, the other tracks left as they are; saved like a fader move. */
+export function applyMixer(stored: MixerState): void {
+  const given = normalizeMixer(stored)
+  mixer.value = { master: given.master, tracks: { ...mixer.value.tracks, ...given.tracks } }
+  saveMixer()
+}
+
 let loading: Promise<void> | null = null
 
 export function trackKey(track: string): string {

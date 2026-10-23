@@ -25,6 +25,7 @@ private struct LogicStart: View {
     @State private var importing = false
     @State private var problem: String?
     @State private var query = ""
+    @State private var savedSessions: [SavedLogicSession] = []
 
     var body: some View {
         let songs = model.songs.filter(\.hasScore)
@@ -34,6 +35,14 @@ private struct LogicStart: View {
                 Text("MIDI-Datei oder score.abc")
                     .foregroundStyle(.secondary)
                 Spacer()
+                if !savedSessions.isEmpty {
+                    Menu("Sitzung fortsetzen") {
+                        ForEach(savedSessions.prefix(30)) { saved in
+                            Button(saved.listLabel) { model.openInLogic(saved: saved) }
+                        }
+                    }
+                    .fixedSize()
+                }
                 Button("Datei öffnen …") { importing = true }
             }
             .padding(.horizontal)
@@ -76,6 +85,7 @@ private struct LogicStart: View {
                 songList(shown)
             }
         }
+        .task { savedSessions = (try? await model.logicSessions()) ?? [] }
         .fileImporter(
             isPresented: $importing,
             allowedContentTypes: [.midi, UTType(filenameExtension: "abc") ?? .plainText, .plainText]
@@ -130,6 +140,9 @@ private struct LogicSessionView: View {
     @State private var exportWarnings: [LogicDiagnostic] = []
     @State private var exportProblem: String?
     @State private var saving = false
+    @State private var renaming = false
+    @State private var newName = ""
+    @State private var confirmingDelete = false
 
     var body: some View {
         ScrollView {
@@ -193,6 +206,17 @@ private struct LogicSessionView: View {
         }
         #endif
         .fileMover(isPresented: $saving, file: exportFile) { _ in }
+        .task { await session.loadSessions(again: true) }
+        .alert("Sitzung umbenennen", isPresented: $renaming) {
+            TextField("Name", text: $newName)
+            Button("Umbenennen") { Task { await session.renameSaved(newName) } }
+            Button("Abbrechen", role: .cancel) {}
+        }
+        .confirmationDialog("Sitzung löschen?", isPresented: $confirmingDelete) {
+            Button("Löschen", role: .destructive) { Task { await session.deleteSaved() } }
+        } message: {
+            Text("Die Seite bleibt, wie sie ist. Eine hochgeladene Datei geht mit der Sitzung.")
+        }
         .onChange(of: session.outputs.outputs) { session.reroute() }
         .task(id: session.form) {
             // Options change by taps and steppers; one conversion after the last of them.
@@ -225,6 +249,7 @@ private struct LogicSessionView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    sessionMenu
                 }
             }
             Spacer()
@@ -232,6 +257,42 @@ private struct LogicSessionView: View {
                 ProgressView().controlSize(.small)
             }
         }
+    }
+
+    /// The saved session: saved by itself, renamed or deleted here, and the others to open instead.
+    private var sessionMenu: some View {
+        Menu {
+            if let current = session.attachedSaved {
+                Button {
+                    newName = current.name
+                    renaming = true
+                } label: {
+                    Label("Umbenennen …", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    confirmingDelete = true
+                } label: {
+                    Label("Sitzung löschen …", systemImage: "trash")
+                }
+                Divider()
+            }
+            Section("Sitzung öffnen") {
+                if session.savedSessions.isEmpty {
+                    Text("Noch keine Sitzung gespeichert")
+                }
+                ForEach(session.savedSessions.prefix(30)) { saved in
+                    Button(saved.listLabel) { Task { await session.openSaved(saved) } }
+                }
+            }
+        } label: {
+            Label(
+                session.attachedSaved.map { String(localized: "Sitzung „\($0.name)“ · wird automatisch gespeichert") }
+                    ?? String(localized: "Wird nach dem Umwandeln als Sitzung gespeichert"),
+                systemImage: "tray.full")
+                .font(.caption)
+                .lineLimit(1)
+        }
+        .fixedSize()
     }
 
     private func transport(_ score: LogicScore) -> some View {

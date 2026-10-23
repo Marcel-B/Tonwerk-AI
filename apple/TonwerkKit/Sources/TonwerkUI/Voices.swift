@@ -587,6 +587,15 @@ enum VoiceJob: Identifiable {
         }
     }
 
+    /// When the server began working on it; nil while it waits.
+    var startedAt: Date? {
+        switch self {
+        case .version(let version): version.startedAt
+        case .stems(let set): set.startedAt
+        case .swap(let swap): swap.startedAt
+        }
+    }
+
     /// The Mac it runs on, once one took it.
     var ranOn: String? {
         switch self {

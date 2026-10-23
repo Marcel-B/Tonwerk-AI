@@ -131,6 +131,12 @@ public sealed record VersionState
 
     public DateTimeOffset CreatedAt { get; init; }
 
+    /// <summary>
+    /// When work on it began, on whichever Mac, for the queue page; null while it waits. Only in memory: a job a
+    /// restart cuts off fails, one still waiting starts anew.
+    /// </summary>
+    public DateTimeOffset? StartedAt { get; init; }
+
     public DateTimeOffset UpdatedAt { get; init; }
 
     public bool Finished => Stage is "done" or "failed" or "cancelled";
@@ -196,6 +202,12 @@ public sealed record SwapState
     public string? RanOn { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>
+    /// When work on it began, on whichever Mac, for the queue page; null while it waits. Only in memory: a job a
+    /// restart cuts off fails, one still waiting starts anew.
+    /// </summary>
+    public DateTimeOffset? StartedAt { get; init; }
 
     public DateTimeOffset UpdatedAt { get; init; }
 

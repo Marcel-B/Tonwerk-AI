@@ -260,6 +260,11 @@ public sealed record ImageState
 
     public DateTimeOffset CreatedAt { get; init; }
 
+    /// <summary>
+    /// When work on it began, on whichever Mac, for the queue page; null while it waits.
+    /// </summary>
+    public DateTimeOffset? StartedAt { get; init; }
+
     public DateTimeOffset UpdatedAt { get; init; }
 
     public bool Finished => Stage is "done" or "failed" or "cancelled";

@@ -166,7 +166,7 @@ public sealed class SpeechLab(
                 LargeModel.Speech, Machines.Engines.Speech, take.Machine, options.Value.WaitInterval, cancel.Token, engine.Installed);
             var speaker = placement.Helper is { } helper ? remote.Speech(helper) : engine;
 
-            take = Update(take, t => t with { Stage = "loading", RanOn = placement.Name });
+            take = Update(take, t => t with { Stage = "loading", RanOn = placement.Name, StartedAt = time.GetUtcNow() });
             Directory.CreateDirectory(work);
             var output = Path.Combine(work, "take.wav");
             var working = cleaning ? "cleaning" : "speaking";

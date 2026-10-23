@@ -196,7 +196,7 @@ public sealed class AceComposer(
             }
 
             var started = time.GetTimestamp();
-            job = Update(job, j => j with { Stage = "loading", Fraction = 0, RanOn = placement.Name });
+            job = Update(job, j => j with { Stage = "loading", Fraction = 0, RanOn = placement.Name, StartedAt = time.GetUtcNow() });
 
             if (Directory.Exists(work))
             {

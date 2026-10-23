@@ -29,6 +29,10 @@ Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0):
 swift-openapi-runtime, swift-openapi-urlsession and swift-http-types.
 swift-openapi-generator (Apache License 2.0) runs only at build time.
 
+The Mac app contains Sparkle (https://sparkle-project.org) for its updates,
+licensed under the MIT licence, with the parts it bundles under their own
+permissive licences (see https://github.com/sparkle-project/Sparkle/blob/2.x/LICENSE).
+
 apple/TonwerkKit/Sources/TonwerkDSP/dsp is copied from Tonwerk Synth
 (https://github.com/Marcel-B/Synth) by the same author, under the same
 licence.

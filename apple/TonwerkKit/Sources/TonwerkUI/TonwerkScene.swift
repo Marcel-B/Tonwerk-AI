@@ -15,7 +15,12 @@ public struct TonwerkScene: Scene {
         }
         #if os(macOS)
         .defaultSize(width: 1000, height: 700)
-        .commands { PlayerCommands(player: model.player) }
+        .commands {
+            PlayerCommands(player: model.player)
+            #if canImport(Sparkle)
+            UpdateCommands(updates: AppUpdates.shared)
+            #endif
+        }
         #endif
 
         #if os(macOS)

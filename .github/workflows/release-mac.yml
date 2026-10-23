@@ -8,6 +8,10 @@
 #   APPLE_ID                     the Apple ID of the developer account
 #   APPLE_APP_PASSWORD           an app-specific password of that Apple ID (account.apple.com), for notarytool
 #   APPLE_TEAM_ID                the team id (also used by testflight.yml)
+#   SPARKLE_PRIVATE_KEY          the EdDSA key that signs updates (bin/generate_keys -x of Sparkle's release, the file's text)
+#   SPARKLE_PUBLIC_ED_KEY        its public half, which generate_keys prints; it goes into the app's Info.plist
+# Besides the DMG the release carries appcast.xml, which the app's updater (Updates.swift) reads from the newest
+# release; so every release must come from here, a DMG made by hand would carry no signature the app accepts.
 # Unlike the Synth release there is no ad-hoc fallback: a download macOS refuses to open helps no one.
 name: Mac-App veröffentlichen
 
@@ -37,6 +41,8 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
       VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v5
@@ -44,7 +50,7 @@ jobs:
       - name: Check the inputs and secrets
         run: |
           missing=0
-          for name in MACOS_CERTIFICATE_P12 MACOS_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+          for name in MACOS_CERTIFICATE_P12 MACOS_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD SPARKLE_PRIVATE_KEY SPARKLE_PUBLIC_ED_KEY; do
             [[ -n "${!name}" ]] || { echo "::error::secret $name is missing"; missing=1; }
           done
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "::error::version '$VERSION' is not like 0.2.0"; missing=1; }
@@ -93,11 +99,28 @@ jobs:
             CODE_SIGN_IDENTITY="$SIGN_IDENTITY" "CODE_SIGN_IDENTITY[sdk=macosx*]=$SIGN_IDENTITY" \
             OTHER_CODE_SIGN_FLAGS="--timestamp --keychain $KEYCHAIN" ENABLE_HARDENED_RUNTIME=YES \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            SPARKLE_PUBLIC_ED_KEY="$SPARKLE_PUBLIC_ED_KEY" \
             > "$RUNNER_TEMP/archive.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/archive.log" | sort -u | head -50; tail -100 "$RUNNER_TEMP/archive.log"; exit 1; }
           grep -E "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
           mkdir -p "$RUNNER_TEMP/dmg"
           ditto "$RUNNER_TEMP/Tonwerk-AI.xcarchive/Products/Applications/Tonwerk-AI.app" "$RUNNER_TEMP/dmg/Tonwerk-AI.app"
           echo "APP=$RUNNER_TEMP/dmg/Tonwerk-AI.app" >> "$GITHUB_ENV"
+
+      # Xcode re-signs Sparkle.framework when it copies it, but not the helpers inside it, which notarization wants
+      # under the same Developer ID with the hardened runtime and a timestamp. Sparkle's documentation lists these
+      # commands; inside out, then the app again with its own entitlements.
+      - name: Sign Sparkle's helpers
+        run: |
+          sign() { codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" --sign "$SIGN_IDENTITY" "$@"; }
+          FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
+          test -d "$FRAMEWORK" || { echo "::error::Sparkle.framework is not in the app"; ls "$APP/Contents/Frameworks"; exit 1; }
+          sign "$FRAMEWORK/Versions/B/XPCServices/Installer.xpc"
+          sign --preserve-metadata=entitlements "$FRAMEWORK/Versions/B/XPCServices/Downloader.xpc"
+          sign "$FRAMEWORK/Versions/B/Autoupdate"
+          sign "$FRAMEWORK/Versions/B/Updater.app"
+          sign "$FRAMEWORK"
+          codesign -d --entitlements - --xml "$APP" > "$RUNNER_TEMP/app.entitlements"
+          sign --entitlements "$RUNNER_TEMP/app.entitlements" "$APP"
 
       - name: Check the signature
         run: |
@@ -105,6 +128,8 @@ jobs:
           codesign -dvv "$APP" 2>&1 | grep -E "Authority=Developer ID Application|Timestamp=|flags=.*runtime"
           codesign -d --entitlements - --xml "$APP" | plutil -p - | tee "$RUNNER_TEMP/entitlements.txt"
           grep -q '"com.apple.security.app-sandbox" => true' "$RUNNER_TEMP/entitlements.txt"
+          grep -q 'de.bvelop.tonwerk.ai-spki' "$RUNNER_TEMP/entitlements.txt"
+          test -n "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP/Contents/Info.plist")"
           if grep -q 'get-task-allow' "$RUNNER_TEMP/entitlements.txt"; then echo "::error::debug entitlement in a release"; exit 1; fi
           lipo -archs "$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")" = "$VERSION"
@@ -132,6 +157,43 @@ jobs:
           # releases/latest/download/Tonwerk-AI.dmg.
           cp "$DMG" dist/Tonwerk-AI.dmg
           shasum -a 256 dist/*.dmg | tee dist/SHA256SUMS.txt
+
+      # The feed the app's updater reads: one entry, this release, its DMG signed with the update key. Sparkle's tools
+      # come from its release of the version the app links (Package.resolved).
+      - name: Appcast
+        env:
+          NOTES: ${{ inputs.notes }}
+        run: |
+          sparkle=$(plutil -extract pins json -o - apple/Tonwerk.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved \
+            | python3 -c 'import json,sys; print(next(p["state"]["version"] for p in json.load(sys.stdin) if p["identity"] == "sparkle"))')
+          mkdir "$RUNNER_TEMP/sparkle"
+          curl -fsSL "https://github.com/sparkle-project/Sparkle/releases/download/$sparkle/Sparkle-$sparkle.tar.xz" | tar -xJ -C "$RUNNER_TEMP/sparkle"
+          key="$RUNNER_TEMP/sparkle.key"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$key"
+          signature=$("$RUNNER_TEMP/sparkle/bin/sign_update" --ed-key-file "$key" "dist/Tonwerk-AI-$VERSION.dmg")
+          rm "$key"
+          echo "$signature"
+          notes="${NOTES:-Tonwerk-AI $VERSION}"
+          notes="${notes//&/&amp;}"; notes="${notes//</&lt;}"
+          cat > dist/appcast.xml <<XML
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Tonwerk-AI</title>
+              <item>
+                <title>Tonwerk-AI $VERSION</title>
+                <pubDate>$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>
+                <sparkle:version>${{ github.run_number }}</sparkle:version>
+                <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+                <description><![CDATA[<p>$notes</p><p><a href="https://github.com/Marcel-B/Tonwerk-AI/releases/tag/app-v$VERSION">Alle Änderungen</a></p>]]></description>
+                <enclosure url="https://github.com/Marcel-B/Tonwerk-AI/releases/download/app-v$VERSION/Tonwerk-AI-$VERSION.dmg" type="application/octet-stream" $signature/>
+              </item>
+            </channel>
+          </rss>
+          XML
+          xmllint --noout dist/appcast.xml
+          cat dist/appcast.xml
 
       - name: Release
         env:

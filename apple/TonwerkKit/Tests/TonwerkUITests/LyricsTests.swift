@@ -9,10 +9,47 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(lines[3].text, "Zweite Zeile")
     }
 
-    func testABracketInsideALineIsNoSection() {
+    func testATagBeforeTextStandsOnItsOwnLine() {
         let lines = ShownLine.lines(of: "[Verse] la la\n[a] [b]")
-        XCTAssertEqual(lines.map(\.section), [false, false])
-        XCTAssertEqual(lines.map(\.timed), [0, 1])
+        XCTAssertEqual(lines.map(\.text), ["[Verse]", "la la", "[a]", "[b]"])
+        XCTAssertEqual(lines.map(\.section), [true, false, true, true])
+        XCTAssertEqual(lines.map(\.timed), [nil, 0, nil, nil])
+    }
+
+    private let paragraph =
+        "[Intro] (Heavy distorted synth bass intro, 140 BPM) (Sound of electronic glitches)\n\n"
+        + "[Verse 1] (Cold, robotic female vocals) Neon rain on carbon glass The ghosts of who we were, they pass "
+        + "Where does the circuit end, and I begin? (Slightly more aggressive) I traded breath for silver veins\n\n"
+        + "[Chorus]\nHold on"
+
+    func testDirectionsAreHiddenAndLostLineEndsBroken() {
+        XCTAssertEqual(ShownLine.lines(of: paragraph).map(\.text), [
+            "[Intro]", "", "[Verse 1]", "Neon rain on carbon glass", "The ghosts of who we were, they pass",
+            "Where does the circuit end, and I begin?", "I traded breath for silver veins", "", "[Chorus]", "Hold on",
+        ])
+    }
+
+    func testDirectionsShowApartOnRequestAndAreNeverLit() {
+        let directions = ShownLine.lines(of: paragraph, directions: true).filter(\.direction)
+        XCTAssertEqual(directions.map(\.text), [
+            "(Heavy distorted synth bass intro, 140 BPM)", "(Sound of electronic glitches)",
+            "(Cold, robotic female vocals)", "(Slightly more aggressive)",
+        ])
+        XCTAssertTrue(directions.allSatisfy { $0.timed == nil })
+        XCTAssertTrue(ShownLine.hasDirections(paragraph))
+        XCTAssertFalse(ShownLine.hasDirections("[Verse]\nRain on the roof"))
+    }
+
+    func testPiecesOfOneLineShareTheServersNumber() {
+        let lines = ShownLine.lines(of: paragraph)
+        XCTAssertEqual(lines.filter { $0.timed == 1 }.count, 4)
+        XCTAssertEqual(lines.last?.timed, 2)
+    }
+
+    func testGermanCapitalsAndShortLinesStay() {
+        let german = "Ich laufe durch die Stadt im Regen und der Wind singt mir ein Lied von Morgen"
+        XCTAssertEqual(ShownLine.lines(of: german).map(\.text), [german])
+        XCTAssertEqual(ShownLine.lines(of: "Rain on the roof Nobody knows").map(\.text), ["Rain on the roof Nobody knows"])
     }
 
     func testTheSungLineIsTheLastStartedUntilABreak() {

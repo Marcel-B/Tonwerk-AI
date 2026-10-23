@@ -20,7 +20,7 @@ import {
 } from '../player'
 import { getTiming, requestTiming } from '../api'
 import { rate, ratingOf } from '../ratings'
-import { lineAt, shownLines } from '../timing'
+import { hasDirections, lineAt, shownLines } from '../timing'
 import type { LyricsTiming } from '../types'
 import { readBands, reducedMotion, setVisual, visuals } from '../spectrum'
 import { coverColour } from '../video'
@@ -107,8 +107,12 @@ function clock(seconds: number): string {
 
 // ---- Lyrics --------------------------------------------------------------------------------------------------------
 
-/** YuE2's lyrics with their section tags ([Verse], [Chorus], …) as headings of their own. */
-const lyricLines = computed(() => shownLines(props.lyrics))
+/**
+ * YuE2's lyrics with their section tags ([Verse], [Chorus], …) as headings of their own; directions in round brackets
+ * only on request.
+ */
+const lyricLines = computed(() => shownLines(props.lyrics, visuals.value.nowPlayingDirections))
+const directionsFound = computed(() => hasDirections(props.lyrics))
 const hasLyrics = computed(() => lyricLines.value.some((line) => line.text && !line.section))
 const showLyrics = computed(() => visuals.value.nowPlayingLyrics)
 
@@ -375,6 +379,7 @@ onBeforeUnmount(() => {
         <template v-else>
           <template v-for="(line, index) in lyricLines" :key="index">
             <div v-if="line.section" class="section">{{ line.text.slice(1, -1) }}</div>
+            <p v-else-if="line.direction" class="direction">{{ line.text.slice(1, -1) }}</p>
             <p
               v-else-if="line.text"
               :class="['line', { active: line.timed >= 0 && line.timed === activeLine }]"
@@ -462,6 +467,17 @@ onBeforeUnmount(() => {
           :class="{ on: showLyrics }"
           :aria-pressed="showLyrics"
           @click="switchVisual('nowPlayingLyrics')"
+        />
+        <Button
+          v-if="showLyrics && directionsFound"
+          icon="pi pi-megaphone"
+          :label="t('nowPlayingDirections')"
+          text
+          size="small"
+          :class="{ on: visuals.nowPlayingDirections }"
+          :aria-pressed="visuals.nowPlayingDirections"
+          :title="t('nowPlayingDirectionsHint')"
+          @click="setVisual('nowPlayingDirections', !visuals.nowPlayingDirections)"
         />
         <Button
           icon="pi pi-chart-bar"
@@ -656,6 +672,14 @@ onBeforeUnmount(() => {
 
 .timed .line.active {
   opacity: 1;
+}
+
+.direction {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-style: italic;
+  line-height: 1.3;
+  opacity: 0.55;
 }
 
 .section {

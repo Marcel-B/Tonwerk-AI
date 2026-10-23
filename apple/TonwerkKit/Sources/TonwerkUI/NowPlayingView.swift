@@ -9,6 +9,8 @@ struct NowPlayingView: View {
     @AppStorage("nowPlayingLyrics") private var showLyrics = true
     @AppStorage("nowPlayingAnalyzer") private var showAnalyzer = true
     @AppStorage("nowPlayingEffects") private var showEffects = true
+    /// The lyrics' performance directions in round brackets; off shows only what is sung, with the section tags.
+    @AppStorage("nowPlayingDirections") private var showDirections = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var beat = BeatLevels()
     @State private var times: [LineTimes]?
@@ -33,7 +35,7 @@ struct NowPlayingView: View {
                 topBar(song)
                 if lyricsShown {
                     compactHeader(song)
-                    LyricsPanel(lyrics: song.lyrics, times: times)
+                    LyricsPanel(lyrics: song.lyrics, directions: showDirections, times: times)
                 } else {
                     Spacer(minLength: 0)
                     bigCover(song)
@@ -110,6 +112,10 @@ struct NowPlayingView: View {
             switchButton("chart.bar.fill", on: $showAnalyzer, label: "Analyzer")
             switchButton("sparkles", on: $showEffects, label: "Effekte")
                 .help(reduceMotion ? "Das System wünscht weniger Bewegung, die Effekte bleiben still." : "Effekte")
+            if showLyrics && ShownLine.hasDirections(song.lyrics) {
+                switchButton("theatermasks", on: $showDirections, label: "Regieanweisungen")
+                    .help("Regieanweisungen in runden Klammern im Text zeigen")
+            }
             if !song.lyrics.isEmpty {
                 Button {
                     showLyrics.toggle()
@@ -319,10 +325,11 @@ struct NowPlayingView: View {
 private struct LyricsPanel: View {
     @Environment(Player.self) private var player
     let lyrics: String
+    let directions: Bool
     let times: [LineTimes]?
 
     var body: some View {
-        let shown = ShownLine.lines(of: lyrics)
+        let shown = ShownLine.lines(of: lyrics, directions: directions)
         let active = times.flatMap { LineTimes.line(at: player.elapsed, in: $0) }
         ScrollViewReader { proxy in
             ScrollView {
@@ -358,6 +365,10 @@ private struct LyricsPanel: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.45))
                 .padding(.top, 10)
+        } else if line.direction {
+            Text(line.text.dropFirst().dropLast())
+                .font(.callout.italic())
+                .foregroundStyle(.white.opacity(0.55))
         } else if line.text.isEmpty {
             Color.clear.frame(height: 2)
         } else {

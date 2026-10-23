@@ -168,7 +168,8 @@ final class LogicPlayer {
             sequenced[track.voice.id] = musicTrack
         }
         self.sequencer = sequencer
-        route()
+        connect()
+        applyMutes()
         sequencer.prepareToPlay()
         if wasPlaying {
             play(from: from)
@@ -216,7 +217,7 @@ final class LogicPlayer {
 
     // MARK: Routing and mixing
 
-    /// Where each track goes and whether it sounds; solo wins over everything not soloed, as the web page's.
+    /// Where each track goes and whether it sounds: a new route reloads the sequencer, the rest only changes mutes.
     func update(_ tracks: [Track]) {
         let channelsChanged = zip(tracks, self.tracks).contains { $0.route != $1.route }
         self.tracks = tracks
@@ -224,7 +225,7 @@ final class LogicPlayer {
             Task { await load(score, tracks: tracks, mixer: currentMixer) }
         } else {
             playSounds()
-            route()
+            applyMutes()
         }
     }
 
@@ -239,8 +240,11 @@ final class LogicPlayer {
         }
     }
 
-    private func route() {
-        let soloing = tracks.contains { $0.soloed }
+    /// Every sequencer track to its instrument or MIDI output. Only while the sequencer is stopped, on a new load:
+    /// AVAudioSequencer raises an Objective-C exception for a destination set while it plays, which AppKit swallowed
+    /// with SwiftUI's lock held, and the page stopped answering (a solo during playback did it). A change of route
+    /// reloads anyway (`update`), so playing needs only the mutes.
+    private func connect() {
         for track in tracks {
             guard let musicTrack = sequenced[track.voice.id] else { continue }
             switch track.route {
@@ -251,7 +255,14 @@ final class LogicPlayer {
             case .midi(let endpoint, _):
                 musicTrack.destinationMIDIEndpoint = endpoint
             }
-            musicTrack.isMuted = track.muted || (soloing && !track.soloed)
+        }
+    }
+
+    /// Whether each track sounds; solo wins over everything not soloed, as the web page's. Safe while playing.
+    private func applyMutes() {
+        let soloing = tracks.contains { $0.soloed }
+        for track in tracks {
+            sequenced[track.voice.id]?.isMuted = track.muted || (soloing && !track.soloed)
         }
     }
 

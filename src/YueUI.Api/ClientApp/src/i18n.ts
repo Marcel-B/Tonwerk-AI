@@ -48,6 +48,11 @@ const messages = {
     sectionTagsMore:
       'YuE2 liest die Form des Songs aus diesen Marken; sie bleiben englisch, auch bei deutschem Text. Eine feste Liste hat YuE2 nicht, es reicht den Text als Ganzes ans Modell. Die oberen Marken benennt YuE2 selbst als Abschnitte seiner geplanten Partitur (intro, verse, pre-chorus, chorus, interlude, bridge, outro). [Intro] gelingt oft schlecht, ein Song beginnt sicherer mit [Verse]. Ein Abschnitt wird in etwa 30 Sekunden gesungen, 4 bis 6 Zeilen. Bei „Instrumental“ zählen nur die Marken.',
     sectionTagsOther: 'Nicht von YuE2 dokumentiert: das Modell liest sie als Wörter, die Wirkung ist offen.',
+    directions:
+      'Anweisungen in Klammern: eine eigene Zeile im Abschnitt, mehrere hintereinander werden eine Klammer. Nicht von YuE2 dokumentiert; in einem Test wurden sie nicht gesungen und Schreien wie ruhiger Gesang kamen dort, wo sie es verlangten.',
+    shout: 'SCHREIEN',
+    shoutHint:
+      'Schreibt die markierten Zeilen groß (ohne Markierung die Zeile am Cursor), ein zweites Antippen wieder klein; Marken in [ ] und Anweisungen in ( ) bleiben. YuE2 singt Großgeschriebenes oft kräftiger, dokumentiert ist das nicht, und einmal blieb ein großgeschriebener Teil ungesungen.',
     styleBlocks_language: 'Sprache',
     styleBlocks_languageHint:
       'Die Sprache des Gesangs, eine pro Song; sie steht vorn wie in den YuE2-Beispielen. Englisch ist am besten trainiert, Mandarin und Kantonesisch unterscheidet YuE ausdrücklich.',
@@ -1448,6 +1453,11 @@ const messages = {
     sectionTagsMore:
       'YuE2 reads the song’s form from these tags; they stay English, also for German lyrics. YuE2 has no fixed list, it hands the lyrics to the model as a whole. The upper tags are the sections YuE2 itself names in its planned score (intro, verse, pre-chorus, chorus, interlude, bridge, outro). [Intro] often comes out poorly; a song starts more reliably with [Verse]. A section is sung in about 30 seconds, 4 to 6 lines. With “Instrumental” only the tags count.',
     sectionTagsOther: 'Not documented by YuE2: the model reads them as words, their effect is open.',
+    directions:
+      'Directions in parentheses: a line of their own in the section, several in a row become one. Not documented by YuE2; in one test they were not sung, and screamed and quiet vocals came where they asked for them.',
+    shout: 'SCREAM',
+    shoutHint:
+      'Writes the selected lines in capitals (without a selection the line at the caret), a second tap back in lower case; tags in [ ] and directions in ( ) stay. YuE2 often sings capitals with more force; this is not documented, and once a part in capitals was not sung at all.',
     styleBlocks_language: 'Language',
     styleBlocks_languageHint:
       'The language of the vocals, one per song; it goes first as in the YuE2 examples. English is trained best, and YuE tells Mandarin and Cantonese apart explicitly.',

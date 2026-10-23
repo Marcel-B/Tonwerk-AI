@@ -151,7 +151,8 @@ public sealed class BackupEndpointTests : IDisposable
         Assert.Equal(7, first.Last.Files);
         var metrics = await client.GetStringAsync("/metrics");
         Assert.Contains("tonwerk_backup_last_run_success 0\n", metrics);
-        Assert.DoesNotContain("tonwerk_backup_last_success_timestamp_seconds", metrics);
+        // Only the family's header, no sample yet.
+        Assert.DoesNotContain("\ntonwerk_backup_last_success_timestamp_seconds ", metrics);
 
         _app.Nextcloud.Locked.Clear();
         var before = _app.Nextcloud.PutPaths().Length;

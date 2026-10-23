@@ -130,7 +130,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           codesign -dvv "$APP" 2>&1 | grep -E "Authority=Developer ID Application|Timestamp=|flags=.*runtime"
           codesign -d --entitlements - --xml "$APP" | plutil -p - | tee "$RUNNER_TEMP/entitlements.txt"
-          grep -q '"com.apple.security.app-sandbox" => true' "$RUNNER_TEMP/entitlements.txt"
+          grep -Eq '"com.apple.security.app-sandbox" => (true|1)$' "$RUNNER_TEMP/entitlements.txt"
           grep -q 'de.bvelop.tonwerk.ai-spki' "$RUNNER_TEMP/entitlements.txt"
           test -n "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP/Contents/Info.plist")"
           if grep -q 'get-task-allow' "$RUNNER_TEMP/entitlements.txt"; then echo "::error::debug entitlement in a release"; exit 1; fi

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { t, type MessageKey } from '../i18n'
+import { locale, t, type MessageKey } from '../i18n'
+import { blockHelp } from '../styleBlockHelp'
 import { loadInsights, provenStyleBlocks } from '../insights'
 import { countTags, hasTag, styleCategories, toggleTag, type StyleCategory } from '../styleTags'
 import { heardTempo, tempoTag } from '../traits'
@@ -24,6 +25,9 @@ function tagsOf(key: StyleCategory, tags: readonly string[]): readonly string[] 
   const heard = key === 'tempo' && heardTempo.value ? tempoTag(heardTempo.value) : null
   return heard && !tags.includes(heard) ? [heard, ...tags] : tags
 }
+
+// A touch screen would open the tooltip on the tap that chooses the block and leave it standing.
+const canHover = window.matchMedia?.('(hover: hover)').matches ?? false
 
 function hint(key: StyleCategory): string {
   return t(`styleBlocks_${key}Hint` as MessageKey)
@@ -76,6 +80,7 @@ function hint(key: StyleCategory): string {
             <Button
               v-for="tag in tagsOf(definition.key, definition.tags)"
               :key="tag"
+              v-tooltip.top="canHover ? blockHelp(tag, locale) : undefined"
               type="button"
               size="small"
               rounded

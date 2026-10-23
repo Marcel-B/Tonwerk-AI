@@ -142,7 +142,7 @@ jobs:
           ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/app.zip"
           .github/scripts/notarize.sh "$RUNNER_TEMP/app.zip"
           # Stapled, the app opens without a network check, also when copied out of the DMG.
-          xcrun stapler staple "$APP"
+          .github/scripts/staple.sh "$APP"
           spctl -a -vv -t exec "$APP"
 
       - name: DMG
@@ -154,7 +154,7 @@ jobs:
           hdiutil create -volname "Tonwerk-AI $VERSION" -srcfolder "$RUNNER_TEMP/dmg" -fs HFS+ -format UDZO -ov "$DMG"
           codesign --sign "$SIGN_IDENTITY" --keychain "$KEYCHAIN" --timestamp "$DMG"
           .github/scripts/notarize.sh "$DMG"
-          xcrun stapler staple "$DMG"
+          .github/scripts/staple.sh "$DMG"
           spctl -a -vv -t open --context context:primary-signature "$DMG"
           # A copy under a name without the version, so tonwerk.studio can always link
           # releases/latest/download/Tonwerk-AI.dmg.

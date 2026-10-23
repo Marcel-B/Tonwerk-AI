@@ -15,6 +15,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.7.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-http-types", from: "1.0.0"),
+        // Updates of the Mac app downloaded from GitHub (Updates.swift); MIT, see NOTICE.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.6"),
     ],
     targets: [
         .target(
@@ -39,7 +41,11 @@ let package = Package(
         // for strict concurrency.
         .target(
             name: "TonwerkUI",
-            dependencies: ["TonwerkKit", "TonwerkDSP"],
+            dependencies: [
+                "TonwerkKit",
+                "TonwerkDSP",
+                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS])),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

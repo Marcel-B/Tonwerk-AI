@@ -27,6 +27,21 @@ public sealed class TaggedFiles(IAudioTagger tagger, ILogger<TaggedFiles> logger
         }
     }
 
+    /// <summary>Adds the <see cref="AiMark"/> in place; false (and a warning in the log) when it could not.</summary>
+    public bool TryMark(string path, string model)
+    {
+        try
+        {
+            tagger.Mark(path, model);
+            return true;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Could not mark {Path} as AI-made", path);
+            return false;
+        }
+    }
+
     /// <summary>A tagged copy of <paramref name="source"/> in a temporary file the caller deletes.</summary>
     public string Copy(string source, SongTags tags)
     {

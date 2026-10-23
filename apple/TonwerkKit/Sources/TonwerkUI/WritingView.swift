@@ -261,6 +261,11 @@ private struct WritingSessionView: View {
                     .help("Senden")
                 }
             }
+            // The AI Act (Art. 50(1)) wants it plain that the other side of a chat is a machine.
+            Text("Antworten schreibt ein KI-Modell. Sie können falsch sein oder bestehenden Texten ähneln.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: 860)
         .padding(.horizontal)

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -679,6 +680,11 @@ public sealed class FakeTagger : IAudioTagger
             throw new InvalidOperationException(Failure);
         }
     }
+
+    /// <summary>The files marked as AI-made, with the model named.</summary>
+    public ConcurrentDictionary<string, string> Marked { get; } = new();
+
+    public void Mark(string path, string model) => Marked[path] = model;
 }
 
 /// <summary>Writes a few bytes instead of running afconvert; remembers what it was asked to encode.</summary>

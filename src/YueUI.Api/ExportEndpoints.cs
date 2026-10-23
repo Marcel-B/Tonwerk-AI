@@ -139,9 +139,10 @@ public static class ExportEndpoints
     {
         var title = library.TitleOf(run, directory);
         var request = library.ReadRequest(run, song);
+        var model = File.Exists(Path.Combine(directory, SongLibrary.AceFile)) ? "ACE-Step" : "YuE2";
         var comment = string.Join(" · ", new[]
         {
-            "YuE2",
+            AiMark.Note(model),
             request?.Seed is { } seed ? $"Seed {seed.ToString(CultureInfo.InvariantCulture)}" : null,
             request?.Style is { Length: > 0 } style ? style : null,
         }.OfType<string>());
@@ -155,7 +156,8 @@ public static class ExportEndpoints
             genre,
             request?.Instrumental == true ? null : request?.Lyrics,
             comment,
-            cover);
+            cover,
+            model);
     }
 
     /// <summary>Read by its first bytes rather than the declared type, which a browser guesses from the file name.</summary>

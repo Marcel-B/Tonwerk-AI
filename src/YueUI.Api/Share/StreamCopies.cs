@@ -48,11 +48,11 @@ public sealed class StreamCopies(
         if (voice is not null)
         {
             // A version plays beside its song; the voice tells them apart in another player's list.
-            tags = tags with { Title = $"{tags.Title} ({voice})" };
+            tags = tags with { Title = $"{tags.Title} ({voice})", AiModel = $"{tags.AiModel}, Seed-VC" };
         }
         // The cover by its path, which changes with every new picture, rather than reading it on every request.
         var stamp = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            string.Join("\n", tags.Title, tags.Album, tags.Year, tags.Track, tags.TrackCount, tags.Lyrics, tags.Comment, cover?.Path))));
+            string.Join("\n", tags.Title, tags.Album, tags.Year, tags.Track, tags.TrackCount, tags.Lyrics, tags.Comment, tags.AiModel, cover?.Path))));
         return new StreamTags(stamp, () => cover is not null && File.Exists(cover.Path)
             ? tags with { Cover = new CoverImage(File.ReadAllBytes(cover.Path), cover.ContentType) }
             : tags);

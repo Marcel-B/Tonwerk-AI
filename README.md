@@ -513,6 +513,24 @@ deploy/install-ace.sh --sft     # dazu der SFT-DiT (feiner, etwa 50 Schritte sta
 
 Oder über das Einrichtungsskript mit den bisherigen Optionen und `--ace`, damit Updates den Build mitpflegen. Programm und Modelle liegen unter `~/Library/Application Support/YuE UI/ace/`, Adapter als `.safetensors` in `ace/adapters/`. Bisher nur in einem Linux-Container mit nachgebauten Programmen getestet, nicht auf dem Mac und nicht mit echten Modellen.
 
+## Apps für Mac, iPhone und iPad
+
+Die nativen Apps liegen in `apple/` (Xcode-Projekt `apple/Tonwerk.xcodeproj`); was sie können und wie man sie verbindet, steht auf [tonwerk.studio/ai](https://tonwerk.studio/ai/).
+
+**Mac:** Die App gibt es als DMG unter [Releases](https://github.com/Marcel-B/Tonwerk-AI/releases) (Tags `app-v…`), mit Developer ID signiert und von Apple notarisiert, nicht im App Store. Eine neue Version macht der Workflow **Mac-App veröffentlichen** (`.github/workflows/release-mac.yml`): Actions → Run workflow, Version eintragen. Er baut die App für Apple Silicon und Intel, lässt App und DMG notarisieren und legt das Release mit dem Tag `app-v<Version>` an, dazu eine Kopie `Tonwerk-AI.dmg`, auf die die Website mit `releases/latest/download/Tonwerk-AI.dmg` zeigt. Dafür braucht das Repository die Secrets `MACOS_CERTIFICATE_P12` (das Zertifikat „Developer ID Application“ mit Schlüssel als .p12, Base64: `base64 -i DeveloperID.p12 | pbcopy`), `MACOS_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_PASSWORD` (app-spezifisches Passwort von account.apple.com) und `APPLE_TEAM_ID`, dieselben wie im Repository Synth, dazu der Schlüssel für Updates.
+
+Updates: Die Mac-App sucht mit [Sparkle](https://sparkle-project.org) selbst nach neuen Versionen (Menü Tonwerk-AI → **Nach Updates suchen …**, in den Einstellungen auch automatisch). Sparkle liest `appcast.xml` aus dem neuesten Release, zeigt, was neu ist, lädt das DMG, prüft dessen Signatur, ersetzt die App und startet sie neu. Die Signatur macht der Workflow mit einem eigenen EdDSA-Schlüssel, einmal auf dem Mac erzeugt:
+
+```sh
+mkdir -p /tmp/sparkle && curl -fsSL https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz | tar -xJ -C /tmp/sparkle
+/tmp/sparkle/bin/generate_keys                      # legt den Schlüssel im Schlüsselbund ab und zeigt den öffentlichen
+/tmp/sparkle/bin/generate_keys -x ~/sparkle.key     # privaten Schlüssel als Datei
+```
+
+Den öffentlichen Schlüssel als Secret `SPARKLE_PUBLIC_ED_KEY`, den Inhalt von `~/sparkle.key` als `SPARKLE_PRIVATE_KEY` anlegen, danach die Datei löschen. Der Schlüssel im Schlüsselbund ist die Sicherung: Geht er verloren, nimmt keine installierte App mehr ein Update an, bis man sie einmal von Hand neu lädt. Eine App, die aus Xcode gebaut ist, hat keinen Schlüssel und kein Update-Menü.
+
+**iPhone und iPad:** über TestFlight (`.github/workflows/testflight.yml`).
+
 ## Konfiguration
 
 `appsettings.json` bzw. Umgebungsvariablen:
@@ -750,3 +768,7 @@ Ideen und geplante Änderungen, ohne feste Reihenfolge. Erledigtes abhaken oder 
 - [ ] Eine Fassung statt der Originalstimme ins Logic-Projekt
 - [x] PrimeVue-Importe optimieren (nur benötigte Komponenten, kleineres Bundle)
 - [x] Restliche Oberfläche auf PrimeVue umstellen (`.button`, `.card`, `.link` und Eingabefelder aus `style.css` ablösen)
+
+## Lizenz
+
+Tonwerk-AI (Server, Weboberfläche und Apps) steht unter der [PolyForm Noncommercial License 1.0.0](LICENSE): nutzen, ändern und weitergeben für jeden nicht kommerziellen Zweck, mit der Zeile „Required Notice“ aus [NOTICE](NOTICE). Kommerzielle Nutzung nur mit meiner schriftlichen Erlaubnis. Die Lizenz gilt für die Software, nicht für die Modelle, die der Server lädt; die haben ihre eigenen Lizenzen (siehe die Abschnitte oben). Fremde Bibliotheken und ihre Lizenzen stehen in NOTICE.

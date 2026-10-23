@@ -12,4 +12,9 @@
 //
 //     CODE_SIGN_IDENTITY[sdk=macosx*] = Apple Development
 CODE_SIGN_IDENTITY[sdk=macosx*] = -
+
+// Sparkle's public EdDSA key for the Mac app's updates (Updates.swift). Empty here, so a build from Xcode has no
+// updater; release-mac.yml passes the key from the secret SPARKLE_PUBLIC_ED_KEY.
+SPARKLE_PUBLIC_ED_KEY =
+
 #include? "Local.xcconfig"

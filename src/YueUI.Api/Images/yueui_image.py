@@ -20,9 +20,11 @@ The model is loaded for this one picture and freed with the process: MLX's Metal
 nothing may stay beside YuE2.
 """
 
+import io
 import json
 import sys
 import time
+from xml.sax.saxutils import escape
 
 # Krea's licence asks for a content filter, FLUX 3's and Klein 9B's for a filter or a review; this is one of the classifiers Krea's
 # names, the one the ComfyUI node and Black Forest Labs' FLUX 3 reference code use too.
@@ -150,6 +152,35 @@ def paint_flux3(pipe, request: dict, steps: int):
     return image, record.get("prompt") if record.get("upsampled") else None
 
 
+XMP_NAMESPACE = b"http://ns.adobe.com/xap/1.0/\x00"
+
+
+def with_ai_note(jpeg: bytes, model: str) -> bytes:
+    """The picture with an XMP packet saying it is AI-made, as the EU's AI Act (Art. 50(2)) asks of a generating
+    system's pictures: IPTC's DigitalSourceType trainedAlgorithmicMedia, which photo apps and platforms read, plus the
+    model as creator tool. Put in as its own APP1 segment after the JFIF header, so no Pillow version matters."""
+    name = escape(model, {'"': "&quot;"})
+    xmp = (
+        '<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>'
+        '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+        '<rdf:Description rdf:about=""'
+        ' xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/"'
+        ' xmlns:xmp="http://ns.adobe.com/xap/1.0/"'
+        ' xmlns:dc="http://purl.org/dc/elements/1.1/"'
+        ' Iptc4xmpExt:DigitalSourceType="http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"'
+        f' xmp:CreatorTool="Tonwerk-AI ({name})">'
+        f'<dc:description><rdf:Alt><rdf:li xml:lang="x-default">KI-generiert mit {name} (Tonwerk-AI)</rdf:li>'
+        "</rdf:Alt></dc:description></rdf:Description></rdf:RDF></x:xmpmeta>"
+        '<?xpacket end="w"?>'
+    ).encode("utf-8")
+    payload = XMP_NAMESPACE + xmp
+    segment = b"\xff\xe1" + (len(payload) + 2).to_bytes(2, "big") + payload
+    at = 2
+    if jpeg[2:4] == b"\xff\xe0":
+        at = 4 + int.from_bytes(jpeg[4:6], "big")
+    return jpeg[:at] + segment + jpeg[at:]
+
+
 def flagged(image) -> bool:
     """Falconsai's ViT on the CPU through transformers (mflux brings it, flux3-mlx's mlx-vlm too, torch is installed
     beside); a few hundred MB, cached in HF_HOME."""
@@ -206,7 +237,10 @@ def main() -> int:
 
     # PIL directly rather than the runner's save, which in mflux swallows errors and writes PNGs of several megabytes:
     # a cover goes into every export and streaming copy.
-    image.convert("RGB").save(request["output"], "JPEG", quality=92)
+    buffer = io.BytesIO()
+    image.convert("RGB").save(buffer, "JPEG", quality=92)
+    with open(request["output"], "wb") as out:
+        out.write(with_ai_note(buffer.getvalue(), request.get("label") or request["model"]))
     emit(
         {
             "event": "done",

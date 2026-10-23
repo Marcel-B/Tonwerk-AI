@@ -90,11 +90,28 @@ struct SettingsView: View {
                     Button("Anderen Server verwenden", role: .destructive) { model.disconnect() }
                 }
             }
+            #if os(macOS) && canImport(Sparkle)
+            UpdateSection()
+            #endif
             Section {
                 LabeledContent("Version", value: Bundle.main.version)
             }
+            AboutSection()
         }
         .formStyle(.grouped)
+    }
+}
+
+/// What the app must say about itself now that it is handed out outside a store: who made it, the privacy policy,
+/// what is AI-made and the licences (also of the packages inside it, NOTICE).
+struct AboutSection: View {
+    var body: some View {
+        Section("Über Tonwerk-AI") {
+            Link("Impressum", destination: URL(string: "https://tonwerk.studio/impressum.html")!)
+            Link("Datenschutz", destination: URL(string: "https://tonwerk.studio/ai/datenschutz.html")!)
+            Link("KI und Verantwortung", destination: URL(string: "https://tonwerk.studio/ai/ki.html")!)
+            Link("Lizenzen", destination: URL(string: "https://github.com/Marcel-B/Tonwerk-AI/blob/main/NOTICE")!)
+        }
     }
 }
 

@@ -30,6 +30,7 @@ public sealed class SingingStudio(
     IPushSender pushSender,
     IOptions<SingingOptions> options,
     TimeProvider time,
+    Export.TaggedFiles tagged,
     ILogger<SingingStudio> logger) : BackgroundService
 {
     private readonly Channel<string> _queue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
@@ -178,6 +179,7 @@ public sealed class SingingStudio(
             var target = store.AudioPath(id);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Move(output, target, overwrite: true);
+            tagged.TryMark(target, "SoulX-Singer");
             if (Get(id) is null)
             {
                 // Deleted while it was sung.

@@ -132,7 +132,8 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger, ILo
             "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-pix_fmt", "yuv420p",
             "-r", rate, "-g", (VideoLayout.FrameRate * 2).ToString(CultureInfo.InvariantCulture),
             "-c:a", "aac", "-b:a", "320k", "-ar", "48000",
-            "-movflags", "+faststart", "-f", "mp4", output,
+            .. AiMetadata,
+            "-movflags", "+faststart+use_metadata_tags", "-f", "mp4", output,
         ]);
         return arguments;
     }
@@ -325,7 +326,19 @@ public sealed class FfmpegVideoRenderer(ILogger<FfmpegVideoRenderer> logger, ILo
         "-vf", format == VideoFormats.Portrait ? "scale=720:1280:flags=lanczos" : "scale=1280:720:flags=lanczos",
         "-c:v", "libx264", "-preset", "faster", "-crf", "25", "-maxrate", "2500k", "-bufsize", "5000k",
         "-profile:v", "high", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", output,
+        "-c:a", "aac", "-b:a", "128k", .. AiMetadata, "-movflags", "+faststart+use_metadata_tags", output,
+    ];
+
+    /// <summary>
+    /// The video's note that it is AI-made (the AI Act's Art. 50(2)), as <see cref="Export.AiMark"/> writes it into
+    /// audio: in the comment for people and players, and as fields of their own, which the MP4 muxer keeps only with
+    /// <c>use_metadata_tags</c>.
+    /// </summary>
+    private static readonly string[] AiMetadata =
+    [
+        "-metadata", $"comment={Export.AiMark.Plain}",
+        "-metadata", $"{Export.AiMark.Field}={Export.AiMark.Plain}",
+        "-metadata", $"{Export.AiMark.SourceField}={Export.AiMark.SourceType}",
     ];
 
     /// <summary>The FLAC's length from ffprobe, which lies next to ffmpeg; null when it cannot tell.</summary>

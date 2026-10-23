@@ -33,7 +33,8 @@ public sealed class ExportEndpointTests : IDisposable
         Assert.Equal("Marcel", tags.Artist);
         Assert.Equal("synthwave", tags.Genre);
         Assert.Equal("[verse]\nLa la", tags.Lyrics);
-        Assert.Equal("YuE2 · Seed 42 · Dark synthwave", tags.Comment);
+        Assert.Equal("KI-generiert mit YuE2 (Tonwerk-AI) · Seed 42 · Dark synthwave", tags.Comment);
+        Assert.Equal("YuE2", tags.AiModel);
         Assert.Equal((2026, 2, 2), (tags.Year, tags.Track, tags.TrackCount));
         Assert.Equal(Jpeg, tags.Cover!.Data);
         Assert.Equal("image/jpeg", tags.Cover.MimeType);

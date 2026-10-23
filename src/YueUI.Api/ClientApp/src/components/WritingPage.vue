@@ -478,6 +478,8 @@ function stageText(value: WritingReply): string {
           :disabled="!text.trim() || models.length === 0"
         />
       </div>
+      <!-- The AI Act (Art. 50(1)) wants it plain that the other side of a chat is a machine. -->
+      <p class="muted m-0 text-xs">{{ t('writingAiNote') }}</p>
     </form>
   </div>
 </template>

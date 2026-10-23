@@ -26,6 +26,7 @@ public sealed class SpeechLab(
     Status.StatusHub hub,
     IOptions<SpeechOptions> options,
     TimeProvider time,
+    Export.TaggedFiles tagged,
     ILogger<SpeechLab> logger) : BackgroundService
 {
     private readonly Channel<string> _queue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
@@ -182,6 +183,12 @@ public sealed class SpeechLab(
             var target = store.TakePath(id);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Move(output, target, overwrite: true);
+            // A spoken take is made by the model; a cleaned recording stays the speaker's own (Art. 50(2) of the AI
+            // Act leaves standard editing out).
+            if (!cleaning)
+            {
+                tagged.TryMark(target, model.Label is { Length: > 0 } label ? label : model.Id);
+            }
             if (store.Take(id) is null)
             {
                 // Deleted while it was spoken.

@@ -38,6 +38,7 @@ public sealed class VoiceConverter(
     IAudioMixer mixer,
     IOptions<VoiceOptions> options,
     TimeProvider time,
+    Export.TaggedFiles tagged,
     ILogger<VoiceConverter> logger) : BackgroundService
 {
     /// <summary>Stem sets share the queue with versions; their entries carry this before the id.</summary>
@@ -403,6 +404,11 @@ public sealed class VoiceConverter(
                     stored = Path.GetFileName(file);
                     File.Move(file, Path.Combine(target, stored), overwrite: true);
                 }
+                // Stems of a song are parts of an AI-made song; those of an upload are the user's own recording, split.
+                if (!string.IsNullOrEmpty(set.SongId))
+                {
+                    tagged.TryMark(Path.Combine(target, stored), "einem Songmodell");
+                }
                 var peaks = read?.Peaks.Select(p => Math.Round(loudest > 0 ? p / loudest : p, 3)).ToList();
                 result.Add(new StemFile(name, stored, Math.Round(read?.Seconds ?? 0, 2), peaks));
             }
@@ -522,6 +528,7 @@ public sealed class VoiceConverter(
                 return;
             }
             File.Move(result, swapStore.ResultPath(id), overwrite: true);
+            tagged.TryMark(swapStore.ResultPath(id), "Seed-VC");
             UpdateSwap(swap, s => s with { Stage = "done", Fraction = 1 });
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)

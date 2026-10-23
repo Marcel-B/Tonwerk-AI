@@ -52,6 +52,68 @@ public sealed class TagLibTaggerTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("mp3", "libmp3lame")]
+    [InlineData("m4a", "aac")]
+    [InlineData("flac", "flac")]
+    public async Task A_song_says_it_is_AI_made(string extension, string codec)
+    {
+        if (AacEncoder.FindFfmpeg() is not { } ffmpeg)
+        {
+            return;
+        }
+        var path = Path.Combine(_root, $"song.{extension}");
+        await Run(ffmpeg, "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:a", codec, path);
+
+        new TagLibTagger().Write(path, new SongTags("x", null, null, null, null, null, null, null, "Seed 42", null, "YuE2"));
+
+        Assert.Equal(
+            (AiMark.Note("YuE2"), AiMark.SourceType),
+            (MarkIn(path, AiMark.Field), MarkIn(path, AiMark.SourceField)));
+    }
+
+    [Theory]
+    [InlineData("wav", "pcm_s16le")]
+    [InlineData("flac", "flac")]
+    public async Task A_take_is_marked_and_keeps_its_tags(string extension, string codec)
+    {
+        if (AacEncoder.FindFfmpeg() is not { } ffmpeg)
+        {
+            return;
+        }
+        var path = Path.Combine(_root, $"take.{extension}");
+        await Run(ffmpeg, "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+            "-metadata", "title=Probe", "-c:a", codec, path);
+
+        new TagLibTagger().Mark(path, "SoulX-Singer");
+        new TagLibTagger().Mark(path, "SoulX-Singer");
+
+        Assert.Equal(AiMark.Note("SoulX-Singer"), MarkIn(path, AiMark.Field));
+        Assert.Equal(AiMark.SourceType, MarkIn(path, AiMark.SourceField));
+        using var file = TagLib.File.Create(path);
+        // Marked twice, said once.
+        Assert.Equal(AiMark.Note("SoulX-Singer"), file.Tag.Comment);
+        if (extension == "flac")
+        {
+            Assert.Equal("Probe", file.Tag.Title);
+        }
+        Assert.True(file.Properties.Duration > TimeSpan.FromSeconds(0.5));
+    }
+
+    /// <summary>The mark's field as each format keeps it.</summary>
+    private static string? MarkIn(string path, string field)
+    {
+        using var file = TagLib.File.Create(path);
+        return file.MimeType switch
+        {
+            "taglib/mp3" or "taglib/wav" => TagLib.Id3v2.UserTextInformationFrame
+                .Get((TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2), field, create: false)?.Text.SingleOrDefault(),
+            "taglib/m4a" => ((TagLib.Mpeg4.AppleTag)file.GetTag(TagLib.TagTypes.Apple)).GetDashBox("com.apple.iTunes", field),
+            "taglib/flac" => ((TagLib.Ogg.XiphComment)file.GetTag(TagLib.TagTypes.Xiph)).GetFirstField(field),
+            var other => throw new InvalidOperationException(other),
+        };
+    }
+
     [Fact]
     public void A_file_that_is_no_audio_is_refused()
     {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Anthropic;
@@ -24,7 +25,7 @@ public sealed class SketchModelException(string message, Exception? inner = null
 /// unstreamed request that long risks the HTTP timeout. Nothing of the song is on the Mac's models: this is a call
 /// to the cloud, made only when the person asks for it.
 /// </summary>
-public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClientFactory httpClients) : ISketchModel
+public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClientFactory httpClients, Monitoring.CloudUsage usage) : ISketchModel
 {
     /// <summary>The named client the SDK sends through, so tests can answer in Anthropic's place.</summary>
     public const string HttpClientName = "anthropic";
@@ -58,6 +59,7 @@ public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClie
         string? stopReason = null;
         int? inputTokens = null;
         int? outputTokens = null;
+        var started = Stopwatch.GetTimestamp();
         try
         {
             await foreach (var streamEvent in client.Messages.CreateStreaming(parameters, cancellationToken))
@@ -79,8 +81,11 @@ public sealed class ClaudeSketchModel(IOptions<SketchOptions> options, IHttpClie
         }
         catch (AnthropicApiException error)
         {
+            usage.Record("sketch", model, inputTokens, outputTokens, false, Stopwatch.GetElapsedTime(started));
             throw new SketchModelException($"Claude: {error.Message}", error);
         }
+        // SketchMaker logs the plan with its tokens; this only counts them.
+        usage.Record("sketch", model, inputTokens, outputTokens, stopReason is not ("refusal" or "max_tokens"), Stopwatch.GetElapsedTime(started));
 
         switch (stopReason)
         {

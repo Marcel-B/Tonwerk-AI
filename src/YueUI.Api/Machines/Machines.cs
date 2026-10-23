@@ -71,7 +71,8 @@ public sealed class Machines(
     IOptions<MachineOptions> options,
     ModelMemory memory,
     WorkerHost host,
-    TimeProvider time)
+    TimeProvider time,
+    ILogger<Machines> logger)
 {
     /// <summary>This Mac in a job's <c>machine</c>.</summary>
     public const string Local = "local";
@@ -180,7 +181,16 @@ public sealed class Machines(
         {
             if (TryPlace(model, engine, localAvailable) is { } placement)
             {
-                return placement.Helper is null ? await LocalAsync(model, claimed: placement) : placement;
+                if (placement.Helper is null)
+                {
+                    return await LocalAsync(model, claimed: placement);
+                }
+                // HelperClient says that it hands the job over; this says why it was not kept here.
+                logger.LogInformation("A {Engine} job goes to {Machine}: {Reason}", engine, placement.Name,
+                    !localAvailable ? "this Mac lacks the engine"
+                    : memory.Holder is { } holder ? $"{holder.ToString().ToLowerInvariant()} holds this Mac's memory"
+                    : "YuE2 is in use here");
+                return placement;
             }
             await Task.Delay(interval, time, cancellationToken);
         }

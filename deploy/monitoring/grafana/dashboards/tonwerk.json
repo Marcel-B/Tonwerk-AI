@@ -719,6 +719,511 @@
     },
     {
       "type": "row",
+      "title": "Macs, Claude und Betrieb",
+      "id": 21,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Ruhig seit",
+      "id": 22,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "max(tonwerk_idle_seconds{app=\"tonwerk\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value"
+      },
+      "description": "Seit wann nichts läuft oder wartet (GET /api/idle), wonach yue-guard die anderen Assistenten pausiert; 0 solange Tonwerk arbeitet."
+    },
+    {
+      "type": "stat",
+      "title": "Macs erreichbar",
+      "id": 23,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "max by (machine) (tonwerk_machine_up{app=\"tonwerk\"})",
+          "legendFormat": "{{machine}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "name",
+        "colorMode": "value"
+      },
+      "description": "Dieser Mac und die Helfer; ein Helfer gilt als erreichbar, wenn er die letzte Abfrage beantwortet hat."
+    },
+    {
+      "type": "stat",
+      "title": "Letztes Backup",
+      "id": 24,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "time() - max(tonwerk_backup_last_success_timestamp_seconds{app=\"tonwerk\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 129600
+              },
+              {
+                "color": "red",
+                "value": 216000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value"
+      },
+      "description": "Wie lange das letzte gelungene Nextcloud-Backup her ist; orange nach 36 h, rot nach 60 h (eine Nacht ausgefallen)."
+    },
+    {
+      "type": "stat",
+      "title": "Loki zuletzt",
+      "id": 25,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "time() - max(tonwerk_loki_last_sent_timestamp_seconds{app=\"tonwerk\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3600
+              },
+              {
+                "color": "red",
+                "value": 21600
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value"
+      },
+      "description": "Wann Loki zuletzt Zeilen genommen hat. Fehlt der Wert, ist der Versand aus (tonwerk_loki_shipping 0): dann fehlt Monitoring:Loki:Url in appsettings.Production.json."
+    },
+    {
+      "type": "stat",
+      "title": "Loki verworfen (24 h)",
+      "id": 26,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(tonwerk_loki_lines_dropped_total{app=\"tonwerk\"}[24h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value"
+      },
+      "description": "Zeilen, die Loki abgelehnt oder nach allen Wiederholungen nicht angenommen hat."
+    },
+    {
+      "type": "stat",
+      "title": "Claude-Tokens (24 h)",
+      "id": 27,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(tonwerk_claude_tokens_total{app=\"tonwerk\"}[24h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value"
+      },
+      "description": "Tokens aller Claude-Aufrufe (Texte, Ausarbeitung, Cover-Übersetzung), Eingabe und Ausgabe zusammen."
+    },
+    {
+      "type": "timeseries",
+      "title": "Aufträge pro Mac",
+      "id": 28,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 35
+      },
+      "targets": [
+        {
+          "expr": "sum by (machine) (increase(tonwerk_jobs_finished_total{app=\"tonwerk\",outcome=\"done\"}[1h])) > 0",
+          "legendFormat": "{{machine}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Fertige Aufträge pro Stunde, nach dem Mac, auf dem sie liefen; claude für Texte und Ausarbeitungen in der Cloud."
+    },
+    {
+      "type": "timeseries",
+      "title": "Claude-Tokens pro Stunde",
+      "id": 29,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 35
+      },
+      "targets": [
+        {
+          "expr": "sum by (use, direction) (increase(tonwerk_claude_tokens_total{app=\"tonwerk\"}[1h])) > 0",
+          "legendFormat": "{{use}} {{direction}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Nach Zweck (lyrics, sketch, translate) und Richtung; die Ausgabe enthält das Nachdenken."
+    },
+    {
+      "type": "bargauge",
+      "title": "YuE2: Sekunden pro Audiosekunde (Median)",
+      "id": 30,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 35
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (engine, steps, le) (increase(tonwerk_synthesis_rate_bucket{app=\"tonwerk\"}[$__range])))",
+          "legendFormat": "{{engine}} · {{steps}} Schritte",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "description": "Wie der Worker jede Synthese meldet, je Engine und Schrittzahl; kleiner ist schneller."
+    },
+    {
+      "type": "row",
       "title": "Protokoll",
       "id": 18,
       "collapsed": false,
@@ -726,7 +1231,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 43
       },
       "panels": []
     },
@@ -742,7 +1247,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 31
+        "y": 44
       },
       "targets": [
         {
@@ -781,7 +1286,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 50
       },
       "targets": [
         {
@@ -816,7 +1321,7 @@
         "multi": true,
         "includeAll": true,
         "allValue": ".+",
-        "query": "server,worker,queue,lyrics,voices,speech,images,ace,video,export,logic,backup,push",
+        "query": "server,worker,queue,lyrics,voices,speech,singing,images,ace,sketch,analysis,machines,video,export,logic,backup,push",
         "current": {
           "text": "All",
           "value": "$__all"

@@ -35,6 +35,6 @@ final class LogTests: XCTestCase {
         XCTAssertEqual(LogSession.sourceName("worker"), "YuE2-Worker")
         XCTAssertEqual(LogSession.sourceName("export"), "Export und Streaming")
         XCTAssertEqual(LogSession.sourceName("unknown"), "unknown")
-        XCTAssertEqual(LogSession.sources.count, 15, "every source the server's LogSources.All knows")
+        XCTAssertEqual(LogSession.sources.count, 18, "every source the server's LogSources.All knows")
     }
 }

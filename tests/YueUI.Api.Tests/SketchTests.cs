@@ -237,6 +237,8 @@ public sealed class SketchEndpointTests : IDisposable
         Assert.Equal("full", (string?)result["request"]!["cot"]);
         Assert.Equal(7, (int?)result["bars"]);
         Assert.Equal("chordSimplified", (string?)result["warnings"]![0]!["code"]);
+        Assert.Contains("tonwerk_jobs_finished_total{kind=\"sketch\",outcome=\"done\",machine=\"claude\"} 1\n",
+            await Client.GetStringAsync("/metrics"));
 
         var list = await Client.GetFromJsonAsync<JsonArray>("/api/sketches", TestApp.Json);
         Assert.Equal(7, (int?)Assert.Single(list!)!["bars"]);
@@ -335,6 +337,8 @@ public sealed class SketchEndpointTests : IDisposable
         var result = await Client.GetFromJsonAsync<JsonObject>($"/api/sketches/{id}", TestApp.Json);
         Assert.Equal("qwen/qwen3-8b", (string?)result!["job"]!["model"]);
         Assert.Equal(7, (int?)result["bars"]);
+        Assert.Contains("tonwerk_jobs_finished_total{kind=\"sketch\",outcome=\"done\",machine=\"Dieser Mac\"} 1\n",
+            await Client.GetStringAsync("/metrics"));
     }
 
     [Fact]

@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using YueUI.Api.Images;
+using YueUI.Api.Monitoring;
 using YueUI.Api.Sketches;
 
 namespace YueUI.Api.Tests;
@@ -68,6 +69,7 @@ public sealed class ClaudePromptTranslatorTests
             Options.Create(new ImageOptions { Translate = translate }),
             Options.Create(new SketchOptions { ApiKey = key, KeyFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.key") }),
             provider.GetRequiredService<IHttpClientFactory>(),
+            new CloudUsage(),
             NullLogger<ClaudePromptTranslator>.Instance);
     }
 

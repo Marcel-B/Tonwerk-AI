@@ -144,6 +144,14 @@ public sealed class MachineTests : IDisposable
         Assert.Equal(("done", null, "Alter Mac"), (take.Stage, take.Machine, take.RanOn));
         Assert.Single(_helper.Speech.Jobs);
         memory.Release(LargeModel.Images);
+
+        // The metrics count it under the helper, the log says why it went there.
+        var metrics = await client.GetStringAsync("/metrics");
+        Assert.Contains("tonwerk_jobs_finished_total{kind=\"speech\",outcome=\"done\",machine=\"Alter Mac\"} 1\n", metrics);
+        Assert.Contains("tonwerk_machine_up{machine=\"Alter Mac\"} 1\n", metrics);
+        Assert.Contains("tonwerk_machine_up{machine=\"Neuer Mac\"} 1\n", metrics);
+        var log = await client.GetStringAsync("/api/logs?source=machines");
+        Assert.Contains("A speech job goes to Alter Mac: images holds this Mac's memory", log);
     }
 
     [Fact]

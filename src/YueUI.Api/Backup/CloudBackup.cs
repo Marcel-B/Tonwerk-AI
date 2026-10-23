@@ -77,6 +77,26 @@ public sealed class CloudBackup(
 
     private string StatePath => Path.Combine(database.Directory, "backup.json");
 
+    /// <summary>The last run and the last that succeeded, kept here once read so <c>/metrics</c> never parses <c>backup.json</c>.</summary>
+    private (bool Read, BackupRun? Last, DateTimeOffset? Succeeded) _outcome;
+
+    /// <summary>The last run, and when a run last succeeded, for <c>/metrics</c>.</summary>
+    public (BackupRun? Last, DateTimeOffset? Succeeded) Outcome
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (!_outcome.Read)
+                {
+                    var state = LoadState();
+                    _outcome = (true, state.Last, state.LastSucceeded ?? (state.Last is { Success: true } last ? last.FinishedAt : null));
+                }
+                return (_outcome.Last, _outcome.Succeeded);
+            }
+        }
+    }
+
     public BackupStatus Status
     {
         get
@@ -247,7 +267,12 @@ public sealed class CloudBackup(
         lock (_gate)
         {
             var state = LoadState();
+            // A file from before LastSucceeded knows only its last run.
+            state.LastSucceeded = error is null
+                ? run.FinishedAt
+                : state.LastSucceeded ?? (state.Last is { Success: true } previous ? previous.FinishedAt : null);
             state.Last = run;
+            _outcome = (true, run, state.LastSucceeded);
             if (scheduled && error is null)
             {
                 state.LastDaily = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(started, zone).DateTime);
@@ -517,6 +542,9 @@ public sealed class CloudBackup(
     private sealed class State
     {
         public BackupRun? Last { get; set; }
+
+        /// <summary>When the last run that succeeded finished; older files lack it.</summary>
+        public DateTimeOffset? LastSucceeded { get; set; }
 
         /// <summary>The local day of the last nightly backup that succeeded.</summary>
         public DateOnly? LastDaily { get; set; }

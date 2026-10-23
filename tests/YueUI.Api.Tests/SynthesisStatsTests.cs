@@ -47,6 +47,12 @@ public sealed class SynthesisStatsTests : IDisposable
         Assert.Equal(2.5, mlx.BestRate);
         Assert.Equal(8.3, Assert.Single(overview.Engines, e => e.Engine == "ane").MeanRate, 3);
         Assert.Equal(465, overview.AnePrograms.LongestSeconds);
+
+        var metrics = await _client.GetStringAsync("/metrics");
+        Assert.Contains("tonwerk_synthesis_rate_count{engine=\"mlx\",steps=\"32\"} 2\n", metrics);
+        Assert.Contains("tonwerk_synthesis_rate_bucket{engine=\"mlx\",steps=\"32\",le=\"3\"} 1\n", metrics);
+        Assert.Contains("tonwerk_synthesis_rate_sum{engine=\"ane\",steps=\"32\"} 8.3\n", metrics);
+        Assert.Contains("tonwerk_ane_programs_seconds_count 1\n", metrics);
     }
 
     public void Dispose()

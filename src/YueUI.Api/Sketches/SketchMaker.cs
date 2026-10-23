@@ -24,6 +24,7 @@ public sealed partial class SketchMaker(
     PushStore pushStore,
     IPushSender pushSender,
     TimeProvider time,
+    Monitoring.JobMetrics metrics,
     ILogger<SketchMaker> logger) : BackgroundService
 {
     private readonly Channel<string> _queue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
@@ -267,6 +268,11 @@ public sealed partial class SketchMaker(
             }
             _jobs[job.Id] = job;
         }
+        metrics.Report($"sketch:{job.Id}", "sketch", job.Stage, job.Finished, job.UpdatedAt,
+            // A finished plan names the model Anthropic answered with, which need not be one of those offered.
+            IsLocal(job.Model ?? options.Value.Model) && job.Model?.StartsWith("claude", StringComparison.Ordinal) != true
+                ? null
+                : Monitoring.JobMetrics.Cloud);
         try
         {
             store.Save(job);

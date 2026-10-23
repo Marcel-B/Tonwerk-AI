@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using YueUI.Api.Monitoring;
 using YueUI.Api.Sketches;
 
 namespace YueUI.Api.Tests;
@@ -67,7 +68,8 @@ public sealed class ClaudeSketchModelTests
         var provider = services.BuildServiceProvider();
         return new ClaudeSketchModel(
             Options.Create(new SketchOptions { ApiKey = "test-key" }),
-            provider.GetRequiredService<IHttpClientFactory>());
+            provider.GetRequiredService<IHttpClientFactory>(),
+            new CloudUsage());
     }
 
     /// <summary>Server-sent events as the Messages API streams them, the text cut into pieces.</summary>

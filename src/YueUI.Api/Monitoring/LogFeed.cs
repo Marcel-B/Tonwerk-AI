@@ -19,6 +19,8 @@ public sealed class LogFeed
     private readonly ConcurrentDictionary<(string Source, string Level), long> _counts = new();
     private readonly Channel<LogLine>? _lines;
     private readonly int _minRank;
+    private long _sentLines;
+    private long _droppedLines;
 
     public LogFeed(IOptions<MonitoringOptions> options)
     {
@@ -48,14 +50,25 @@ public sealed class LogFeed
     /// <summary>Since when Loki has refused or not answered; null while it takes the log.</summary>
     public DateTimeOffset? FailingSince { get; private set; }
 
-    /// <summary>Set by the <see cref="LokiShipper"/>, read by the log report.</summary>
-    public void Sent(DateTimeOffset time)
+    /// <summary>Lines Loki took since the server started.</summary>
+    public long SentLines => Interlocked.Read(ref _sentLines);
+
+    /// <summary>Lines given up on since the server started: Loki refused them or did not answer after the retries.</summary>
+    public long DroppedLines => Interlocked.Read(ref _droppedLines);
+
+    /// <summary>Set by the <see cref="LokiShipper"/>, read by the log report and <c>/metrics</c>.</summary>
+    public void Sent(DateTimeOffset time, int lines = 0)
     {
         LastSent = time;
         FailingSince = null;
+        Interlocked.Add(ref _sentLines, lines);
     }
 
-    public void Failed(DateTimeOffset time) => FailingSince ??= time;
+    public void Failed(DateTimeOffset time, int lines = 0)
+    {
+        FailingSince ??= time;
+        Interlocked.Add(ref _droppedLines, lines);
+    }
 
     public void Add(LogLine line)
     {

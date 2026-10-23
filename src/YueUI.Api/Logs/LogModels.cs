@@ -67,7 +67,7 @@ public static class LogSources
     public const string Update = "update";
 
     public static readonly IReadOnlyList<string> All =
-        [Server, Worker, "queue", "lyrics", "voices", "speech", "singing", "images", "ace", "video", "export", "logic", "backup", "push", Update];
+        [Server, Worker, "queue", "lyrics", "voices", "speech", "singing", "images", "ace", "sketch", "analysis", "machines", "video", "export", "logic", "backup", "push", Update];
 
     private static readonly (string Prefix, string Source)[] Categories =
     [
@@ -81,6 +81,13 @@ public static class LogSources
         ("YueUI.Api.Singing.", "singing"),
         ("YueUI.Api.Images.", "images"),
         ("YueUI.Api.Ace.", "ace"),
+        ("YueUI.Api.Sketches.", "sketch"),
+        // Tempo, key and the lyrics' timing: both hear finished songs in the background.
+        ("YueUI.Api.Analysis.", "analysis"),
+        ("YueUI.Api.Timing.", "analysis"),
+        ("YueUI.Api.Machines.", "machines"),
+        // Who holds the memory decides what waits in the queue.
+        ("YueUI.Api.Memory.", "queue"),
         ("YueUI.Api.Video.", "video"),
         ("YueUI.Api.Share.", "export"),
         ("YueUI.Api.Export.", "export"),

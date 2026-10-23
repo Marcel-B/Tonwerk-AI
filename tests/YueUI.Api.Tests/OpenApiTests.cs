@@ -103,7 +103,7 @@ public sealed class OpenApiTests : IDisposable
             .Where(method => path.Value?[method] is not null)
             .Select(method => ($"{method.ToUpperInvariant()} {path.Key}", path.Value![method]!)));
 
-    private static string RepositoryRoot()
+    internal static string RepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {

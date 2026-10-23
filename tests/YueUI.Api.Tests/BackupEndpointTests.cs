@@ -149,12 +149,18 @@ public sealed class BackupEndpointTests : IDisposable
         Assert.Contains("423", first.Last.Error);
         Assert.Contains($"{Base}/songs/{Run}/song2/audio.flac", _app.Nextcloud.PutPaths());
         Assert.Equal(7, first.Last.Files);
+        var metrics = await client.GetStringAsync("/metrics");
+        Assert.Contains("tonwerk_backup_last_run_success 0\n", metrics);
+        Assert.DoesNotContain("tonwerk_backup_last_success_timestamp_seconds", metrics);
 
         _app.Nextcloud.Locked.Clear();
         var before = _app.Nextcloud.PutPaths().Length;
         var second = await Backup(client);
 
         Assert.True(second.Last!.Success, second.Last.Error);
+        metrics = await client.GetStringAsync("/metrics");
+        Assert.Contains("tonwerk_backup_last_run_success 1\n", metrics);
+        Assert.Contains($"tonwerk_backup_last_success_timestamp_seconds {second.Last.FinishedAt.ToUnixTimeMilliseconds() / 1000.0:R}\n".Replace(",", "."), metrics);
         Assert.Equal([$"{Base}/songs/{Run}/song1/audio.flac"], _app.Nextcloud.PutPaths()[before..].Where(p => !p.EndsWith(".zip")));
     }
 

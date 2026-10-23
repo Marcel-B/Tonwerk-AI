@@ -8,12 +8,15 @@ namespace YueUI.Api.Monitoring;
 /// keeps what is waiting or running for <c>/metrics</c>.
 /// </summary>
 /// <remarks>
-/// Kinds: song, render, transcription, lyrics, version, stems, swap, video, image, ace, speech, singing. A job's working time
+/// Kinds: song, render, transcription, lyrics, version, stems, swap, video, image, ace, speech, singing, writing (an answer
+/// on the writing page) and sketch (reported by <see cref="Sketches.SketchMaker"/> through <see cref="Report"/>, since
+/// sketches do not go through the status hub). Each finished job is counted under the Mac it ran on (<c>RanOn</c>,
+/// this Mac's name where a job says none) or <c>claude</c> for a cloud draft or plan. A job's working time
 /// runs from the first state that is no longer queued to the finished one, so the time spent waiting for the memory is
 /// left out; a song takes its stage times, which the worker reports itself. Only the change to finished counts, as for
 /// push notifications: a fresh snapshot after a dropped subscription marks what is already done.
 /// </remarks>
-public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
+public sealed class JobMetrics(Status.StatusHub hub, Machines.Machines machines) : BackgroundService
 {
     /// <summary>Seconds; a draft takes a minute, a full-quality song or a slow separation an hour and more.</summary>
     public static readonly double[] Buckets = [5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200];
@@ -24,11 +27,17 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
     private readonly Lock _gate = new();
     private readonly Dictionary<string, Job> _jobs = [];
     private readonly Queue<string> _finishedOrder = new();
-    private readonly Dictionary<(string Kind, string Outcome), long> _finished = [];
-    private readonly Dictionary<string, Histogram> _durations = [];
+    private readonly Dictionary<(string Kind, string Outcome, string Machine), long> _finished = [];
+    private readonly Dictionary<(string Kind, string Machine), Histogram> _durations = [];
 
     public static readonly IReadOnlyList<string> Kinds =
-        ["song", "render", "transcription", "lyrics", "version", "stems", "swap", "video", "image", "ace", "speech", "singing"];
+        ["song", "render", "transcription", "lyrics", "version", "stems", "swap", "video", "image", "ace", "speech", "singing", "writing", "sketch"];
+
+    /// <summary>The <c>machine</c> of a job that ran in the cloud: a Claude draft or plan.</summary>
+    public const string Cloud = "claude";
+
+    /// <summary>The <c>machine</c> of a job that ran here.</summary>
+    public string LocalMachine => machines.LocalName;
 
     public static readonly IReadOnlyList<string> Outcomes = ["done", "failed", "cancelled"];
 
@@ -67,15 +76,15 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
         }
     }
 
-    public IReadOnlyDictionary<(string Kind, string Outcome), long> Finished()
+    public IReadOnlyDictionary<(string Kind, string Outcome, string Machine), long> Finished()
     {
         lock (_gate)
         {
-            return new Dictionary<(string, string), long>(_finished);
+            return new Dictionary<(string, string, string), long>(_finished);
         }
     }
 
-    public IReadOnlyDictionary<string, Histogram> Durations()
+    public IReadOnlyDictionary<(string Kind, string Machine), Histogram> Durations()
     {
         lock (_gate)
         {
@@ -116,6 +125,11 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
         }
     }
 
+    /// <summary>A job's state from a service whose jobs do not go through the status hub (the sketches).</summary>
+    /// <param name="machine">Where it runs, null for this Mac.</param>
+    public void Report(string key, string kind, string stage, bool finished, DateTimeOffset updatedAt, string? machine = null) =>
+        Observe(new State(key, kind, stage, stage is not ("queued" or "waiting"), finished, updatedAt, Machine: machine));
+
     private void Observe(State state)
     {
         lock (_gate)
@@ -137,13 +151,14 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
                 return;
             }
             Forget(state.Key);
-            var key = (state.Kind, state.Outcome);
+            var machine = string.IsNullOrWhiteSpace(state.Machine) ? LocalMachine : state.Machine;
+            var key = (state.Kind, state.Outcome, machine);
             _finished[key] = _finished.GetValueOrDefault(key) + 1;
             if (state.Outcome == "done" && started is { } from && state.UpdatedAt >= from)
             {
-                if (!_durations.TryGetValue(state.Kind, out var histogram))
+                if (!_durations.TryGetValue((state.Kind, machine), out var histogram))
                 {
-                    _durations[state.Kind] = histogram = new Histogram(Buckets);
+                    _durations[(state.Kind, machine)] = histogram = new Histogram(Buckets);
                 }
                 histogram.Observe((state.UpdatedAt - from).TotalSeconds);
             }
@@ -175,23 +190,29 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
             song.UpdatedAt,
             song.Stages.FirstOrDefault(stage => stage.Stage != "queued")?.StartedAt),
         TranscriptionState t => new State($"transcription:{t.Id}", "transcription", t.Stage, true, t.Finished, t.UpdatedAt),
-        LyricsState l => new State($"lyrics:{l.Id}", "lyrics", l.Stage, l.Stage != "queued", l.Finished, l.UpdatedAt),
-        VersionState v => Queued($"version:{v.Id}", "version", v.Stage, v.Finished, v.UpdatedAt),
-        StemSetState s => Queued($"stems:{s.Id}", "stems", s.Stage, s.Finished, s.UpdatedAt),
-        SwapState s => Queued($"swap:{s.Id}", "swap", s.Stage, s.Finished, s.UpdatedAt),
+        // A draft that names no Mac went to Claude (LyricsWriter.Start); one still in the queue names none yet either.
+        LyricsState l => new State($"lyrics:{l.Id}", "lyrics", l.Stage, l.Stage != "queued", l.Finished, l.UpdatedAt,
+            Machine: l.RanOn ?? (l.Stage == "queued" ? null : Cloud)),
+        VersionState v => Queued($"version:{v.Id}", "version", v.Stage, v.Finished, v.UpdatedAt, v.RanOn),
+        StemSetState s => Queued($"stems:{s.Id}", "stems", s.Stage, s.Finished, s.UpdatedAt, s.RanOn),
+        SwapState s => Queued($"swap:{s.Id}", "swap", s.Stage, s.Finished, s.UpdatedAt, s.RanOn),
         Video.VideoState v => Queued($"video:{v.Id}", "video", v.Stage, v.Finished, v.UpdatedAt),
-        Images.ImageState i => Queued($"image:{i.Id}", "image", i.Stage, i.Finished, i.UpdatedAt),
-        Ace.AceJob a => Queued($"ace:{a.Id}", "ace", a.Stage, a.Finished, a.UpdatedAt),
-        Speech.SpeechTake s => Queued($"speech:{s.Id}", "speech", s.Stage, s.Finished, s.UpdatedAt),
-        Singing.SingTake s => Queued($"singing:{s.Id}", "singing", s.Stage, s.Finished, s.UpdatedAt),
+        Images.ImageState i => Queued($"image:{i.Id}", "image", i.Stage, i.Finished, i.UpdatedAt, i.RanOn),
+        Ace.AceJob a => Queued($"ace:{a.Id}", "ace", a.Stage, a.Finished, a.UpdatedAt, a.RanOn),
+        Speech.SpeechTake s => Queued($"speech:{s.Id}", "speech", s.Stage, s.Finished, s.UpdatedAt, s.RanOn),
+        Singing.SingTake s => Queued($"singing:{s.Id}", "singing", s.Stage, s.Finished, s.UpdatedAt, s.RanOn),
+        // An answer waits for the memory in stage waiting; stopped by the user counts as cancelled.
+        Writing.WritingReply w => new State($"writing:{w.Id}", "writing", w.Stage == "stopped" ? "cancelled" : w.Stage,
+            w.Stage != "waiting", w.Finished, w.UpdatedAt),
         _ => null,
     };
 
-    private static State Queued(string key, string kind, string stage, bool finished, DateTimeOffset updatedAt) =>
-        new(key, kind, stage, stage != "queued", finished, updatedAt);
+    private static State Queued(string key, string kind, string stage, bool finished, DateTimeOffset updatedAt, string? machine = null) =>
+        new(key, kind, stage, stage != "queued", finished, updatedAt, Machine: machine);
 
     /// <param name="Working">Past waiting: running, or finished after running.</param>
     /// <param name="StartedAt">When it began working, where the state says so itself.</param>
+    /// <param name="Machine">The name of the Mac it ran on, or <see cref="Cloud"/>; null for this one.</param>
     private sealed record State(
         string Key,
         string Kind,
@@ -199,7 +220,8 @@ public sealed class JobMetrics(Status.StatusHub hub) : BackgroundService
         bool Working,
         bool Finished,
         DateTimeOffset UpdatedAt,
-        DateTimeOffset? StartedAt = null)
+        DateTimeOffset? StartedAt = null,
+        string? Machine = null)
     {
         public string Outcome => Stage switch
         {

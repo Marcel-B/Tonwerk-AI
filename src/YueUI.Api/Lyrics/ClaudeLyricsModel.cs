@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Anthropic;
 using Anthropic.Exceptions;
@@ -24,7 +25,12 @@ public interface ICloudLyricsModel
 /// (<see cref="SketchOptions.ResolveApiKey"/>). Nothing of it runs on the Mac, so a draft here needs no memory and
 /// waits for no model.
 /// </summary>
-public sealed class ClaudeLyricsModel(IOptions<LyricsOptions> options, IOptions<SketchOptions> keys, IHttpClientFactory httpClients) : ICloudLyricsModel
+public sealed class ClaudeLyricsModel(
+    IOptions<LyricsOptions> options,
+    IOptions<SketchOptions> keys,
+    IHttpClientFactory httpClients,
+    Monitoring.CloudUsage usage,
+    ILogger<ClaudeLyricsModel> logger) : ICloudLyricsModel
 {
     public bool Configured => keys.Value.ResolveApiKey() is not null;
 
@@ -60,6 +66,9 @@ public sealed class ClaudeLyricsModel(IOptions<LyricsOptions> options, IOptions<
         // Streamed like the sketches: with thinking the answer can take long enough to risk an unstreamed timeout.
         var text = new StringBuilder();
         string? stopReason = null;
+        long? inputTokens = null;
+        long? outputTokens = null;
+        var started = Stopwatch.GetTimestamp();
         try
         {
             await foreach (var streamEvent in client.Messages.CreateStreaming(parameters, cancellationToken))
@@ -68,16 +77,23 @@ public sealed class ClaudeLyricsModel(IOptions<LyricsOptions> options, IOptions<
                 {
                     text.Append(piece.Text);
                 }
+                else if (streamEvent.TryPickStart(out var start))
+                {
+                    inputTokens = start.Message.Usage.InputTokens;
+                }
                 else if (streamEvent.TryPickDelta(out var messageDelta))
                 {
                     stopReason = messageDelta.Delta.StopReason?.Raw();
+                    outputTokens = messageDelta.Usage.OutputTokens;
                 }
             }
         }
         catch (AnthropicApiException error)
         {
+            usage.Record("lyrics", model, inputTokens, outputTokens, false, Stopwatch.GetElapsedTime(started), logger);
             throw new LyricsUnavailableException($"Claude: {error.Message}");
         }
+        usage.Record("lyrics", model, inputTokens, outputTokens, stopReason is not ("refusal" or "max_tokens"), Stopwatch.GetElapsedTime(started), logger);
         return stopReason switch
         {
             "refusal" => throw new LyricsUnavailableException("Claude declined to write these lyrics."),

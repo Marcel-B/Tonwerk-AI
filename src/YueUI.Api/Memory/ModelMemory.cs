@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using YueUI.Api.Worker;
 
 namespace YueUI.Api.Memory;
@@ -41,8 +42,11 @@ public enum LargeModel
 /// the holder the server decided on instead of inferring it from the stages of everything in the works.
 /// </para>
 /// </remarks>
-public sealed class ModelMemory(WorkerHost host, Status.StatusHub hub)
+public sealed class ModelMemory(WorkerHost host, Status.StatusHub hub, ILogger<ModelMemory> logger)
 {
+    /// <summary>When the holder took the memory (<see cref="Stopwatch"/> ticks), for the line its release writes.</summary>
+    private long _claimedAt;
+
     /// <summary>0 for none, otherwise the <see cref="LargeModel"/> plus one.</summary>
     private int _holder;
 
@@ -72,7 +76,10 @@ public sealed class ModelMemory(WorkerHost host, Status.StatusHub hub)
             Interlocked.CompareExchange(ref _holder, 0, Code(model));
             return false;
         }
+        Volatile.Write(ref _claimedAt, Stopwatch.GetTimestamp());
         Published();
+        // Who held the memory when is what the log needs to tell why something waited.
+        logger.LogInformation("{Model} takes the memory", Name(model));
         return true;
     }
 
@@ -88,9 +95,11 @@ public sealed class ModelMemory(WorkerHost host, Status.StatusHub hub)
     /// <summary>Gives the memory back if <paramref name="model"/> holds it; safe to call more than once.</summary>
     public void Release(LargeModel model)
     {
+        var claimedAt = Volatile.Read(ref _claimedAt);
         if (Interlocked.CompareExchange(ref _holder, 0, Code(model)) == Code(model))
         {
             Published();
+            logger.LogInformation("{Model} gives the memory back after {Seconds:0} s", Name(model), Stopwatch.GetElapsedTime(claimedAt).TotalSeconds);
         }
     }
 
@@ -103,4 +112,6 @@ public sealed class ModelMemory(WorkerHost host, Status.StatusHub hub)
     }
 
     private static int Code(LargeModel model) => (int)model + 1;
+
+    private static string Name(LargeModel model) => model.ToString().ToLowerInvariant();
 }

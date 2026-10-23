@@ -76,6 +76,12 @@ enum Stages {
         return steps
     }
 
+    /// When the worker began on the song: the start of its first stage after waiting in the worker's own queue; nil
+    /// while it still waits there.
+    static func started(of song: Components.Schemas.SongState) -> Date? {
+        song.stages?.first { $0.stage != "queued" }?.startedAt
+    }
+
     static func steps(of song: Components.Schemas.SongState, now: Date) -> [Step] {
         steps(
             history: (song.stages ?? []).map { (stage: $0.stage, startedAt: $0.startedAt, waited: $0.waited ?? 0) },

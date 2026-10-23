@@ -264,7 +264,7 @@ public sealed class VoiceConverter(
                 throw new VoiceServiceException("The song is gone.");
             }
 
-            version = Update(version, v => v with { Stage = "separating", RanOn = placement.Name });
+            version = Update(version, v => v with { Stage = "separating", RanOn = placement.Name, StartedAt = time.GetUtcNow() });
             var separated = await stems.SeparateAsync(Path.Combine(directory, "audio.flac"), version.StemModel, work, cancel.Token, Separator(placement));
 
             version = Update(version, v => v with { Stage = "converting", Fraction = 0 });
@@ -376,7 +376,7 @@ public sealed class VoiceConverter(
             {
                 throw new VoiceServiceException("The song is gone.");
             }
-            set = UpdateStems(set, s => s with { Stage = "separating", RanOn = placement.Name });
+            set = UpdateStems(set, s => s with { Stage = "separating", RanOn = placement.Name, StartedAt = time.GetUtcNow() });
             var files = await stems.ExtractAsync(input, set.Model, set.Dereverb, work, cancel.Token, Separator(placement));
             if (files.Count == 0)
             {
@@ -490,7 +490,7 @@ public sealed class VoiceConverter(
             {
                 throw new VoiceServiceException("The uploaded file is gone.");
             }
-            swap = UpdateSwap(swap, s => s with { RanOn = placement.Name });
+            swap = UpdateSwap(swap, s => s with { RanOn = placement.Name, StartedAt = time.GetUtcNow() });
             Directory.CreateDirectory(work);
             var converted = Path.Combine(work, "converted.wav");
             void Progress(double fraction, double estimated) =>

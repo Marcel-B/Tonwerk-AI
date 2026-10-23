@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using YueUI.Api.Memory;
 using YueUI.Api.Share;
 using YueUI.Api.Speech;
+using YueUI.Api.Worker;
 
 namespace YueUI.Api.Tests;
 
@@ -101,6 +102,23 @@ public sealed class SpeechEndpointTests : IDisposable
         await WaitForTakes(client, all => all.Single().Finished);
         var job = Assert.Single(_app.Speech.Jobs);
         Assert.Equal((null, null, "german"), (job.RefAudio, job.RefText, job.Model.LangCode));
+    }
+
+    [Fact]
+    public async Task A_take_says_when_its_work_began_while_waiting_says_nothing()
+    {
+        var client = _app.CreateClient();
+
+        var takes = await (await client.PostAsJsonAsync("/api/speech/takes", new { text = "Hallo", models = new[] { "qwen3-tts" } }))
+            .Content.ReadFromJsonAsync<SpeechTake[]>(TestApp.Json);
+        Assert.Null(Assert.Single(takes!).StartedAt);
+
+        await WaitForTakes(client, all => all.Single().Finished);
+        // The queue page reads the snapshot, which keeps the last finished take.
+        var status = await client.GetFromJsonAsync<StatusSnapshot>("/api/status", TestApp.Json);
+        var take = Assert.Single(status!.Speech!);
+        Assert.NotNull(take.StartedAt);
+        Assert.InRange(take.StartedAt!.Value, take.CreatedAt, take.UpdatedAt);
     }
 
     [Fact]

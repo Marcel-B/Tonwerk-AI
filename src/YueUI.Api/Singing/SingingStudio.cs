@@ -166,7 +166,7 @@ public sealed class SingingStudio(
                 engine.Installed && engine.ModelDownloaded);
             var singer = placement.Helper is { } helper ? remote.Singing(helper) : engine;
 
-            take = Update(take, t => t with { Stage = "loading", RanOn = placement.Name });
+            take = Update(take, t => t with { Stage = "loading", RanOn = placement.Name, StartedAt = time.GetUtcNow() });
             Directory.CreateDirectory(work);
             var output = Path.Combine(work, "take.wav");
             var result = await singer.SingAsync(

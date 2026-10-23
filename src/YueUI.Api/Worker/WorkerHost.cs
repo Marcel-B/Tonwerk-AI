@@ -205,6 +205,7 @@ public sealed class WorkerHost(
     public async Task<bool> TranscribeAsync(
         TranscriptionState transcription, string audioPath, bool offline, CancellationToken cancellationToken, Func<bool>? memoryTaken = null)
     {
+        transcription = transcription with { StartedAt = time.GetUtcNow() };
         lock (_gate)
         {
             if (TranscribingLocked())

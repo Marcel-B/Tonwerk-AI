@@ -295,7 +295,7 @@ public sealed class ImageMaker(
             var painter = placement.Helper is { } helper ? remote.Images(helper) : engine;
 
             var sent = SentPromptOf(image with { SentPrompt = null });
-            image = Update(image, i => i with { Stage = "loading", RanOn = placement.Name, SentPrompt = sent });
+            image = Update(image, i => i with { Stage = "loading", RanOn = placement.Name, SentPrompt = sent, StartedAt = time.GetUtcNow() });
             var shown = 0.0;
             var result = await painter.PaintAsync(
                 new ImageJob(

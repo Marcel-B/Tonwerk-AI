@@ -125,7 +125,7 @@ public sealed class VideoMaker(
             _running = video.Id;
             _cancel = cancel;
         }
-        var current = Save(video with { Stage = "rendering", Fraction = 0 });
+        var current = Save(video with { Stage = "rendering", Fraction = 0, StartedAt = time.GetUtcNow() });
         try
         {
             if (video.SongId.Split('/') is not [var run, var song]

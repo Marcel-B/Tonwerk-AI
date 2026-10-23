@@ -7259,6 +7259,13 @@
             "type": "string",
             "format": "date-time"
           },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -8646,6 +8653,13 @@
           },
           "createdAt": {
             "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "updatedAt": {
@@ -10437,6 +10451,13 @@
             "type": "string",
             "format": "date-time"
           },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -11407,6 +11428,13 @@
             "type": "string",
             "format": "date-time"
           },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -11741,6 +11769,13 @@
             "type": "string",
             "format": "date-time"
           },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -12032,6 +12067,13 @@
           },
           "createdAt": {
             "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "updatedAt": {
@@ -12418,6 +12460,13 @@
               "string"
             ]
           },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -12544,6 +12593,13 @@
             "type": "string",
             "format": "date-time"
           },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -12627,6 +12683,13 @@
           },
           "createdAt": {
             "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "updatedAt": {

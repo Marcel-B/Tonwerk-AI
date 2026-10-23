@@ -181,6 +181,7 @@ private struct WorkingCard: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    StartedCaption(startedAt: Stages.started(of: state), orderedAt: state.stages?.first?.startedAt)
                 }
                 Spacer(minLength: 8)
                 Text(Stages.name(stage))
@@ -297,6 +298,7 @@ private struct FinishedCard: View {
                     .font(.subheadline)
                 }
             }
+            StartedCaption(startedAt: Stages.started(of: state), orderedAt: state.stages?.first?.startedAt)
             if let note = state.message ?? state.detail, !note.isEmpty {
                 Text(note)
                     .font(.caption)
@@ -467,18 +469,21 @@ private struct VoiceJobCard: View {
                 .foregroundStyle(Theme.accent)
                 .frame(width: 44, height: 44)
                 .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            JobRow(
-                title: names.title,
-                detail: [names.detail, model.ranOnNote(job.ranOn)].compactMap { $0 }.joined(separator: " · "),
-                stage: job.stage, fraction: job.fraction, message: nil
-            ) {
-                Button(role: .destructive) {
-                    Task { await model.cancel(job) }
-                } label: {
-                    Image(systemName: "xmark")
+            VStack(alignment: .leading, spacing: 2) {
+                JobRow(
+                    title: names.title,
+                    detail: [names.detail, model.ranOnNote(job.ranOn)].compactMap { $0 }.joined(separator: " · "),
+                    stage: job.stage, fraction: job.fraction, message: nil
+                ) {
+                    Button(role: .destructive) {
+                        Task { await model.cancel(job) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Abbrechen")
                 }
-                .buttonStyle(.borderless)
-                .help("Abbrechen")
+                StartedCaption(startedAt: job.startedAt, orderedAt: job.createdAt)
             }
         }
         .card(padding: 12)
@@ -502,6 +507,7 @@ private struct VideoJobCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(model.song(video.songId)?.displayTitle ?? video.title).lineLimit(1)
                         Text(AppModel.describe(video)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        StartedCaption(startedAt: video.startedAt, orderedAt: video.createdAt)
                     }
                     Spacer()
                     Text(AppModel.videoStage(video))
@@ -546,6 +552,7 @@ private struct ImageJobCard: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                        StartedCaption(startedAt: image.startedAt, orderedAt: image.createdAt)
                     }
                     Spacer()
                     Text(PaintCoverView.stage(of: image))
@@ -588,6 +595,7 @@ private struct TranscriptionJobCard: View {
                         Text(state.fileName).lineLimit(1)
                         Text(TranscriptionSession.Melody.name(of: state.task))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        StartedCaption(startedAt: state.startedAt, orderedAt: nil)
                     }
                     Spacer()
                     Text(AppModel.transcriptionStage(state.stage))
@@ -629,6 +637,7 @@ private struct SpeechJobCard: View {
                         Text(take.source == nil ? take.text : take.modelLabel)
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         RanOnCaption(ranOn: take.ranOn)
+                        StartedCaption(startedAt: take.startedAt, orderedAt: take.createdAt)
                     }
                     Spacer()
                     Text(SpeechSession.stageName(take))
@@ -671,6 +680,7 @@ private struct SingJobCard: View {
                         Text(take.title ?? "").lineLimit(1)
                         Text(take.voiceLabel ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         RanOnCaption(ranOn: take.ranOn)
+                        StartedCaption(startedAt: take.startedAt, orderedAt: take.createdAt)
                     }
                     Spacer()
                     Text(SingSession.stageName(take))
@@ -713,6 +723,7 @@ private struct AceJobCard: View {
                         Text(job.title).lineLimit(1)
                         Text(job.request.caption ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         RanOnCaption(ranOn: job.ranOn)
+                        StartedCaption(startedAt: job.startedAt, orderedAt: job.createdAt)
                     }
                     Spacer()
                     Text(AceSession.stageName(job))
@@ -749,6 +760,25 @@ private struct RanOnCaption: View {
     }
 }
 
+/// When a job began, or while it waits when it was asked for, with date and time: jobs wait and run for hours, often
+/// past midnight.
+private struct StartedCaption: View {
+    let startedAt: Date?
+    let orderedAt: Date?
+
+    var body: some View {
+        if let startedAt {
+            Text("Gestartet \(Self.text(startedAt))").font(.caption2.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+        } else if let orderedAt {
+            Text("Bestellt \(Self.text(orderedAt))").font(.caption2.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+        }
+    }
+
+    static func text(_ date: Date) -> String {
+        date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).hour().minute())
+    }
+}
+
 /// A job waiting for its turn, with moving and removing.
 private struct WaitingCard: View {
     @Environment(AppModel.self) private var model
@@ -772,11 +802,9 @@ private struct WaitingCard: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                StartedCaption(startedAt: nil, orderedAt: job.createdAt)
             }
             Spacer(minLength: 8)
-            Text(job.createdAt, style: .relative)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
             HStack(spacing: 2) {
                 Button {
                     Task { await model.move(job, by: -1) }

@@ -669,6 +669,11 @@ private struct TrackRow: View {
 
 /// The notes of every track over time, coloured per track, with bar lines and section names; a tap moves the
 /// playhead. The notes are drawn once, only the playhead follows the player.
+///
+/// Drawn in tiles of `tileWidth` that the lazy stack makes only while visible: one canvas over a whole song was some
+/// 12,000 points (24,000 pixels on a Retina screen, wider than a GPU texture), and the Mac redrew it while playing
+/// until buttons and the sidebar stopped answering. The tiles compare equal as long as the score does, so the
+/// playhead and the analyzer never redraw them.
 struct PianoRoll: View {
     let score: LogicScore
     let voices: [LogicScore.Voice]
@@ -684,12 +689,18 @@ struct PianoRoll: View {
     var body: some View {
         GeometryReader { box in
             let width = max(box.size.width, CGFloat(score.durationSeconds) * pointsPerSecond)
+            let layout = RollLayout(score: score, voices: voices, width: width, height: box.size.height)
             ScrollView(.horizontal) {
-                ZStack(alignment: .topLeading) {
-                    notes(width: width, height: box.size.height)
+                LazyHStack(spacing: 0) {
+                    ForEach(layout.tiles.indices, id: \.self) { index in
+                        RollTile(layout: layout, index: index)
+                            .equatable()
+                    }
+                }
+                .frame(width: width, height: box.size.height, alignment: .leading)
+                .overlay(alignment: .topLeading) {
                     Playhead(player: player, pointsPerSecond: width / CGFloat(max(1, score.durationSeconds)))
                 }
-                .frame(width: width, height: box.size.height)
                 .contentShape(Rectangle())
                 .onTapGesture { point in
                     player.seek(to: Double(point.x / width) * score.durationSeconds)
@@ -697,37 +708,108 @@ struct PianoRoll: View {
             }
         }
     }
+}
 
-    private func notes(width: CGFloat, height: CGFloat) -> some View {
+/// Where everything of the piano roll lies, worked out once per score and size and cut into tiles.
+private final class RollLayout {
+    static let tileWidth: CGFloat = 512
+    static let top: CGFloat = 18
+
+    struct Tile {
+        var start: CGFloat
+        var width: CGFloat
+        var bars: [CGFloat] = []
+        var sections: [(x: CGFloat, name: String)] = []
+        var notes: [(rect: CGRect, colour: Int)] = []
+    }
+
+    let height: CGFloat
+    let corner: CGFloat
+    /// What makes two layouts draw the same: the tiles redraw only when it changes.
+    let key: String
+    private(set) var tiles: [Tile] = []
+
+    init(score: LogicScore, voices: [LogicScore.Voice], width: CGFloat, height: CGFloat) {
+        self.height = height
         let pitches = voices.flatMap { $0.notes.map(\.noteNumber) }
         let low = (pitches.min() ?? 48) - 2
         let high = (pitches.max() ?? 72) + 2
-        let top: CGFloat = 18
-        let row = (height - top) / CGFloat(max(1, high - low + 1))
+        let row = (height - Self.top) / CGFloat(max(1, high - low + 1))
+        corner = min(2, row / 3)
         let length = CGFloat(max(1, score.durationSeconds))
-        return Canvas { context, _ in
-            let x = { (ticks: Int) in CGFloat(score.seconds(ticks)) / length * width }
-            for line in score.barLines {
-                context.fill(Path(CGRect(x: x(line), y: top, width: 0.5, height: height - top)), with: .color(.secondary.opacity(0.18)))
+        let x = { (ticks: Int) in CGFloat(score.seconds(ticks)) / length * width }
+        key = "\(width)x\(height)|\(score.durationSeconds)|\(score.lengthTicks)|"
+            + voices.map { "\($0.id):\($0.notes.count):\($0.notes.first?.startTicks ?? -1):\($0.notes.last?.startTicks ?? -1)" }
+                .joined(separator: ",")
+
+        let count = max(1, Int((width / Self.tileWidth).rounded(.up)))
+        tiles = (0..<count).map { index in
+            let start = CGFloat(index) * Self.tileWidth
+            return Tile(start: start, width: min(Self.tileWidth, width - start))
+        }
+        // Everything goes into each tile it reaches into; a section's name may run on into the next one.
+        func place(from left: CGFloat, to right: CGFloat, _ add: (inout Tile) -> Void) {
+            let first = max(0, Int(left / Self.tileWidth))
+            let last = min(count - 1, Int(right / Self.tileWidth))
+            guard first <= last else { return }
+            for index in first...last {
+                add(&tiles[index])
             }
-            for section in score.sections {
-                context.fill(Path(CGRect(x: x(section.startTicks), y: 0, width: 1, height: height)), with: .color(.secondary.opacity(0.45)))
-                context.draw(
-                    Text(section.name).font(.caption2.weight(.semibold)).foregroundStyle(.secondary),
-                    at: CGPoint(x: x(section.startTicks) + 4, y: 2), anchor: .topLeading)
-            }
-            for (index, voice) in voices.enumerated() {
-                let colour = Self.colour(index)
-                for note in voice.notes {
-                    let rect = CGRect(
-                        x: x(note.startTicks), y: top + CGFloat(high - note.noteNumber) * row,
-                        width: max(1.5, x(note.startTicks + note.durationTicks) - x(note.startTicks)),
-                        height: max(1.5, row - 0.5))
-                    context.fill(Path(roundedRect: rect, cornerRadius: min(2, row / 3)), with: .color(colour.opacity(0.85)))
+        }
+        for line in score.barLines {
+            let at = x(line)
+            place(from: at, to: at) { $0.bars.append(at - $0.start) }
+        }
+        for section in score.sections {
+            let at = x(section.startTicks)
+            place(from: at, to: at + 160) { $0.sections.append((at - $0.start, section.name)) }
+        }
+        for (index, voice) in voices.enumerated() {
+            for note in voice.notes {
+                let left = x(note.startTicks)
+                let rect = CGRect(
+                    x: left, y: Self.top + CGFloat(high - note.noteNumber) * row,
+                    width: max(1.5, x(note.startTicks + note.durationTicks) - left),
+                    height: max(1.5, row - 0.5))
+                place(from: rect.minX, to: rect.maxX) {
+                    $0.notes.append((rect.offsetBy(dx: -$0.start, dy: 0), index))
                 }
             }
         }
-        .frame(width: width, height: height)
+    }
+}
+
+/// One tile of the piano roll; equal to another of the same layout and place, so SwiftUI keeps what it drew.
+private struct RollTile: View, Equatable {
+    let layout: RollLayout
+    let index: Int
+
+    static func == (lhs: RollTile, rhs: RollTile) -> Bool {
+        lhs.index == rhs.index && (lhs.layout === rhs.layout || lhs.layout.key == rhs.layout.key)
+    }
+
+    var body: some View {
+        let tile = layout.tiles[index]
+        let height = layout.height
+        let top = RollLayout.top
+        let corner = layout.corner
+        Canvas { context, _ in
+            for line in tile.bars {
+                context.fill(Path(CGRect(x: line, y: top, width: 0.5, height: height - top)), with: .color(.secondary.opacity(0.18)))
+            }
+            for section in tile.sections {
+                context.fill(Path(CGRect(x: section.x, y: 0, width: 1, height: height)), with: .color(.secondary.opacity(0.45)))
+                context.draw(
+                    Text(section.name).font(.caption2.weight(.semibold)).foregroundStyle(.secondary),
+                    at: CGPoint(x: section.x + 4, y: 2), anchor: .topLeading)
+            }
+            for note in tile.notes {
+                context.fill(
+                    Path(roundedRect: note.rect, cornerRadius: corner),
+                    with: .color(PianoRoll.colour(note.colour).opacity(0.85)))
+            }
+        }
+        .frame(width: tile.width, height: height)
     }
 }
 

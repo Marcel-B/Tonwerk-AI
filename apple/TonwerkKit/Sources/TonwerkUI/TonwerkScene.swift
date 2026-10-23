@@ -16,7 +16,7 @@ public struct TonwerkScene: Scene {
         #if os(macOS)
         .defaultSize(width: 1000, height: 700)
         .commands {
-            PlayerCommands(player: model.player)
+            PlayerCommands(player: model.player, model: model)
             #if canImport(Sparkle)
             UpdateCommands(updates: AppUpdates.shared)
             #endif
@@ -52,11 +52,16 @@ struct RootView: View {
 /// search field.
 struct PlayerCommands: Commands {
     let player: Player
+    let model: AppModel
 
     var body: some Commands {
         CommandMenu("Wiedergabe") {
             Button(player.isPlaying ? "Pause" : "Abspielen") { player.toggle() }
                 .disabled(player.current == nil)
+            // A way out that never depends on the page answering: the menu bar is AppKit's and works while the
+            // window's buttons do not. Never disabled, since a stale state could hide it just when it is needed.
+            Button("Logic-Seite anhalten") { model.logic?.player.pause() }
+                .keyboardShortcut(".", modifiers: .command)
             Button("Nächster Song") { player.next() }
                 .keyboardShortcut(.rightArrow, modifiers: .command)
                 .disabled(!player.hasNext)

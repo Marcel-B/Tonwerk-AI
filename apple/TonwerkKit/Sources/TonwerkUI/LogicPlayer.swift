@@ -84,8 +84,26 @@ final class LogicPlayer {
     /// Counts loads, so one overtaken while its instruments were being made leaves the score to the newer one.
     private var loads = 0
 
+    /// When the engine was last restarted after a configuration change.
+    private var resumedAt: Date?
+    private var retry: Task<Void, Never>?
+
     private func resume() {
         guard isPlaying else { return }
+        // Restarting may itself change the configuration again (an output switching its format as it starts);
+        // answered every time, that would be a loop on the main thread. Within a second of the last restart it is
+        // answered once more, a second later.
+        if let resumedAt, Date().timeIntervalSince(resumedAt) < 1 {
+            guard retry == nil else { return }
+            retry = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let self else { return }
+                self.retry = nil
+                self.resume()
+            }
+            return
+        }
+        resumedAt = Date()
         let at = position
         pause()
         play(from: at)
@@ -306,7 +324,10 @@ final class LogicPlayer {
 
     private func tick() {
         guard let sequencer, let score else { return }
-        position = sequencer.currentPositionInBeats * 60 / score.tempoBpm
+        let now = sequencer.currentPositionInBeats * 60 / score.tempoBpm
+        // Unchanged, the views watching the position need not draw again.
+        guard now != position else { return }
+        position = now
         if position >= duration {
             stop()
         }

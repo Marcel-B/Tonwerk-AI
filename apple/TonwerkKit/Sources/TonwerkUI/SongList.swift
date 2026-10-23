@@ -9,9 +9,13 @@ struct SongList: View {
     let songs: [Song]
     var playlist: Components.Schemas.PlaylistInfo?
     var empty: String = "Noch keine Songs."
+    /// Whether this list answers ``AppModel/revealing``: only the library's does.
+    var reveals = false
     @State private var query = ""
     @State private var scope = Song.SearchScope.titleStyle
     @State private var selected: Song.ID?
+    /// The song to scroll to once the list shows it, after a reveal.
+    @State private var scrollTarget: Song.ID?
     /// The song whose deletion waits for its confirmation.
     @State private var deleting: Song?
     @State private var deleteProblem: String?
@@ -40,6 +44,7 @@ struct SongList: View {
 
     var body: some View {
         withDetails(content)
+            .onChange(of: model.revealing, initial: true) { revealIfAsked() }
             .confirmationDialog(
                 deleting.map { "„\($0.displayTitle)“ löschen?" } ?? "",
                 isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
@@ -129,6 +134,12 @@ struct SongList: View {
     /// a tap and opens the details from the row's ⓘ, as the Music app does.
     #if os(macOS)
     private var songList: some View {
+        ScrollViewReader { proxy in
+            macList.onChange(of: scrollTarget, initial: true) { scroll(proxy) }
+        }
+    }
+
+    private var macList: some View {
         List(selection: $selected) {
             ForEach(shown) { song in
                 SongRow(song: song, playing: player.current?.id == song.id)
@@ -165,6 +176,12 @@ struct SongList: View {
     }
     #else
     private var songList: some View {
+        ScrollViewReader { proxy in
+            phoneList.onChange(of: scrollTarget, initial: true) { scroll(proxy) }
+        }
+    }
+
+    private var phoneList: some View {
         List {
             ForEach(shown) { song in
                 SongRow(song: song, playing: player.current?.id == song.id) {
@@ -334,6 +351,38 @@ struct SongList: View {
             deleting = song
         } label: {
             Label("Song löschen …", systemImage: "trash")
+        }
+    }
+
+    /// Takes a song the player asked to show: the search and rating filter give way if they hide it, the Mac selects
+    /// it (its details beside the list), the iPhone opens its details, as nothing stays selected there.
+    private func revealIfAsked() {
+        guard reveals, let id = model.revealing else { return }
+        model.revealing = nil
+        guard songs.contains(where: { $0.id == id }) else { return }
+        if !shown.contains(where: { $0.id == id }) {
+            query = ""
+            storedFilter = RatingFilter.all.stored
+        }
+        #if os(macOS)
+        selected = id
+        #else
+        // The full-screen player is still going away; a sheet asked for meanwhile would not come up.
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            sheetSong = id
+        }
+        #endif
+        scrollTarget = id
+    }
+
+    private func scroll(_ proxy: ScrollViewProxy) {
+        guard let id = scrollTarget else { return }
+        // A frame later, so the list has its rows after a page change or a cleared filter.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            withAnimation { proxy.scrollTo(id, anchor: .center) }
+            scrollTarget = nil
         }
     }
 

@@ -58,6 +58,7 @@ import {
 } from '../../logic/synths'
 import type { Assignments, Instrument, ScoreDocument, VoiceTrack } from '../../logic/types'
 import { registerSource, setVisual, visuals, type SpectrumSource } from '../../spectrum'
+import { isVocalTrack } from '../../singing'
 import SpectrumBars from '../SpectrumBars.vue'
 import MixerPanel, { type MixerTrack } from './MixerPanel.vue'
 
@@ -73,6 +74,8 @@ const props = defineProps<{
   recording: string | File | null
   /** Tracks a session had muted and soloed, laid over the routing whenever a score arrives; null leaves it as stored. */
   listening?: Listening | null
+  /** Whether vocal tracks offer to be sung on the singing page. */
+  singable?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -81,6 +84,8 @@ const emit = defineEmits<{
   manageInstruments: []
   /** Mute or solo changed, so a session can keep them. */
   listening: [value: Listening]
+  /** A vocal track to be sung on the singing page. */
+  sing: [track: string]
 }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -850,7 +855,7 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
                     {{ t('previewInstrumentMissing', { port: effective[index]?.instrument?.port ?? '' }) }}
                   </div>
                 </td>
-                <td class="py-1 align-middle">
+                <td class="py-1 align-middle whitespace-nowrap">
                   <Button
                     size="small"
                     severity="secondary"
@@ -867,6 +872,17 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
                           : registerOf(voices[index]),
                       )
                     "
+                  />
+                  <Button
+                    v-if="singable && voices[index] && isVocalTrack(voices[index]!)"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    icon="pi pi-microphone"
+                    class="ml-1"
+                    :label="t('previewSing')"
+                    :title="t('previewSingHint')"
+                    @click="emit('sing', trackIds[index]!)"
                   />
                 </td>
               </tr>

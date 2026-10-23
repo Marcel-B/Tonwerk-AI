@@ -26,8 +26,11 @@ import {
   singStats,
   suggestedPhrase,
   voiceRange,
+  wordsFromGuide,
+  type SingHandOff,
 } from '../singing'
 import type { RunInfo, SingingInfo, SingingVoiceInfo, SingingVoiceMade, SingTake } from '../types'
+import { handedSinging } from '../view'
 import MachinePicker from './MachinePicker.vue'
 import SingNoteEditor from './SingNoteEditor.vue'
 
@@ -155,6 +158,47 @@ watch(chosenSong, (song) => {
     chosenSong.value = null
   }
 })
+
+/**
+ * A track of the Logic page with the song's words: the server lays them on the vocal melody, and the track's notes
+ * take what the melody note they start with sings (`wordsFromGuide`), so a backing part sings the melody's syllables.
+ */
+async function takeHandOff(handed: SingHandOff): Promise<void> {
+  busy.value = true
+  try {
+    editor.load(handed.melody)
+    title.value = handed.melody.title
+    lyrics.value = handed.melody.lyrics
+    if (!handed.melody.lyrics.trim() || handed.melody.notes.length === 0) {
+      return
+    }
+    let answer
+    try {
+      answer = await alignSinging(handed.guide, handed.melody.lyrics)
+    } catch (caught) {
+      // Without SoulX-Singer installed the page says so itself; the words stay in their field.
+      if (installed.value) {
+        emit('error', message(caught))
+      }
+      return
+    }
+    editor.load({ ...handed.melody, notes: wordsFromGuide(handed.melody.notes, handed.guide, answer) })
+    editor.leftover = answer.leftover
+  } finally {
+    busy.value = false
+  }
+}
+
+watch(
+  handedSinging,
+  (handed) => {
+    if (handed) {
+      handedSinging.value = null
+      void takeHandOff(handed)
+    }
+  },
+  { immediate: true },
+)
 
 function clearMelody(): void {
   editor.clear()

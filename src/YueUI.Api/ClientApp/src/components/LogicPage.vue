@@ -48,7 +48,8 @@ import { audioUrl, listStems } from '../api'
 import { loadMidiInfo, midiInfo } from '../audioMidi'
 import { locale } from '../i18n'
 import type { RunInfo, SongInfo, StemSetState } from '../types'
-import { handedMidi, logicSong, openStems, replaceLogicSong } from '../view'
+import { handedMidi, logicSong, openOnSingPage, openStems, replaceLogicSong } from '../view'
+import { singHandOff } from '../singing'
 import FileDropZone from './logic/FileDropZone.vue'
 import OptionsForm from './logic/OptionsForm.vue'
 import ResultView from './logic/ResultView.vue'
@@ -364,6 +365,20 @@ async function loadInstruments(): Promise<void> {
 /** The library is kept on its own page, where the instruments are also played. */
 function openInstruments(): void {
   navigate('instruments')
+}
+
+/**
+ * A vocal track to the singing page, with the library song's lyrics (only what is sung); an uploaded score brings no
+ * words, so its notes go alone.
+ */
+function singTrack(track: string): void {
+  const score = result.value?.score
+  if (!score) {
+    return
+  }
+  const song = mode.value === 'library' ? chosen.value : null
+  const name = song?.run.title || score.title || (file.value ? baseName(file.value.name) : '') || t('untitled')
+  openOnSingPage(singHandOff(score, track, song?.run.lyrics ?? '', `${name} · ${track}`))
 }
 
 // A track whose instrument was deleted on the instruments page loses its assignment, as on the server.
@@ -1208,7 +1223,9 @@ if (convertWhenReady && source.value && mode.value === 'library') {
       :assignments="assignments"
       :recording="recording"
       :listening="listening"
+      singable
       @assign="assign"
+      @sing="singTrack"
       @manage-instruments="openInstruments"
       @listening="(value) => (listening = value)"
     />

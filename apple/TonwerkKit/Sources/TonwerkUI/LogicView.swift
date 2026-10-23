@@ -643,6 +643,19 @@ private struct TrackRow: View {
                 RoundedRectangle(cornerRadius: 2).fill(colour).frame(width: 4, height: 18)
                 Text(voice.displayName).font(.callout.weight(.medium)).lineLimit(1)
                 Spacer()
+                if voice.isVocal, let score = session.score {
+                    Button {
+                        model.singTrack(voice, of: score, song: session.song)
+                    } label: {
+                        Image(systemName: "music.mic")
+                            .font(.caption.weight(.bold))
+                            .frame(width: 24, height: 22)
+                            .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 5))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Auf der Seite Singen öffnen, mit den gesungenen Worten des Songs")
+                    .accessibilityLabel("\(voice.displayName) singen")
+                }
                 route
                 toggle("M", on: session.muted.contains(voice.id), tint: .orange) { session.toggleMute(voice.id) }
                 toggle("S", on: session.soloed.contains(voice.id), tint: .yellow) { session.toggleSolo(voice.id) }

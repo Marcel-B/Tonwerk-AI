@@ -32,13 +32,15 @@ public sealed class SynthesisStatsTests : IDisposable
         _app.Worker.Emit(new { @event = "log", message = "Synthesis of run/song2 done in 611 s (2.5 s per second of audio, 32 steps, mlx)" });
         _app.Worker.Emit(new { @event = "log", message = "Synthesis of run/song3 done in 2041 s (8.3 s per second of audio, 32 steps, ane)" });
         _app.Worker.Emit(new { @event = "log", message = "Background: Neural Engine programs for run/song3 ready in 465 s" });
+        _app.Worker.Emit(new { @event = "log", message = "Synthesizing run/song4 on the Neural Engine: about 222 s of audio, full quality (32 steps)" });
+        _app.Worker.Emit(new { @event = "log", message = "Neural Engine program 1/1 ready for run/song4" });
         _app.Worker.Emit(new { @event = "log", message = "Saved /x/audio.flac (221.9 s, full)" });
 
         SynthesisOverview? overview = null;
         await TestApp.WaitUntil(() =>
         {
             overview = _client.GetFromJsonAsync<SynthesisOverview>("/api/stats/synthesis", TestApp.Json).GetAwaiter().GetResult();
-            return overview!.Recent.Count == 3 && overview.AnePrograms.Count == 1;
+            return overview!.Recent.Count == 3 && overview.AnePrograms.Count == 2;
         });
 
         var mlx = Assert.Single(overview!.Engines, e => e.Engine == "mlx");
@@ -47,6 +49,9 @@ public sealed class SynthesisStatsTests : IDisposable
         Assert.Equal(2.5, mlx.BestRate);
         Assert.Equal(8.3, Assert.Single(overview.Engines, e => e.Engine == "ane").MeanRate, 3);
         Assert.Equal(465, overview.AnePrograms.LongestSeconds);
+        Assert.Equal(["run/song4", "run/song3"], overview.AneRecent.Select(r => r.Song));
+        Assert.True(overview.AneRecent[0].Waited);
+        Assert.False(overview.AneRecent[1].Waited);
     }
 
     public void Dispose()

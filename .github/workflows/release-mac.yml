@@ -5,6 +5,8 @@
 # takes the next version (major stays, minor for new functions, patch otherwise) and the notes users see in the update
 # window, both from Claude when ANTHROPIC_API_KEY is set, else a patch with the changes' titles. By hand (Actions →
 # Mac-App veröffentlichen → Run workflow) a version and notes can be given; without them it plans like after CI.
+# After the Mac release, the job "testflight" uploads the iPhone and iPad app of the same commit and version
+# (testflight.yml, with its secrets), so TestFlight follows each release.
 # Needs the repository secrets (the same values as in
 # Marcel-B/Synth, whose release uses the same certificate)
 #   MACOS_CERTIFICATE_P12        the "Developer ID Application" certificate with its key, as .p12, base64-encoded
@@ -57,9 +59,13 @@ jobs:
       notes_md: ${{ steps.plan.outputs.notes_md }}
       notes_html: ${{ steps.plan.outputs.notes_html }}
       sha: ${{ steps.sha.outputs.sha }}
+      build: ${{ steps.sha.outputs.build }}
     steps:
       - id: sha
-        run: echo "sha=${{ github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "sha=${{ github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+          # The iPhone build's number for TestFlight, apart from testflight.yml's own runs (1000 + their number).
+          echo "build=$((2000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v5
         with:
           ref: ${{ steps.sha.outputs.sha }}
@@ -264,3 +270,16 @@ jobs:
       - name: Remove the keychain
         if: always()
         run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+
+  testflight:
+    name: iPhone-App zu TestFlight
+    # After the Mac release, so a TestFlight build always has its tag; a failed Mac release uploads nothing and the
+    # next run plans the same version again.
+    needs: [plan, release]
+    if: needs.plan.outputs.release == 'true'
+    uses: ./.github/workflows/testflight.yml
+    with:
+      version: ${{ needs.plan.outputs.version }}
+      ref: ${{ needs.plan.outputs.sha }}
+      build: ${{ needs.plan.outputs.build }}
+    secrets: inherit

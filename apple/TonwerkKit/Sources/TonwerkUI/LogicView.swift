@@ -267,13 +267,22 @@ private struct LogicSessionView: View {
 
     private var midiMenu: some View {
         Menu {
-            Section("MIDI-Ausgänge") {
+            // Buttons rather than plain text: the Mac greys out a menu's text items, which read as unavailable outputs.
+            Section("Instrument anlegen für …") {
                 if session.outputs.outputs.isEmpty {
-                    Text("Keine")
+                    Text("Keine MIDI-Ausgänge")
                 }
                 ForEach(session.outputs.outputs) { output in
-                    Text(output.displayName)
+                    Button(output.displayName) {
+                        model.instrumentPort = output.name
+                        model.page = .instruments
+                    }
                 }
+            }
+            Button {
+                model.page = .instruments
+            } label: {
+                Label("Instrumente verwalten …", systemImage: "slider.vertical.3")
             }
             Button {
                 session.outputs.refresh()
@@ -562,6 +571,7 @@ struct LogicTransport: View {
 
 /// One track: its sound or instrument, mute and solo, volume and pan.
 private struct TrackRow: View {
+    @Environment(AppModel.self) private var model
     let session: LogicSession
     let voice: LogicScore.Voice
     let colour: Color
@@ -624,6 +634,12 @@ private struct TrackRow: View {
                         }
                     }
                 }
+            }
+            Divider()
+            Button {
+                model.page = .instruments
+            } label: {
+                Label("MIDI-Instrument anlegen …", systemImage: "plus")
             }
         } label: {
             HStack(spacing: 4) {

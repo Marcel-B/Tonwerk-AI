@@ -220,6 +220,49 @@ export function fromAceRequest(request: AceSongRequest, machine = ''): AceForm {
   }
 }
 
+/** YuE2's language building blocks (`styleTags.ts`) as ACE-Step's codes. */
+const styleLanguages: Record<string, string> = {
+  english: 'en',
+  german: 'de',
+  mandarin: 'zh',
+  cantonese: 'yue',
+  japanese: 'ja',
+  korean: 'ko',
+  spanish: 'es',
+  french: 'fr',
+}
+
+/** What a library song gives a new ACE-Step song: its words and its sound, nothing of how it was made. */
+export interface AceTemplate {
+  title: string
+  style: string
+  lyrics: string
+  instrumental: boolean
+}
+
+/**
+ * A library song as the template of a new ACE-Step song: title, style (as the description, building blocks and all)
+ * and lyrics replace the form's, the language follows the style's language block (else the LM tells), and the rest
+ * of the form (models, length, seed, the Mac) stays as it was. A cover or repaint becomes a new song, since the
+ * template is the song's words, not its audio.
+ */
+export function withAceTemplate(form: AceForm, template: AceTemplate): AceForm {
+  const language =
+    template.style
+      .split(',')
+      .map((tag) => styleLanguages[tag.trim().toLowerCase()])
+      .find((code) => code !== undefined) ?? ''
+  return {
+    ...form,
+    title: template.title,
+    caption: template.style,
+    lyrics: template.instrumental ? '' : template.lyrics,
+    instrumental: template.instrumental,
+    language,
+    task: 'text2music',
+  }
+}
+
 /** The languages ACE-Step's LM knows (the server's `AceSongRequest.Languages`), German and English first. */
 export const aceLanguages = [
   'de',

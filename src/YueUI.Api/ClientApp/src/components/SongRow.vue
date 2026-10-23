@@ -61,6 +61,7 @@ const emit = defineEmits<{
   /** `warnings` only when the score came from a MIDI file, which then replaces the song's own. */
   useScore: [abc: string, warnings?: string[]]
   newSong: []
+  aceTemplate: []
   sing: []
   delete: []
   error: [message: string]
@@ -310,6 +311,7 @@ const severityByQuality: Record<string, string> = {
           @use-score="useScore"
           @use-midi="(abc, warnings) => emit('useScore', abc, warnings)"
           @new-song="emit('newSong')"
+          @ace-template="emit('aceTemplate')"
           @sing="emit('sing')"
           @delete="emit('delete')"
           @error="emit('error', $event)"

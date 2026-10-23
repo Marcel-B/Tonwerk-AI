@@ -40,6 +40,8 @@ const emit = defineEmits<{
   useScore: [run: RunInfo, song: SongInfo, abc: string, warnings?: string[]]
   /** Everything the song was made with into the form, its seed and score included, to make it again or vary it. */
   newSong: [songId: string]
+  /** Title, style and lyrics as a new ACE-Step song's, on its page. */
+  aceTemplate: [songId: string]
   /** Something was deleted; carries the run's title for the notice. */
   deleted: [title: string]
   notice: [message: string]
@@ -352,6 +354,7 @@ async function saveTitle(): Promise<void> {
                 @rate="rateSong(song, $event)"
                 @use-score="(abc, warnings) => emit('useScore', run, song, abc, warnings)"
                 @new-song="emit('newSong', song.id)"
+                @ace-template="emit('aceTemplate', song.id)"
                 @sing="singing = { run, song }"
                 @delete="askDeleteSong(run, song)"
                 @error="emit('error', $event)"

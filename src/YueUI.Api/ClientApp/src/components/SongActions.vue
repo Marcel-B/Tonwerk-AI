@@ -31,6 +31,8 @@ const emit = defineEmits<{
   /** A MIDI file (the song edited in Logic) read back into a score, which replaces the song's own. */
   useMidi: [abc: string, warnings: string[]]
   newSong: []
+  /** Title, style and lyrics as a new ACE-Step song's, on its page. */
+  aceTemplate: []
   sing: []
   delete: []
   error: [message: string]
@@ -143,6 +145,12 @@ const actions = computed<SongAction[]>(() => {
     })
   }
   list.push({ key: 'newSong', label: t('useAsNewSong'), icon: 'pi pi-clone', command: () => emit('newSong') })
+  list.push({
+    key: 'aceTemplate',
+    label: t('useAsAceTemplate'),
+    icon: 'pi pi-wave-pulse',
+    command: () => emit('aceTemplate'),
+  })
   if (song.hasScore) {
     list.push({ key: 'score', label: t('useScore'), icon: 'pi pi-file-import', command: () => emit('useScore') })
   }

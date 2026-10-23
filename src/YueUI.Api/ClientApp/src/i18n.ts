@@ -281,6 +281,9 @@ const messages = {
     transcriptionsEmpty: 'Noch keine.',
     useScore: 'Als Partitur übernehmen',
     useAsNewSong: 'Alles übernehmen',
+    useAsAceTemplate: 'Als ACE-Vorlage',
+    aceTemplateApplied:
+      'Titel, Stil und Text von „{title}“ stehen im ACE-Step-Formular, die übrigen Einstellungen sind geblieben.',
     showSong: 'Zum Titel',
     songGone: 'Diesen Song gibt es nicht mehr.',
     songActions: 'Weitere Aktionen',
@@ -1690,6 +1693,8 @@ const messages = {
     transcriptionsEmpty: 'None yet.',
     useScore: 'Use as score',
     useAsNewSong: 'Use everything',
+    useAsAceTemplate: 'As ACE-Step template',
+    aceTemplateApplied: 'Title, style and lyrics of “{title}” are in the ACE-Step form, the other settings stayed.',
     showSong: 'Go to song',
     songGone: 'This song no longer exists.',
     songActions: 'More actions',

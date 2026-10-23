@@ -10,7 +10,7 @@ import {
   songScore,
   subscribe,
 } from './api'
-import { aceForm, fromAceRequest } from './ace'
+import { aceForm, fromAceRequest, withAceTemplate } from './ace'
 import { liveWriting } from './writing'
 import AdvancedParameters from './components/AdvancedParameters.vue'
 import GenerateForm from './components/GenerateForm.vue'
@@ -670,6 +670,41 @@ async function useAsNewSong(songId: string): Promise<void> {
     show(caught instanceof Error ? caught.message : String(caught), true)
   }
 }
+
+/** A library song as the template of a new ACE-Step song: its title, style and lyrics, the page's other settings kept. */
+async function useAsAceTemplate(songId: string): Promise<void> {
+  const found = listedSong(songId)
+  if (!found) {
+    return
+  }
+  try {
+    let template
+    if (found.song.engine === 'ace') {
+      const request = await aceSongRequest(songId)
+      template = {
+        title: request.title ?? '',
+        style: request.caption ?? '',
+        lyrics: request.lyrics ?? '',
+        instrumental: request.instrumental ?? false,
+      }
+    } else {
+      const request = await songRequest(songId)
+      template = {
+        title: request.title,
+        style: request.style,
+        lyrics: request.lyrics,
+        instrumental: request.instrumental ?? false,
+      }
+    }
+    // The library's title, which a rename may have changed since the song was asked for.
+    template.title = found.run.title || template.title
+    aceForm.value = withAceTemplate(aceForm.value, template)
+    navigate('ace')
+    show(t('aceTemplateApplied', { title: template.title || t('untitled') }))
+  } catch (caught) {
+    show(caught instanceof Error ? caught.message : String(caught), true)
+  }
+}
 </script>
 
 <template>
@@ -906,6 +941,7 @@ async function useAsNewSong(songId: string): Promise<void> {
           @template="useTemplate"
           @use-score="useSongScore"
           @new-song="useAsNewSong"
+          @ace-template="useAsAceTemplate"
           @deleted="onDeleted"
           @notice="show($event)"
           @error="show($event, true)"

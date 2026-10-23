@@ -1,7 +1,11 @@
 # Builds the Mac app Tonwerk-AI for download outside the App Store: signed with Developer ID, notarized by Apple and
 # packed into a DMG, attached to a GitHub release with the tag app-v<version> (the server goes out through main, so its
-# commits carry no tags; "app-" keeps the two apart). Started by hand (Actions → Mac-App veröffentlichen → Run
-# workflow), since the cloud sessions cannot push tags. Needs the repository secrets (the same values as in
+# commits carry no tags; "app-" keeps the two apart). It runs by itself after CI passed on main: the job "plan"
+# (.github/scripts/app-release-plan.py) releases only when apple/, LICENSE or NOTICE changed since the newest tag,
+# takes the next version (major stays, minor for new functions, patch otherwise) and the notes users see in the update
+# window, both from Claude when ANTHROPIC_API_KEY is set, else a patch with the changes' titles. By hand (Actions →
+# Mac-App veröffentlichen → Run workflow) a version and notes can be given; without them it plans like after CI.
+# Needs the repository secrets (the same values as in
 # Marcel-B/Synth, whose release uses the same certificate)
 #   MACOS_CERTIFICATE_P12        the "Developer ID Application" certificate with its key, as .p12, base64-encoded
 #   MACOS_CERTIFICATE_PASSWORD   the .p12's password
@@ -10,29 +14,72 @@
 #   APPLE_TEAM_ID                the team id (also used by testflight.yml)
 #   SPARKLE_PRIVATE_KEY          the EdDSA key that signs updates (bin/generate_keys -x of Sparkle's release, the file's text)
 #   SPARKLE_PUBLIC_ED_KEY        its public half, which generate_keys prints; it goes into the app's Info.plist
+#   ANTHROPIC_API_KEY            optional, for the version kind and the notes (Claude Opus 5.5, a few cents a release)
 # Besides the DMG the release carries appcast.xml, which the app's updater (Updates.swift) reads from the newest
 # release; so every release must come from here, a DMG made by hand would carry no signature the app accepts.
 # Unlike the Synth release there is no ad-hoc fallback: a download macOS refuses to open helps no one.
 name: Mac-App veröffentlichen
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version ohne v, z. B. 0.2.0"
-        required: true
+        description: "Version ohne v, z. B. 1.2.0 (leer: wie nach CI bestimmen)"
+        required: false
         type: string
       notes:
-        description: "Was neu ist (eine Zeile, optional)"
+        description: "Was neu ist (eine Zeile, leer: aus den Änderungen)"
         required: false
         type: string
 
 permissions:
   contents: write
 
+# One release at a time, none cancelled: a second run waits and then finds the first one's tag.
+concurrency:
+  group: release-mac
+  cancel-in-progress: false
+
 jobs:
+  plan:
+    name: Neue Version?
+    # After CI only for its pushes to main that passed; a pull request's run never releases.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      notes_md: ${{ steps.plan.outputs.notes_md }}
+      notes_html: ${{ steps.plan.outputs.notes_html }}
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - id: sha
+        run: echo "sha=${{ github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.sha.outputs.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet anthropic pydantic
+      - id: plan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VERSION: ${{ inputs.version }}
+          NOTES: ${{ inputs.notes }}
+        run: python .github/scripts/app-release-plan.py "${{ steps.sha.outputs.sha }}" --version "$VERSION" --notes "$NOTES"
+
   release:
     name: Signieren, notarisieren, veröffentlichen
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
     runs-on: macos-15
     timeout-minutes: 90
     env:
@@ -43,9 +90,13 @@ jobs:
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
       SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
-      VERSION: ${{ inputs.version }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      NOTES_MD: ${{ needs.plan.outputs.notes_md }}
+      NOTES_HTML: ${{ needs.plan.outputs.notes_html }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
 
       - name: Check the inputs and secrets
         run: |
@@ -164,8 +215,6 @@ jobs:
       # The feed the app's updater reads: one entry, this release, its DMG signed with the update key. Sparkle's tools
       # come from its release of the version the app links (Package.resolved).
       - name: Appcast
-        env:
-          NOTES: ${{ inputs.notes }}
         run: |
           sparkle=$(plutil -extract pins json -o - apple/Tonwerk.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved \
             | python3 -c 'import json,sys; print(next(p["state"]["version"] for p in json.load(sys.stdin) if p["identity"] == "sparkle"))')
@@ -176,8 +225,6 @@ jobs:
           signature=$("$RUNNER_TEMP/sparkle/bin/sign_update" --ed-key-file "$key" "dist/Tonwerk-AI-$VERSION.dmg")
           rm "$key"
           echo "$signature"
-          notes="${NOTES:-Tonwerk-AI $VERSION}"
-          notes="${notes//&/&amp;}"; notes="${notes//</&lt;}"
           cat > dist/appcast.xml <<XML
           <?xml version="1.0" encoding="utf-8"?>
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
@@ -189,7 +236,7 @@ jobs:
                 <sparkle:version>${{ github.run_number }}</sparkle:version>
                 <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
                 <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-                <description><![CDATA[<p>$notes</p><p><a href="https://github.com/Marcel-B/Tonwerk-AI/releases/tag/app-v$VERSION">Alle Änderungen</a></p>]]></description>
+                <description><![CDATA[$NOTES_HTML<p><a href="https://github.com/Marcel-B/Tonwerk-AI/releases/tag/app-v$VERSION">Alle Änderungen</a></p>]]></description>
                 <enclosure url="https://github.com/Marcel-B/Tonwerk-AI/releases/download/app-v$VERSION/Tonwerk-AI-$VERSION.dmg" type="application/octet-stream" $signature/>
               </item>
             </channel>
@@ -201,11 +248,10 @@ jobs:
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-          NOTES: ${{ inputs.notes }}
+          SHA: ${{ needs.plan.outputs.sha }}
         run: |
-          news=""
-          [[ -n "$NOTES" ]] && news="**Neu:** $NOTES"$'\n\n'
-          gh release create "app-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+          news="**Neu:**"$'\n'"$NOTES_MD"$'\n\n'
+          gh release create "app-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --target "$SHA" \
             --title "Tonwerk-AI $VERSION für Mac" --notes "$(cat <<NOTES
           ${news}**Mac** (\`Tonwerk-AI-$VERSION.dmg\`): die App für macOS 14 und neuer, Apple Silicon und Intel. DMG öffnen und Tonwerk-AI in den Ordner Programme ziehen. Sie ist mit Developer ID signiert und von Apple notarisiert; macOS öffnet sie ohne Rückfrage.
 

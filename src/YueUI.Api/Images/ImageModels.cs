@@ -219,6 +219,13 @@ public sealed record ImageState
     /// </summary>
     public string? PaintedPrompt { get; init; }
 
+    /// <summary>
+    /// The whole text sent to the model: <see cref="PaintedPrompt"/> (or <see cref="Prompt"/>) with the LoRAs' trigger words and
+    /// the reference pictures' sentences after it; null until it is sent, and for pictures from before (see
+    /// <see cref="ImageMaker.SentPromptOf"/>). FLUX 3's upsampler writes it out again; what it made is <see cref="PaintedPrompt"/>.
+    /// </summary>
+    public string? SentPrompt { get; init; }
+
     /// <summary>The same prompt, model and seed paint the same picture again (FLUX 3's upsampler decodes greedily, so it too).</summary>
     public long Seed { get; init; }
 
@@ -316,6 +323,36 @@ public sealed record ImageModelInfo(
 /// <param name="Role">One of <see cref="ReferenceRoles"/>; null for a style picture's own role, else style.</param>
 /// <param name="Strength">For <see cref="ReferenceRoles.Start"/>: how much of the start picture stays, 0.1 to 0.9.</param>
 public sealed record ImageReferenceChoice(string Source, string? Id = null, string? Role = null, double? Strength = null);
+
+/// <summary>
+/// How a song's cover was painted, kept with the cover in the database when a candidate becomes it (the candidate itself
+/// lives only in <c>images/</c>, which a cleanup empties and the backup leaves out), so the text can be read and copied
+/// later. A photo taken as cover has none. Field names as <see cref="ImageState"/>'s, so the viewers take either.
+/// </summary>
+public sealed record CoverPainting(
+    string ImageId,
+    string ModelId,
+    string ModelLabel,
+    string Prompt,
+    string? PaintedPrompt,
+    string SentPrompt,
+    long Seed,
+    IReadOnlyList<ImageLoraUsed>? Loras,
+    IReadOnlyList<ImageReferenceUsed>? References,
+    DateTimeOffset CreatedAt)
+{
+    public static CoverPainting Of(ImageState image) => new(
+        image.Id,
+        image.ModelId,
+        image.ModelLabel,
+        image.Prompt,
+        image.PaintedPrompt,
+        ImageMaker.SentPromptOf(image),
+        image.Seed,
+        image.Loras,
+        image.References,
+        image.CreatedAt);
+}
 
 /// <summary>A reference a picture was painted with, as the dialog shows it under the picture.</summary>
 public sealed record ImageReferenceUsed(string Role, string Label, double? Strength = null);

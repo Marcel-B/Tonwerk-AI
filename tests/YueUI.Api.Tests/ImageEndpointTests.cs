@@ -121,6 +121,35 @@ public sealed class ImageEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task A_painted_cover_keeps_the_text_it_was_painted_with_until_a_photo_replaces_it()
+    {
+        _app.AddSong(Run, "song1");
+        _app.Translator.Configured = true;
+        _app.Translator.Answer = "A lighthouse in a storm";
+
+        var response = await _client.PostAsJsonAsync($"/api/songs/{Run}/song1/images", new { prompt = "Ein Leuchtturm im Sturm", seed = 3 });
+        var queued = await response.Content.ReadFromJsonAsync<ImageState>(TestApp.Json);
+        var done = await WaitForImages("song1", all => all.Single().Finished);
+        var job = Assert.Single(_app.Images.Jobs);
+        Assert.Equal(job.Prompt, done[0].SentPrompt);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"/api/songs/{Run}/song1/cover/painting")).StatusCode);
+
+        await _client.PutAsync($"/api/images/{queued!.Id}/cover", null);
+        // Kept in the database: the candidate going does not take it along.
+        await _client.DeleteAsync($"/api/images/{queued.Id}");
+
+        var painting = await _client.GetFromJsonAsync<CoverPainting>($"/api/songs/{Run}/song1/cover/painting", TestApp.Json);
+        Assert.Equal(
+            (queued.Id, "Ein Leuchtturm im Sturm", "A lighthouse in a storm", job.Prompt, 3L, "klein-4b"),
+            (painting!.ImageId, painting.Prompt, painting.PaintedPrompt, painting.SentPrompt, painting.Seed, painting.ModelId));
+
+        var photo = new ByteArrayContent(FakeImages.Jpeg);
+        photo.Headers.ContentType = new("image/jpeg");
+        await _client.PutAsync($"/api/songs/{Run}/song1/cover", new MultipartFormDataContent { { photo, "cover", "cover.jpg" } });
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"/api/songs/{Run}/song1/cover/painting")).StatusCode);
+    }
+
+    [Fact]
     public async Task A_description_is_painted_in_the_english_claude_made_of_it()
     {
         _app.AddSong(Run, "song1");

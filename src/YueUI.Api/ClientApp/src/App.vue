@@ -35,6 +35,7 @@ import { reviewCount, reviewDays } from './review'
 import { exportTarget, registerExportLookup } from './export'
 import { videoTarget } from './video'
 import { imageTarget } from './images'
+import { viewedImage } from './imageViewer'
 import { checkForUpdate, reload, updateAvailable } from './update'
 import { visuals } from './spectrum'
 import { singFinished } from './singing'
@@ -73,6 +74,7 @@ const LibraryList = defineAsyncComponent(() => import('./components/LibraryList.
 const ExportDialog = defineAsyncComponent(() => import('./components/ExportDialog.vue'))
 const VideoDialog = defineAsyncComponent(() => import('./components/VideoDialog.vue'))
 const ImageDialog = defineAsyncComponent(() => import('./components/ImageDialog.vue'))
+const ImageViewer = defineAsyncComponent(() => import('./components/ImageViewer.vue'))
 // The Logic page brings the options form, the piano roll and the MIDI preview; loaded only once it is opened.
 const LogicPage = defineAsyncComponent(() => import('./components/LogicPage.vue'))
 // Backing vocals share the Logic page's preview; loaded only once opened as well.
@@ -676,6 +678,7 @@ async function useAsNewSong(songId: string): Promise<void> {
   <ExportDialog v-if="exportTarget" />
   <VideoDialog v-if="videoTarget" :live="videos" @error="show($event, true)" />
   <ImageDialog v-if="imageTarget" :live="images" @error="show($event, true)" @notice="show($event)" />
+  <ImageViewer v-if="viewedImage" @error="show($event, true)" />
   <!--
     Header and player frame the page like the rollers of a scroll: both as wide as the page including its padding,
     flush at the top and the bottom, and the pages run between them.

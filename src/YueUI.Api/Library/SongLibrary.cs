@@ -292,7 +292,8 @@ public sealed partial class SongLibrary(
 
     /// <summary>Gives the song its own cover, or with null returns it to the drawn one.</summary>
     /// <returns>False for a name the worker would not write or a song that does not exist.</returns>
-    public bool SetCover(string run, string song, CoverImage? image)
+    /// <param name="painting">How a painted candidate taken as cover was painted, kept with it.</param>
+    public bool SetCover(string run, string song, CoverImage? image, Images.CoverPainting? painting = null)
     {
         if (SongDirectory(run, song) is null)
         {
@@ -304,7 +305,7 @@ public sealed partial class SongLibrary(
         }
         else
         {
-            covers.Set($"{run}/{song}", image);
+            covers.Set($"{run}/{song}", image, painting);
         }
         return true;
     }
@@ -312,6 +313,10 @@ public sealed partial class SongLibrary(
     /// <summary>The song's own cover, or null (also when the database cannot be read).</summary>
     public SongCover? CoverOf(string run, string song) =>
         SongDirectory(run, song) is null ? null : Read(() => covers.Get($"{run}/{song}"));
+
+    /// <summary>How the song's cover was painted, or null (a photo, none, or the database cannot be read).</summary>
+    public Images.CoverPainting? CoverPaintingOf(string run, string song) =>
+        SongDirectory(run, song) is null ? null : Read(() => covers.Painting($"{run}/{song}"));
 
     /// <summary>The title given to the run in this app, or null (also when the database cannot be read).</summary>
     public string? RenamedTitle(string run) => RunName().IsMatch(run) ? Read(() => titles.Get(run)) : null;

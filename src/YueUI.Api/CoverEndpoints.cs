@@ -18,6 +18,11 @@ public static class CoverEndpoints
             .WithName("GetSongCover")
             .ProducesFile("image/jpeg", "image/png")
             .Produces(StatusCodes.Status404NotFound);
+        api.MapGet("/songs/{run}/{song}/cover/painting", (string run, string song, SongLibrary library) =>
+            library.CoverPaintingOf(run, song) is { } painting ? Results.Ok(painting) : Results.NotFound())
+            .WithName("GetSongCoverPainting")
+            .Produces<Images.CoverPainting>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
         api.MapPut("/songs/{run}/{song}/cover", PutAsync).DisableAntiforgery()
             .WithName("SetSongCover")
             .Produces(StatusCodes.Status204NoContent)

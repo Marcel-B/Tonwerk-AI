@@ -2,6 +2,7 @@ import type {
   AudioMidiInfo,
   AudioMidiSettings,
   BackupStatus,
+  CoverPainting,
   GenerateRequest,
   LogEntry,
   SynthesisOverview,
@@ -315,6 +316,18 @@ export async function cleanupStorage(target: StorageCleanupTarget): Promise<Stor
 /** The song's own cover; the time it was chosen makes a changed cover a new address, past every cache. */
 export function coverUrl(songId: string, updatedAt: string): string {
   return `${apiBase}/api/songs/${songId}/cover?v=${encodeURIComponent(updatedAt)}`
+}
+
+/** How the song's cover was painted, or null for a photo or a cover taken before this was kept. */
+export async function getCoverPainting(songId: string): Promise<CoverPainting | null> {
+  try {
+    return (await (await send(`/api/songs/${songId}/cover/painting`)).json()) as CoverPainting
+  } catch (caught) {
+    if (caught instanceof ApiError && caught.status === 404) {
+      return null
+    }
+    throw caught
+  }
 }
 
 /** Keeps the image as the song's cover, for the library, the player and every later export. */

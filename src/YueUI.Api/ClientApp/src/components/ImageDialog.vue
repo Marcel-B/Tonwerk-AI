@@ -16,6 +16,7 @@ import { t } from '../i18n'
 import { blocksIn, toggleBlock } from '../coverBlocks'
 import { defaultStartStrength, fitReferences, styleReferences, withStyleText, type ReferenceItem } from '../coverStyles'
 import { imageTarget, loadImageSettings, saveImageSettings, suggestPrompt } from '../images'
+import { imageFileName, openViewer } from '../imageViewer'
 import { machineField, ranOnNote, storedMachine } from '../machines'
 import type { CoverStyle, ImageInfo, ImageLoraChoice, ImageState } from '../types'
 import CoverBlocks from './CoverBlocks.vue'
@@ -220,6 +221,12 @@ async function start(): Promise<void> {
   }
 }
 
+/** The candidate large, with the text it was painted with. */
+function view(image: ImageState): void {
+  const title = image.title || imageTarget.value?.title || t('untitled')
+  openViewer({ src: imageUrl(image.id), fileName: imageFileName(title, `${image.seed}`), title, painting: image })
+}
+
 async function take(image: ImageState): Promise<void> {
   taking.value = image.id
   try {
@@ -338,7 +345,16 @@ function close(): void {
       <ul class="m-0 p-0 list-none grid grid-cols-2 gap-3">
         <li v-for="image in images" :key="image.id" class="flex flex-col gap-1 min-w-0">
           <div class="picture">
-            <img v-if="image.stage === 'done'" :src="imageUrl(image.id)" :alt="image.prompt" loading="lazy" />
+            <button
+              v-if="image.stage === 'done'"
+              type="button"
+              class="open"
+              :aria-label="t('viewerOpen')"
+              :title="t('viewerOpen')"
+              @click="view(image)"
+            >
+              <img :src="imageUrl(image.id)" :alt="image.prompt" loading="lazy" />
+            </button>
             <div v-else-if="image.stage === 'failed'" class="state">
               <i class="pi pi-exclamation-triangle danger" aria-hidden="true" />
               <small class="danger">{{ t('imageFailed', { message: image.message ?? '' }) }}</small>
@@ -414,6 +430,15 @@ function close(): void {
   border-radius: 0.5rem;
   overflow: hidden;
   background: var(--surface-sunken);
+}
+.open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
 }
 .picture img {
   display: block;

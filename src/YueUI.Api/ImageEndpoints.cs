@@ -73,7 +73,11 @@ public static class ImageEndpoints
                 return Results.NotFound();
             }
             // A copy: the candidate stays in the dialog, so another one can be tried and this one taken back.
-            if (!library.SetCover(run, song, new CoverImage(await File.ReadAllBytesAsync(images.ImagePath(id), cancellationToken), "image/jpeg")))
+            if (!library.SetCover(
+                run,
+                song,
+                new CoverImage(await File.ReadAllBytesAsync(images.ImagePath(id), cancellationToken), "image/jpeg"),
+                CoverPainting.Of(image)))
             {
                 return Results.NotFound();
             }

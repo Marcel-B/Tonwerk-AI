@@ -858,6 +858,31 @@ export interface SpeechInfo {
 }
 
 /** A cover painted by FLUX.2 Klein (Images/ImageModels.cs `ImageState`): a candidate until it is taken. */
+/** How a painted cover was painted, kept with it in the database (`GET /api/songs/{run}/{song}/cover/painting`). */
+export interface CoverPainting {
+  imageId: string
+  modelId: string
+  modelLabel: string
+  prompt: string
+  paintedPrompt: string | null
+  sentPrompt: string
+  seed: number
+  loras: ImageLoraUsed[] | null
+  references: ImageReferenceUsed[] | null
+  createdAt: string
+}
+
+/** What the image viewer shows of how a picture was painted: a candidate's state or a cover's painting. */
+export interface PaintingDetails {
+  modelLabel: string
+  prompt: string
+  paintedPrompt: string | null
+  sentPrompt?: string | null
+  seed: number
+  loras?: ImageLoraUsed[] | null
+  references?: ImageReferenceUsed[] | null
+}
+
 export interface ImageState {
   id: string
   /** `run/songN` */
@@ -868,6 +893,8 @@ export interface ImageState {
   prompt: string
   /** The English Klein was given, where Claude translated the prompt. */
   paintedPrompt: string | null
+  /** The whole text sent to the model: the English with the LoRAs' triggers and the references' sentences after it. */
+  sentPrompt?: string | null
   seed: number
   stage: 'queued' | 'loading' | 'painting' | 'done' | 'failed' | 'cancelled'
   message: string | null

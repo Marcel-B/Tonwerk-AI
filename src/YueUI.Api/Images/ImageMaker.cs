@@ -294,12 +294,13 @@ public sealed class ImageMaker(
                 engine.Unavailable(model) is null);
             var painter = placement.Helper is { } helper ? remote.Images(helper) : engine;
 
-            image = Update(image, i => i with { Stage = "loading", RanOn = placement.Name });
+            var sent = SentPromptOf(image with { SentPrompt = null });
+            image = Update(image, i => i with { Stage = "loading", RanOn = placement.Name, SentPrompt = sent });
             var shown = 0.0;
             var result = await painter.PaintAsync(
                 new ImageJob(
                     model,
-                    WithReferences(WithTriggers(image.PaintedPrompt ?? image.Prompt, image.Loras), image.References),
+                    sent,
                     image.Seed,
                     Size,
                     Size,
@@ -358,6 +359,13 @@ public sealed class ImageMaker(
             }
         }
     }
+
+    /// <summary>
+    /// The text the model is (or was) given; for a picture painted before it was kept, built again the same way, which gives
+    /// the same text as long as no LoRA's trigger changed since.
+    /// </summary>
+    public static string SentPromptOf(ImageState image) =>
+        image.SentPrompt ?? WithReferences(WithTriggers(image.PaintedPrompt ?? image.Prompt, image.Loras), image.References);
 
     /// <summary>
     /// The LoRAs' trigger words go last, after the translation, so that Claude cannot reword them: they were trained as

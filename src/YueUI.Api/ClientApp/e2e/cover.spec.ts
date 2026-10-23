@@ -1,4 +1,4 @@
-import { expect, run, test } from './fakeApi'
+import { expect, run, song, test } from './fakeApi'
 
 function lora(name: string, model: string | null, trigger: string | null) {
   return { name, label: name, model, trigger, strength: 1, sizeBytes: 80 << 20, modifiedAt: '2026-10-22T12:00:00Z' }
@@ -131,4 +131,63 @@ test('a cover style brings its sentence and pictures, which go with the picture 
   await expect.poll(() => api.callsTo('POST', '/api/songs/run-1/song1/images').length).toBe(1)
   const body = api.callsTo('POST', '/api/songs/run-1/song1/images')[0]!.body as { references: unknown[] }
   expect(body.references).toEqual([{ source: 'style', id: `7/${'ab'.repeat(16)}`, role: 'figure', strength: null }])
+})
+
+test('a candidate opens large with the text it was sent with, to copy and download', async ({ page, api }) => {
+  api.answers.set('GET /api/songs/run-1/song1/images', () => [
+    {
+      id: 'i9',
+      songId: 'run-1/song1',
+      title: 'Nachtzug',
+      modelId: 'flux2-klein-4b',
+      modelLabel: 'FLUX.2 Klein 4B',
+      prompt: 'Ein Zug bei Nacht',
+      paintedPrompt: 'A train at night',
+      sentPrompt: 'A train at night. metrorose.',
+      seed: 42,
+      stage: 'done',
+      fraction: 1,
+      createdAt: '2026-10-22T12:00:00Z',
+      updatedAt: '2026-10-22T12:00:00Z',
+      finished: true,
+    },
+  ])
+  await page.goto('#/songs')
+  await page.getByRole('button', { name: 'Weitere Aktionen' }).first().click()
+  await page.getByRole('menuitem', { name: 'Cover malen' }).click()
+  await page.getByRole('button', { name: 'Groß ansehen' }).click()
+
+  const viewer = page.getByRole('dialog', { name: 'Nachtzug' })
+  await expect(viewer.getByText('A train at night. metrorose.')).toBeVisible()
+  await expect(viewer.getByText('Ein Zug bei Nacht')).toBeVisible()
+  await expect(viewer.getByRole('link', { name: 'Herunterladen' })).toHaveAttribute('download', 'Nachtzug 42.jpg')
+})
+
+test('a painted cover shows its text from the database', async ({ page, api }) => {
+  api.runs = [
+    run('run-1', {
+      title: 'Nachtzug',
+      songs: [song('run-1/song1', { coverUpdatedAt: '2026-10-22T12:00:00Z' })],
+    }),
+  ]
+  api.answers.set('GET /api/songs/run-1/song1/cover/painting', () => ({
+    imageId: 'i9',
+    modelId: 'flux2-klein-4b',
+    modelLabel: 'FLUX.2 Klein 4B',
+    prompt: 'Ein Zug bei Nacht',
+    paintedPrompt: 'A train at night',
+    sentPrompt: 'A train at night',
+    seed: 42,
+    loras: null,
+    references: null,
+    createdAt: '2026-10-22T12:00:00Z',
+  }))
+  await page.goto('#/songs')
+  await page.getByRole('button', { name: 'Groß ansehen' }).click()
+
+  const viewer = page.getByRole('dialog', { name: 'Nachtzug' })
+  await expect(viewer.getByText('A train at night', { exact: true })).toBeVisible()
+  // The sent text equals the English here, so it is shown once.
+  await expect(viewer.getByText('Vollständig an das Modell geschickt')).toHaveCount(0)
+  await expect(viewer.getByText(/FLUX\.2 Klein 4B · Seed 42/)).toBeVisible()
 })

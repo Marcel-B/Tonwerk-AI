@@ -107,6 +107,11 @@ final class InstrumentsSession {
 
         init() {}
 
+        /// A new instrument on an output picked from the MIDI menu.
+        init(port: String) {
+            self.port = port
+        }
+
         init(_ instrument: Components.Schemas.Instrument) {
             id = instrument.id
             name = instrument.name

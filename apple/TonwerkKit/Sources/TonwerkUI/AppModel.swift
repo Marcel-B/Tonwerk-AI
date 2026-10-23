@@ -46,6 +46,9 @@ public final class AppModel {
     @ObservationIgnored private var templateList: TemplateStore?
     /// The instruments page's state, kept like the Logic page's.
     var instrumentsPage: InstrumentsSession?
+    /// A MIDI output the Logic page asked to make an instrument for; the instruments page opens its editor with it
+    /// and takes it back.
+    var instrumentPort: String?
     /// The voices page's state, kept like the Logic page's.
     var voicesPage: VoicesSession?
     /// The song the sing-with-a-voice dialog is open for, from a song's menu.

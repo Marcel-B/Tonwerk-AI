@@ -19,6 +19,7 @@ struct InstrumentsView: View {
 }
 
 private struct InstrumentsSessionView: View {
+    @Environment(AppModel.self) private var model
     @Bindable var session: InstrumentsSession
     @State private var editing: InstrumentsSession.Draft?
     @State private var noting: Noting?
@@ -40,6 +41,8 @@ private struct InstrumentsSessionView: View {
             .frame(maxWidth: .infinity)
         }
         .safeAreaInset(edge: .bottom) { keyboard }
+        .onAppear(perform: takeAskedPort)
+        .onChange(of: model.instrumentPort) { takeAskedPort() }
         .sheet(item: $editing) { draft in
             InstrumentEditor(draft: draft, outputs: session.outputs) { saved in
                 await session.save(saved)
@@ -75,6 +78,13 @@ private struct InstrumentsSessionView: View {
         } message: {
             Text("Spuren mit diesem Klang behalten ihre Kopie davon.")
         }
+    }
+
+    /// The Logic page's MIDI menu asked for an instrument on an output: open the editor with it.
+    private func takeAskedPort() {
+        guard let port = model.instrumentPort else { return }
+        model.instrumentPort = nil
+        editing = InstrumentsSession.Draft(port: port)
     }
 
     // MARK: Sounds
@@ -175,12 +185,15 @@ private struct InstrumentsSessionView: View {
 
     private var midiMenu: some View {
         Menu {
-            Section("MIDI-Ausgänge") {
+            // Buttons rather than plain text: the Mac greys out a menu's text items, which read as unavailable outputs.
+            Section("Instrument anlegen für …") {
                 if session.outputs.outputs.isEmpty {
-                    Text("Keine")
+                    Text("Keine MIDI-Ausgänge")
                 }
                 ForEach(session.outputs.outputs) { output in
-                    Text(output.displayName)
+                    Button(output.displayName) {
+                        editing = InstrumentsSession.Draft(port: output.name)
+                    }
                 }
             }
             Button {

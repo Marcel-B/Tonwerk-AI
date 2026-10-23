@@ -323,7 +323,7 @@ private struct VoicesSessionView: View {
             if !session.models.isEmpty {
                 Picker("Modell", selection: $session.stemModel) {
                     ForEach(session.models, id: \.id) { stemModel in
-                        Text(stemModel.name).tag(String?.some(stemModel.id))
+                        Text(VoicesSession.menuLabel(stemModel)).tag(String?.some(stemModel.id))
                     }
                 }
             }

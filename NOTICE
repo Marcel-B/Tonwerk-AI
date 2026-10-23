@@ -1,0 +1,42 @@
+Tonwerk-AI
+Copyright (C) 2026 Marcel Benders
+
+Required Notice: Copyright (C) 2026 Marcel Benders. Tonwerk-AI by Marcel Benders (https://github.com/Marcel-B/Tonwerk-AI)
+
+This software (the server, the web interface and the apps for Mac, iPhone
+and iPad) is licensed under the PolyForm Noncommercial License 1.0.0
+(see LICENSE, or https://polyformproject.org/licenses/noncommercial/1.0.0).
+You may use, change and share it for any noncommercial purpose, as long as
+everyone who gets a copy from you also gets these terms and the Required
+Notice line above. Selling it, building it into a paid product or service,
+or any other commercial use needs the author's written permission; ask
+Marcel Benders through https://github.com/Marcel-B/Tonwerk-AI.
+
+The author asks (beyond the licence) that a changed version be marked as
+changed and not be presented as the original.
+
+The licence covers this software, not the songs, pictures, voices and texts
+made with it, nor the models that make them. The models are downloaded from
+their own sources during setup and keep their own licences (for example
+YuE2's weights: CC BY-NC 4.0); see the README and
+https://tonwerk.studio/ai/.
+
+Third-party software
+--------------------
+
+The apps contain these packages by Apple Inc., each licensed under the
+Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0):
+swift-openapi-runtime, swift-openapi-urlsession and swift-http-types.
+swift-openapi-generator (Apache License 2.0) runs only at build time.
+
+apple/TonwerkKit/Sources/TonwerkDSP/dsp is copied from Tonwerk Synth
+(https://github.com/Marcel-B/Synth) by the same author, under the same
+licence.
+
+The server uses NuGet packages that are fetched at build time and keep
+their licences: Anthropic (MIT), Lib.Net.Http.WebPush (MIT),
+Melanchall.DryWetMidi (MIT), Microsoft's ASP.NET Core and
+Microsoft.Data.Sqlite packages (MIT) and TagLibSharp (LGPL 2.1, used
+unchanged as a separate library). The web interface's npm packages are
+listed in src/YueUI.Api/ClientApp/package.json. None of them is shipped
+inside the apps.

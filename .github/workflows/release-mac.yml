@@ -1,0 +1,155 @@
+# Builds the Mac app Tonwerk-AI for download outside the App Store: signed with Developer ID, notarized by Apple and
+# packed into a DMG, attached to a GitHub release with the tag app-v<version> (the server goes out through main, so its
+# commits carry no tags; "app-" keeps the two apart). Started by hand (Actions → Mac-App veröffentlichen → Run
+# workflow), since the cloud sessions cannot push tags. Needs the repository secrets (the same values as in
+# Marcel-B/Synth, whose release uses the same certificate)
+#   MACOS_CERTIFICATE_P12        the "Developer ID Application" certificate with its key, as .p12, base64-encoded
+#   MACOS_CERTIFICATE_PASSWORD   the .p12's password
+#   APPLE_ID                     the Apple ID of the developer account
+#   APPLE_APP_PASSWORD           an app-specific password of that Apple ID (account.apple.com), for notarytool
+#   APPLE_TEAM_ID                the team id (also used by testflight.yml)
+# Unlike the Synth release there is no ad-hoc fallback: a download macOS refuses to open helps no one.
+name: Mac-App veröffentlichen
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version ohne v, z. B. 0.2.0"
+        required: true
+        type: string
+      notes:
+        description: "Was neu ist (eine Zeile, optional)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Signieren, notarisieren, veröffentlichen
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the inputs and secrets
+        run: |
+          missing=0
+          for name in MACOS_CERTIFICATE_P12 MACOS_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+            [[ -n "${!name}" ]] || { echo "::error::secret $name is missing"; missing=1; }
+          done
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "::error::version '$VERSION' is not like 0.2.0"; missing=1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/app-v$VERSION" >/dev/null; then
+            echo "::error::app-v$VERSION exists already; take a new version"; missing=1
+          fi
+          exit $missing
+
+      # The same Xcode choice as testflight.yml, so both platforms build with one SDK.
+      - name: Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)
+          version=$(basename "$xcode" .app); version=${version#Xcode_}
+          (( ${version%%.*} >= 26 )) || { echo "::error::no Xcode 26 on the runner"; ls -d /Applications/Xcode*; exit 1; }
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+
+      - name: Import the Developer ID certificate
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')"
+          [[ -n "$IDENTITY" ]] || { echo "::error::the certificate holds no 'Developer ID Application' identity"; exit 1; }
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      # Signed in the archive itself: the app's entitlements (sandbox, network, microphone, Bluetooth, chosen files)
+      # need no provisioning profile under Developer ID, so no export step with profiles is needed. The bracketed
+      # setting overrides Signing.xcconfig's ad-hoc identity for macOS. The build number is the run number, so every
+      # release counts up for the update check.
+      - name: Archive
+        working-directory: apple
+        run: |
+          xcodebuild archive -project Tonwerk.xcodeproj -scheme Tonwerk -configuration Release \
+            -destination 'generic/platform=macOS' -archivePath "$RUNNER_TEMP/Tonwerk-AI.xcarchive" \
+            -skipPackagePluginValidation \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_IDENTITY="$SIGN_IDENTITY" "CODE_SIGN_IDENTITY[sdk=macosx*]=$SIGN_IDENTITY" \
+            OTHER_CODE_SIGN_FLAGS="--timestamp --keychain $KEYCHAIN" ENABLE_HARDENED_RUNTIME=YES \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            > "$RUNNER_TEMP/archive.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/archive.log" | sort -u | head -50; tail -100 "$RUNNER_TEMP/archive.log"; exit 1; }
+          grep -E "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
+          mkdir -p "$RUNNER_TEMP/dmg"
+          ditto "$RUNNER_TEMP/Tonwerk-AI.xcarchive/Products/Applications/Tonwerk-AI.app" "$RUNNER_TEMP/dmg/Tonwerk-AI.app"
+          echo "APP=$RUNNER_TEMP/dmg/Tonwerk-AI.app" >> "$GITHUB_ENV"
+
+      - name: Check the signature
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dvv "$APP" 2>&1 | grep -E "Authority=Developer ID Application|Timestamp=|flags=.*runtime"
+          codesign -d --entitlements - --xml "$APP" | plutil -p - | tee "$RUNNER_TEMP/entitlements.txt"
+          grep -q '"com.apple.security.app-sandbox" => true' "$RUNNER_TEMP/entitlements.txt"
+          if grep -q 'get-task-allow' "$RUNNER_TEMP/entitlements.txt"; then echo "::error::debug entitlement in a release"; exit 1; fi
+          lipo -archs "$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")" = "$VERSION"
+
+      - name: Notarize the app
+        run: |
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/app.zip"
+          .github/scripts/notarize.sh "$RUNNER_TEMP/app.zip"
+          # Stapled, the app opens without a network check, also when copied out of the DMG.
+          xcrun stapler staple "$APP"
+          spctl -a -vv -t exec "$APP"
+
+      - name: DMG
+        run: |
+          cp LICENSE NOTICE "$RUNNER_TEMP/dmg/"
+          ln -s /Applications "$RUNNER_TEMP/dmg/Programme"
+          mkdir dist
+          DMG="dist/Tonwerk-AI-$VERSION.dmg"
+          hdiutil create -volname "Tonwerk-AI $VERSION" -srcfolder "$RUNNER_TEMP/dmg" -fs HFS+ -format UDZO -ov "$DMG"
+          codesign --sign "$SIGN_IDENTITY" --keychain "$KEYCHAIN" --timestamp "$DMG"
+          .github/scripts/notarize.sh "$DMG"
+          xcrun stapler staple "$DMG"
+          spctl -a -vv -t open --context context:primary-signature "$DMG"
+          # A copy under a name without the version, so tonwerk.studio can always link
+          # releases/latest/download/Tonwerk-AI.dmg.
+          cp "$DMG" dist/Tonwerk-AI.dmg
+          shasum -a 256 dist/*.dmg | tee dist/SHA256SUMS.txt
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          news=""
+          [[ -n "$NOTES" ]] && news="**Neu:** $NOTES"$'\n\n'
+          gh release create "app-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Tonwerk-AI $VERSION für Mac" --notes "$(cat <<NOTES
+          ${news}**Mac** (\`Tonwerk-AI-$VERSION.dmg\`): die App für macOS 14 und neuer, Apple Silicon und Intel. DMG öffnen und Tonwerk-AI in den Ordner Programme ziehen. Sie ist mit Developer ID signiert und von Apple notarisiert; macOS öffnet sie ohne Rückfrage.
+
+          Die App erzeugt selbst nichts: Sie steuert einen Tonwerk-AI-Server auf einem Mac mit Apple Silicon, den du selbst betreibst. Ohne Server zeigt **Ohne Server ausprobieren** eine Beispielbibliothek. Einrichtung: https://tonwerk.studio/ai/einrichtung.html
+
+          Songs, Stimmen, Bilder und Texte, die mit Tonwerk-AI entstehen, sind KI-erzeugt; was das heißt, steht auf https://tonwerk.studio/ai/. Lizenz: PolyForm Noncommercial 1.0.0 (LICENSE, NOTICE im DMG).
+          NOTES
+          )"
+
+      - name: Remove the keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true

@@ -92,6 +92,13 @@ final class StyleBlocksTests: XCTestCase {
         XCTAssertEqual(StyleBlocks.count(.genre, in: "pop, rock, piano"), 2)
     }
 
+    func testEveryVoiceBlockIsExplained() {
+        for tag in StyleBlocks.Category.voice.tags + StyleBlocks.Category.timbre.tags {
+            XCTAssertNotNil(StyleBlocks.explanation(of: tag), tag)
+        }
+        XCTAssertNil(StyleBlocks.explanation(of: "pop"))
+    }
+
     func testASectionTagGetsALineOfItsOwn() {
         XCTAssertEqual(SectionTags.append("[Verse]", to: ""), "[Verse]\n")
         XCTAssertEqual(SectionTags.append("[Chorus]", to: "[Verse]\nHallo\n"), "[Verse]\nHallo\n\n[Chorus]\n")

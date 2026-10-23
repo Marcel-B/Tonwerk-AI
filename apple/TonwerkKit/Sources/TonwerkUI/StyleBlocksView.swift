@@ -68,6 +68,8 @@ struct StyleBlocksView: View {
                 Chip(title: tag, chosen: StyleBlocks.has(tag, in: style)) {
                     style = StyleBlocks.toggle(tag, in: style)
                 }
+                // Hovering exists on the Mac (and an iPad with a pointer); the iPhone shows nothing.
+                .help(StyleBlocks.explanation(of: tag) ?? "")
             }
         }
     }

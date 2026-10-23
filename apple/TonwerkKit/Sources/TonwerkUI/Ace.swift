@@ -237,6 +237,30 @@ struct AceForm: Codable, Equatable {
         repaintEnd = request.repaintEnd
     }
 
+    /// YuE2's language building blocks (`StyleBlocks`) as ACE-Step's codes.
+    private static let styleLanguages = [
+        "english": "en", "german": "de", "mandarin": "zh", "cantonese": "yue", "japanese": "ja", "korean": "ko",
+        "spanish": "es", "french": "fr",
+    ]
+
+    /// A library song as the template of a new ACE-Step song, as the web page's `withAceTemplate`: title, style (as
+    /// the description, building blocks and all) and lyrics replace the form's, the language follows the style's
+    /// language block (else the LM tells), the rest (models, length, seed, the Mac) stays. A cover or repaint becomes
+    /// a new song, since the template is the song's words, not its audio.
+    func taking(title: String, style: String, lyrics: String, instrumental: Bool) -> AceForm {
+        var form = self
+        form.title = title
+        form.caption = style
+        form.lyrics = instrumental ? "" : lyrics
+        form.instrumental = instrumental
+        form.language = style.split(separator: ",")
+            .lazy
+            .compactMap { Self.styleLanguages[$0.trimmingCharacters(in: .whitespaces).lowercased()] }
+            .first ?? ""
+        form.task = .text2music
+        return form
+    }
+
     /// Models or an adapter removed from the server's folder since would be refused.
     func keeping(lms: [String], dits: [String], adapters: [String]) -> AceForm {
         var form = self
@@ -420,6 +444,30 @@ extension AppModel {
               let request = try? decode(Components.Schemas.AceSongRequest.self, answer.0)
         else { return }
         aceForm = AceForm(request: request, machine: aceForm.machine)
+        openAce()
+    }
+
+    /// A library song as the template of a new ACE-Step song: its title, style and lyrics, the page's other
+    /// settings kept.
+    func useAsAceTemplate(_ song: Song) async {
+        if song.engine == "ace" {
+            guard let answer = try? await call("GET", address("api/songs", song.run, song.name, "ace")),
+                  let request = try? decode(Components.Schemas.AceSongRequest.self, answer.0)
+            else { return }
+            aceForm = aceForm.taking(
+                title: song.title, style: request.caption ?? "", lyrics: request.lyrics ?? "",
+                instrumental: request.instrumental ?? false)
+        } else {
+            guard let tonwerk,
+                  let request = try? await tonwerk.api.getSongRequest(path: .init(run: song.run, song: song.name))
+                      .ok.body.json
+            else { return }
+            // The library's title, which a rename may have changed since the song was asked for.
+            aceForm = aceForm.taking(
+                title: song.title, style: request.style, lyrics: request.lyrics,
+                instrumental: request.instrumental ?? false)
+        }
+        saveAceForm()
         openAce()
     }
 }

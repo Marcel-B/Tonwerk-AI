@@ -121,4 +121,30 @@ final class AceTests: XCTestCase {
         XCTAssertTrue(model.shownModels.contains(.ace))
         XCTAssertEqual(model.queueCount, 2)
     }
+
+    func testALibrarySongGivesTitleStyleAndLyricsAndTheRestOfTheFormStays() {
+        var form = AceForm()
+        form.duration = 180
+        form.seed = "7"
+        form.lmModel = "lm.gguf"
+        form.machine = "helper"
+        form.language = "en"
+        form.task = .cover
+        let taken = form.taking(
+            title: "Neonregen", style: "synthwave, German, female vocal", lyrics: "[verse]\nRegen", instrumental: false)
+        XCTAssertEqual(taken.title, "Neonregen")
+        XCTAssertEqual(taken.caption, "synthwave, German, female vocal")
+        XCTAssertEqual(taken.lyrics, "[verse]\nRegen")
+        XCTAssertEqual(taken.language, "de")
+        XCTAssertEqual(taken.task, .text2music)
+        XCTAssertEqual(taken.duration, 180)
+        XCTAssertEqual(taken.seed, "7")
+        XCTAssertEqual(taken.lmModel, "lm.gguf")
+        XCTAssertEqual(taken.machine, "helper")
+
+        let instrumental = form.taking(title: "Drift", style: "ambient", lyrics: "[verse]\nNo", instrumental: true)
+        XCTAssertEqual(instrumental.language, "", "without a language block the LM tells")
+        XCTAssertEqual(instrumental.lyrics, "")
+        XCTAssertTrue(instrumental.instrumental)
+    }
 }

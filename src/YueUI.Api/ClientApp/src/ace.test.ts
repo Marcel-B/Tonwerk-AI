@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { aceKeys, defaultAceForm, fromAceRequest, toAceRequest } from './ace'
+import { aceKeys, defaultAceForm, fromAceRequest, toAceRequest, withAceTemplate } from './ace'
 
 describe('toAceRequest', () => {
   test('a new song sends only what was set, the rest left to the model', () => {
@@ -87,4 +87,52 @@ test('keys read as acestep.cpp writes them', () => {
   expect(aceKeys).toHaveLength(28)
   expect(aceKeys.slice(0, 2)).toEqual(['C major', 'C minor'])
   expect(aceKeys).toContain('F# minor')
+})
+
+describe('withAceTemplate', () => {
+  test('a library song gives title, style and lyrics, the rest of the form stays', () => {
+    const form = {
+      ...defaultAceForm(),
+      title: 'Alt',
+      caption: 'old caption',
+      lyrics: 'old',
+      language: 'en',
+      duration: 180,
+      seed: '7',
+      lmModel: 'lm.gguf',
+      machine: 'helper',
+      task: 'cover' as const,
+      source: 'run/song1',
+    }
+    const taken = withAceTemplate(form, {
+      title: 'Neonregen',
+      style: 'synthwave, German, female vocal',
+      lyrics: '[verse]\nRegen',
+      instrumental: false,
+    })
+
+    expect(taken).toMatchObject({
+      title: 'Neonregen',
+      caption: 'synthwave, German, female vocal',
+      lyrics: '[verse]\nRegen',
+      instrumental: false,
+      language: 'de',
+      task: 'text2music',
+      duration: 180,
+      seed: '7',
+      lmModel: 'lm.gguf',
+      machine: 'helper',
+    })
+  })
+
+  test('without a language block the LM tells, an instrumental takes no lyrics', () => {
+    const taken = withAceTemplate(
+      { ...defaultAceForm(), language: 'fr' },
+      { title: 'Drift', style: 'ambient, slow', lyrics: '[verse]\nNo', instrumental: true },
+    )
+
+    expect(taken.language).toBe('')
+    expect(taken.lyrics).toBe('')
+    expect(taken.instrumental).toBe(true)
+  })
 })

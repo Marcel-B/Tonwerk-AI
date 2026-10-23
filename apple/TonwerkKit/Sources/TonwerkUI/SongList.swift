@@ -250,6 +250,11 @@ struct SongList: View {
         } label: {
             Label("Ins Formular übernehmen", systemImage: "square.and.pencil")
         }
+        Button {
+            Task { await model.useAsAceTemplate(song) }
+        } label: {
+            Label("Als ACE-Vorlage", systemImage: "waveform.badge.plus")
+        }
         if song.rendersFull {
             Button {
                 Task { _ = try? await model.renderFull(song) }

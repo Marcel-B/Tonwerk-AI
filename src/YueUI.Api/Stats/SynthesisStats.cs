@@ -44,6 +44,35 @@ public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<Synt
     // When each song's Neural Engine synthesis began, so a compile it waited for gets its duration.
     private readonly ConcurrentDictionary<string, DateTimeOffset> _aneStarted = new();
 
+    /// <summary>Seconds of work per second of audio: the Neural Engine at full quality is about 3, a draft on the CPU 30.</summary>
+    public static readonly double[] RateBuckets = [0.5, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 64];
+
+    /// <summary>Preparing the Neural Engine's programs: seconds from the cache, minutes when compiled.</summary>
+    public static readonly double[] AneBuckets = [5, 15, 30, 60, 120, 300, 600, 1200];
+
+    private readonly Lock _gate = new();
+    private readonly Dictionary<(string Engine, int Steps), Monitoring.Histogram> _rates = [];
+    private readonly Monitoring.Histogram _anePrograms = new(AneBuckets);
+
+    /// <summary>The rates seen since the server started, per engine and step count, for <c>/metrics</c>.</summary>
+    public IReadOnlyDictionary<(string Engine, int Steps), Monitoring.Histogram> Rates()
+    {
+        lock (_gate)
+        {
+            return _rates.ToDictionary(pair => pair.Key, pair => pair.Value.Copy());
+        }
+    }
+
+    /// <summary>How long the Neural Engine's programs took to get ready since the server started, in the background or
+    /// while a song waited.</summary>
+    public Monitoring.Histogram AnePrograms()
+    {
+        lock (_gate)
+        {
+            return _anePrograms.Copy();
+        }
+    }
+
     // "Synthesis of 20261023-004449-Chomas/song1 done in 769 s (3.5 s per second of audio, 32 steps, mlx)"
     [GeneratedRegex(@"^Synthesis of (?<song>\S+) done in (?<seconds>[\d.]+) s \((?<rate>[\d.]+) s per second of audio, (?<steps>\d+) steps, (?<engine>[\w+-]+)\)")]
     private static partial Regex SynthesisLine();
@@ -91,10 +120,22 @@ public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<Synt
         {
             if (ParseSynthesis(line, at) is { } synthesis)
             {
+                lock (_gate)
+                {
+                    if (!_rates.TryGetValue((synthesis.Engine, synthesis.Steps), out var histogram))
+                    {
+                        _rates[(synthesis.Engine, synthesis.Steps)] = histogram = new Monitoring.Histogram(RateBuckets);
+                    }
+                    histogram.Observe(synthesis.Rate);
+                }
                 Insert("synthesis", synthesis.Song, synthesis.Engine, synthesis.Steps, synthesis.Seconds, synthesis.Rate, at);
             }
             else if (ParseAnePrograms(line, at) is { } programs)
             {
+                lock (_gate)
+                {
+                    _anePrograms.Observe(programs.Seconds);
+                }
                 Insert("ane-programs", programs.Song, "ane", null, programs.Seconds, null, at);
             }
             else if (AneStartLine().Match(line.Trim()) is { Success: true } start)
@@ -105,7 +146,12 @@ public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<Synt
                 && ready.Groups["done"].Value == ready.Groups["total"].Value
                 && _aneStarted.TryRemove(ready.Groups["song"].Value, out var began))
             {
-                Insert("ane-programs", ready.Groups["song"].Value, Waited, null, Math.Max(0, (at - began).TotalSeconds), null, at);
+                var seconds = Math.Max(0, (at - began).TotalSeconds);
+                lock (_gate)
+                {
+                    _anePrograms.Observe(seconds);
+                }
+                Insert("ane-programs", ready.Groups["song"].Value, Waited, null, seconds, null, at);
             }
         }
         catch (Exception exception)

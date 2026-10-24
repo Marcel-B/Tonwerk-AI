@@ -52,6 +52,12 @@ public sealed class SynthesisStatsTests : IDisposable
         Assert.Equal(["run/song4", "run/song3"], overview.AneRecent.Select(r => r.Song));
         Assert.True(overview.AneRecent[0].Waited);
         Assert.False(overview.AneRecent[1].Waited);
+
+        var metrics = await _client.GetStringAsync("/metrics");
+        Assert.Contains("tonwerk_synthesis_rate_count{engine=\"mlx\",steps=\"32\"} 2\n", metrics);
+        Assert.Contains("tonwerk_synthesis_rate_bucket{engine=\"mlx\",steps=\"32\",le=\"3\"} 1\n", metrics);
+        Assert.Contains("tonwerk_synthesis_rate_sum{engine=\"ane\",steps=\"32\"} 8.3\n", metrics);
+        Assert.Contains("tonwerk_ane_programs_seconds_count 2\n", metrics);
     }
 
     public void Dispose()

@@ -31,9 +31,16 @@ public sealed class MonitoringTests : IDisposable
         Assert.Contains("tonwerk_memory_holder{model=\"yue2\"} 0\n", text);
         Assert.Contains("tonwerk_memory_holder{model=\"ace\"} 0\n", text);
         Assert.Contains("tonwerk_queue_jobs{kind=\"lyrics\"} 0\n", text);
-        Assert.Contains("tonwerk_jobs_finished_total{kind=\"song\",outcome=\"done\"} 0\n", text);
+        Assert.Contains("tonwerk_jobs_finished_total{kind=\"song\",outcome=\"done\",machine=\"Dieser Mac\"} 0\n", text);
         Assert.Contains("tonwerk_disk_free_bytes{volume=\"songs\"} ", text);
         Assert.Contains("process_resident_memory_bytes ", text);
+        Assert.Contains("tonwerk_idle 1\n", text);
+        Assert.Contains("tonwerk_machine_up{machine=\"Dieser Mac\"} 1\n", text);
+        Assert.Contains("tonwerk_jobs_finished_total{kind=\"sketch\",outcome=\"done\",machine=\"Dieser Mac\"} 0\n", text);
+        Assert.Contains("tonwerk_backup_configured 0\n", text);
+        Assert.Contains("tonwerk_loki_shipping 0\n", text);
+        Assert.Contains("tonwerk_loki_lines_dropped_total 0\n", text);
+        Assert.Contains("tonwerk_ane_programs_seconds_count 0\n", text);
         // Every sample line is a name, optional labels and a number.
         Assert.All(text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(line => !line.StartsWith('#')),
             line => Assert.Matches(@"^[a-z_]+(\{[a-z_]+=""[^""]*""(,[a-z_]+=""[^""]*"")*\})? -?[0-9.E+\-]+$|^.+ \+Inf$", line));
@@ -66,14 +73,14 @@ public sealed class MonitoringTests : IDisposable
         // Repeated: still one song.
         _app.Worker.Emit(new { @event = "stage", path = _app.AudioPath(Run, "song1"), stage = "ready", detail = "" });
         _app.Worker.Emit(new { @event = "failed", path = _app.AudioPath(Run, "song2"), message = "out of memory" });
-        await TestApp.WaitUntil(() => Metrics().Result.Contains("tonwerk_jobs_finished_total{kind=\"song\",outcome=\"failed\"} 1\n"));
+        await TestApp.WaitUntil(() => Metrics().Result.Contains("tonwerk_jobs_finished_total{kind=\"song\",outcome=\"failed\",machine=\"Dieser Mac\"} 1\n"));
 
         var text = await Metrics();
-        Assert.Contains("tonwerk_jobs_finished_total{kind=\"song\",outcome=\"done\"} 1\n", text);
-        Assert.Contains("tonwerk_job_duration_seconds_bucket{kind=\"song\",le=\"5\"} 1\n", text);
-        Assert.Contains("tonwerk_job_duration_seconds_bucket{kind=\"song\",le=\"+Inf\"} 1\n", text);
+        Assert.Contains("tonwerk_jobs_finished_total{kind=\"song\",outcome=\"done\",machine=\"Dieser Mac\"} 1\n", text);
+        Assert.Contains("tonwerk_job_duration_seconds_bucket{kind=\"song\",machine=\"Dieser Mac\",le=\"5\"} 1\n", text);
+        Assert.Contains("tonwerk_job_duration_seconds_bucket{kind=\"song\",machine=\"Dieser Mac\",le=\"+Inf\"} 1\n", text);
         // A failed song counts, but its time does not go into the durations.
-        Assert.Contains("tonwerk_job_duration_seconds_count{kind=\"song\"} 1\n", text);
+        Assert.Contains("tonwerk_job_duration_seconds_count{kind=\"song\",machine=\"Dieser Mac\"} 1\n", text);
         Assert.Contains("tonwerk_jobs{kind=\"song\",state=\"running\"} 0\n", text);
     }
 
@@ -147,6 +154,94 @@ public sealed class MonitoringTests : IDisposable
         Assert.Empty(_app.Loki.Pushes());
         var logged = await Client.GetStringAsync("/api/logs?q=Loki");
         Assert.Contains("Loki is off: Monitoring:Loki:Url is not set", logged);
+    }
+
+    [Fact]
+    public async Task Every_metric_the_dashboard_reads_is_written()
+    {
+        var dashboard = File.ReadAllText(Path.Combine(OpenApiTests.RepositoryRoot(), "deploy", "monitoring", "grafana", "dashboards", "tonwerk.json"));
+        var text = await Metrics();
+
+        var names = System.Text.RegularExpressions.Regex.Matches(dashboard, @"\b(tonwerk_[a-z_]+|process_[a-z_]+|dotnet_[a-z_]+)")
+            .Select(match => System.Text.RegularExpressions.Regex.Replace(match.Value, "_(bucket|sum|count)$", ""))
+            .Distinct();
+        Assert.All(names, name => Assert.Contains($"# TYPE {name} ", text));
+    }
+
+    [Fact]
+    public async Task Claudes_tokens_are_counted_by_use_and_model()
+    {
+        var usage = _app.Services.GetRequiredService<Api.Monitoring.CloudUsage>();
+        usage.Record("lyrics", "claude-opus-5-5", 1200, 9000, true, TimeSpan.FromSeconds(30));
+        usage.Record("lyrics", "claude-opus-5-5", 800, 1000, true, TimeSpan.FromSeconds(10));
+        usage.Record("translate", "claude-haiku-5-5", null, null, false, TimeSpan.FromSeconds(1));
+
+        var text = await Metrics();
+
+        Assert.Contains("tonwerk_claude_requests_total{use=\"lyrics\",model=\"claude-opus-5-5\",outcome=\"answered\"} 2\n", text);
+        Assert.Contains("tonwerk_claude_tokens_total{use=\"lyrics\",model=\"claude-opus-5-5\",direction=\"input\"} 2000\n", text);
+        Assert.Contains("tonwerk_claude_tokens_total{use=\"lyrics\",model=\"claude-opus-5-5\",direction=\"output\"} 10000\n", text);
+        Assert.Contains("tonwerk_claude_requests_total{use=\"translate\",model=\"claude-haiku-5-5\",outcome=\"failed\"} 1\n", text);
+    }
+
+    [Fact]
+    public async Task Answers_on_the_writing_page_count_as_jobs()
+    {
+        await Client.GetAsync("/api/health");
+        var hub = _app.Services.GetRequiredService<Api.Status.StatusHub>();
+        var reply = new Api.Writing.WritingReply { Id = "w1", ChatId = "c1", UpdatedAt = DateTimeOffset.UtcNow };
+        hub.Publish("writing", reply);
+        hub.Publish("writing", reply with { Stage = "writing" });
+        await TestApp.WaitUntil(() => Metrics().Result.Contains("tonwerk_jobs{kind=\"writing\",state=\"running\"} 1\n"));
+        hub.Publish("writing", reply with { Stage = "stopped", UpdatedAt = DateTimeOffset.UtcNow.AddSeconds(2) });
+
+        await TestApp.WaitUntil(() =>
+            Metrics().Result.Contains("tonwerk_jobs_finished_total{kind=\"writing\",outcome=\"cancelled\",machine=\"Dieser Mac\"} 1\n"));
+    }
+
+    [Fact]
+    public async Task Who_holds_the_memory_is_logged_under_the_queue()
+    {
+        await Client.GetAsync("/api/health");
+        var memory = _app.Services.GetRequiredService<Api.Memory.ModelMemory>();
+
+        Assert.True(memory.TryClaim(Api.Memory.LargeModel.Speech));
+        memory.Release(Api.Memory.LargeModel.Speech);
+        memory.Release(Api.Memory.LargeModel.Speech);
+
+        var log = await Client.GetStringAsync("/api/logs?source=queue");
+        Assert.Contains("speech takes the memory", log);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(log, "speech gives the memory back after"));
+    }
+
+    [Theory]
+    [InlineData("YueUI.Api.Machines.MachineMonitor", "machines")]
+    [InlineData("YueUI.Api.Sketches.SketchMaker", "sketch")]
+    [InlineData("YueUI.Api.Analysis.SongAnalyzer", "analysis")]
+    [InlineData("YueUI.Api.Timing.LyricsTimer", "analysis")]
+    [InlineData("YueUI.Api.Memory.ModelMemory", "queue")]
+    [InlineData("YueUI.Api.Library.SongLibrary", "server")]
+    public void Log_sources_follow_the_namespace(string category, string source)
+    {
+        Assert.Equal(source, Api.Logs.LogSources.ForCategory(category));
+        Assert.Contains(source, Api.Logs.LogSources.All);
+    }
+
+    [Fact]
+    public async Task Lines_loki_refuses_are_counted_as_dropped()
+    {
+        _app.LokiUrl = "http://loki.test:3100";
+        _app.Loki.Refusals.Enqueue(HttpStatusCode.BadRequest);
+        await Client.GetAsync("/api/health");
+
+        await TestApp.WaitUntil(() => !Metrics().Result.Contains("tonwerk_loki_lines_dropped_total 0\n"));
+
+        // The shipper's own warning about it goes out in the next batch, which Loki takes.
+        Assert.Contains("tonwerk_loki_shipping 1\n", await Metrics());
+        _app.Services.GetRequiredService<ILogger<VoiceConverter>>().LogWarning("Seed-VC failed");
+        await TestApp.WaitUntil(() => Metrics().Result.Contains("tonwerk_loki_failing 0\n"));
+        Assert.Contains("tonwerk_loki_last_sent_timestamp_seconds ", await Metrics());
+        Assert.DoesNotContain("tonwerk_loki_lines_sent_total 0\n", await Metrics());
     }
 
     private Task<string> Metrics() => Client.GetStringAsync("/metrics");

@@ -46,7 +46,9 @@ final class LogSession {
         ("queue", String(localized: "Warteschlange")), ("lyrics", String(localized: "Songtexte")),
         ("voices", String(localized: "Stimmen und Stems")), ("speech", String(localized: "Sprachlabor")),
         ("singing", String(localized: "Singen")),
-        ("images", String(localized: "Cover")), ("ace", "ACE-Step"), ("video", String(localized: "Videos")),
+        ("images", String(localized: "Cover")), ("ace", "ACE-Step"), ("sketch", String(localized: "Ausarbeitung")),
+        ("analysis", String(localized: "Tempo, Tonart und Texttiming")), ("machines", "Macs"),
+        ("video", String(localized: "Videos")),
         ("export", String(localized: "Export und Streaming")), ("logic", "Logic"), ("backup", "Backup"),
         ("push", String(localized: "Benachrichtigungen")), ("update", String(localized: "Updates")),
     ]

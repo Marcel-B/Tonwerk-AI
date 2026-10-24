@@ -178,7 +178,7 @@ public sealed record BusyInfo(bool Busy, IReadOnlyList<string> Reasons);
 /// <param name="Idle">Nothing runs and nothing waits, in any of the models' queues.</param>
 /// <param name="IdleSeconds">Since the last activity; 0 while not idle. Counts from the server's start at most.</param>
 /// <param name="Busy">What <c>GET /api/busy</c> names: what runs or holds the memory.</param>
-/// <param name="Waiting">Kinds of jobs that wait for their turn: song, render, lyrics, transcription, version, stems, swap, video, image, ace, speech, singing.</param>
+/// <param name="Waiting">Kinds of jobs that wait for their turn: song, render, lyrics, transcription, version, stems, swap, video, image, ace, speech, singing, writing, sketch.</param>
 public sealed record IdleInfo(bool Idle, double IdleSeconds, DateTimeOffset? IdleSince, IReadOnlyList<string> Busy, IReadOnlyList<string> Waiting);
 
 /// <summary>

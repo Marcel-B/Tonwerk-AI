@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Anthropic;
 using Anthropic.Exceptions;
@@ -27,6 +28,7 @@ public sealed class ClaudePromptTranslator(
     IOptions<ImageOptions> options,
     IOptions<SketchOptions> keys,
     IHttpClientFactory httpClients,
+    Monitoring.CloudUsage usage,
     ILogger<ClaudePromptTranslator> logger) : IPromptTranslator
 {
     /// <summary>
@@ -65,12 +67,16 @@ public sealed class ClaudePromptTranslator(
             System = System,
             Messages = [new() { Role = Role.User, Content = prompt }],
         };
+        var started = Stopwatch.GetTimestamp();
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(settings.TranslateTimeout);
             var message = await client.Messages.Create(parameters, timeout.Token);
-            if (message.StopReason?.Raw() is not ("end_turn" or null))
+            var answered = message.StopReason?.Raw() is "end_turn" or null;
+            usage.Record("translate", settings.TranslateModel, message.Usage.InputTokens, message.Usage.OutputTokens, answered,
+                Stopwatch.GetElapsedTime(started), logger);
+            if (!answered)
             {
                 logger.LogWarning("Claude did not translate the picture's description: {Reason}", message.StopReason?.Raw());
                 return null;
@@ -89,6 +95,7 @@ public sealed class ClaudePromptTranslator(
         catch (Exception exception) when (exception is AnthropicApiException or HttpRequestException
             || (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
+            usage.Record("translate", settings.TranslateModel, null, null, false, Stopwatch.GetElapsedTime(started));
             logger.LogWarning(exception, "Could not translate the picture's description; it is painted as written");
             return null;
         }

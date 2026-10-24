@@ -201,6 +201,7 @@ builder.Services.AddHostedService(services => services.GetRequiredService<CloudB
 // Every log message, the worker's output and the updater's log in daily files, read on the log page.
 builder.Services.Configure<LogOptions>(builder.Configuration.GetSection(LogOptions.Section));
 builder.Services.AddSingleton<LogFeed>();
+builder.Services.AddSingleton<CloudUsage>();
 builder.Services.AddSingleton<LogStore>();
 builder.Services.AddSingleton<ILoggerProvider, LogStoreProvider>();
 builder.Services.AddSingleton<LogReport>();

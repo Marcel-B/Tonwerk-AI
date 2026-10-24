@@ -58,7 +58,7 @@ public sealed class LokiShipper(
                 {
                     batch.Add(line);
                 }
-                await SendAsync(Body(batch, host), stoppingToken);
+                await SendAsync(Body(batch, host), batch.Count, stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -93,7 +93,7 @@ public sealed class LokiShipper(
 
     private static string Text(LogLine line) => line.Exception is null ? line.Message : line.Message + "\n" + line.Exception;
 
-    private async Task SendAsync(object body, CancellationToken cancellationToken)
+    private async Task SendAsync(object body, int count, CancellationToken cancellationToken)
     {
         for (var attempt = 0; ; attempt++)
         {
@@ -112,7 +112,7 @@ public sealed class LokiShipper(
                 using var response = await clients.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
                 if (response.IsSuccessStatusCode)
                 {
-                    feed.Sent(time.GetUtcNow());
+                    feed.Sent(time.GetUtcNow(), count);
                     if (_failing)
                     {
                         _failing = false;
@@ -125,7 +125,7 @@ public sealed class LokiShipper(
                 // 400 is a line Loki will never take (too old, too long); trying again changes nothing.
                 if ((int)response.StatusCode is >= 400 and < 500 and not 408 and not 429)
                 {
-                    Failed(problem);
+                    Failed(problem, count);
                     return;
                 }
             }
@@ -135,16 +135,16 @@ public sealed class LokiShipper(
             }
             if (attempt >= Retries.Length)
             {
-                Failed(problem);
+                Failed(problem, count);
                 return;
             }
             await Task.Delay(Retries[attempt], cancellationToken);
         }
     }
 
-    private void Failed(string problem)
+    private void Failed(string problem, int count)
     {
-        feed.Failed(time.GetUtcNow());
+        feed.Failed(time.GetUtcNow(), count);
         if (!_failing)
         {
             _failing = true;

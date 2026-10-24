@@ -2,8 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using YueUI.Api.Lyrics;
+using YueUI.Api.Monitoring;
 using YueUI.Api.Sketches;
 using YueUI.Api.Worker;
 
@@ -115,16 +117,21 @@ public sealed class ClaudeLyricsTests : IDisposable
     public async Task The_adapter_asks_Claude_with_the_system_prompt_and_a_photo_as_an_image_block()
     {
         var handler = new ClaudeSketchModelTests.FakeAnthropic(ClaudeSketchModelTests.Stream("[Verse]\nLine", "end_turn"));
+        var usage = new CloudUsage();
         var services = new ServiceCollection();
         services.AddHttpClient(ClaudeSketchModel.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
         var model = new ClaudeLyricsModel(
             Options.Create(new LyricsOptions()),
             Options.Create(new SketchOptions { ApiKey = "test-key" }),
-            services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>());
+            services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>(),
+            usage,
+            NullLogger<ClaudeLyricsModel>.Instance);
 
         var answer = await model.WriteAsync("claude-opus-5-5", "You write song lyrics", "Write lyrics about: rain", "data:image/png;base64,iVBORw0KGgo=", CancellationToken.None);
 
         Assert.Equal("[Verse]\nLine", answer);
+        // The stream's usage, counted for /metrics.
+        Assert.Equal(("lyrics", "claude-opus-5-5", 1L, 0L, 1200L, 9000L), Assert.Single(usage.Totals()));
         var request = handler.Request!;
         Assert.Equal("test-key", handler.Key);
         Assert.Equal("claude-opus-5-5", (string?)request["model"]);
@@ -147,7 +154,9 @@ public sealed class ClaudeLyricsTests : IDisposable
         var model = new ClaudeLyricsModel(
             Options.Create(new LyricsOptions()),
             Options.Create(new SketchOptions { ApiKey = "test-key" }),
-            services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>());
+            services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>(),
+            new CloudUsage(),
+            NullLogger<ClaudeLyricsModel>.Instance);
 
         var error = await Assert.ThrowsAsync<LyricsUnavailableException>(() => model.WriteAsync("claude-opus-5-5", "s", "p", null, CancellationToken.None));
 

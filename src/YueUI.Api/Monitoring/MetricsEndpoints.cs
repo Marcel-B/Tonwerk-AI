@@ -36,6 +36,11 @@ public static class MetricsEndpoints
         var data = services.GetRequiredService<IOptions<DataOptions>>().Value;
         var hub = services.GetRequiredService<Status.StatusHub>();
         var videos = services.GetRequiredService<Video.VideoMaker>();
+        var machines = services.GetRequiredService<Machines.Machines>();
+        var idle = services.GetRequiredService<Status.IdleClock>();
+        var cloud = services.GetRequiredService<CloudUsage>();
+        var backup = services.GetRequiredService<Backup.CloudBackup>();
+        var synthesis = services.GetRequiredService<Stats.SynthesisStats>();
 
         var text = new PrometheusText();
         var version = typeof(MetricsEndpoints).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
@@ -55,8 +60,18 @@ public static class MetricsEndpoints
                 .. Enum.GetValues<Memory.LargeModel>().Select(model =>
                     (Labels(("model", model.ToString().ToLowerInvariant())), holder == model ? 1.0 : 0)),
             ]);
-        text.Gauge("tonwerk_busy", "A restart would cut work off (what GET /api/busy says).",
-            WorkerEndpoints.Busy(worker, memory, videos).Busy ? 1 : 0);
+        var busy = WorkerEndpoints.Busy(worker, memory, videos);
+        text.Gauge("tonwerk_busy", "A restart would cut work off (what GET /api/busy says).", busy.Busy ? 1 : 0);
+        var quiet = idle.Read(busy, jobs);
+        text.Gauge("tonwerk_idle", "Nothing runs or waits in any model's queue (what GET /api/idle and yue-guard read).", quiet.Idle ? 1 : 0);
+        text.Gauge("tonwerk_idle_seconds", "Seconds since the last activity; 0 while something runs or waits.", quiet.IdleSeconds);
+
+        // This Mac is always up; a helper is up when it answered its last poll.
+        var macs = machines.List([]);
+        text.Gauge("tonwerk_machine_up", "The Mac answered its last poll (this one always).",
+            macs.Select(mac => (Labels(("machine", mac.Name)), mac.Reachable ? 1.0 : 0)));
+        text.Gauge("tonwerk_machine_busy", "The Mac's YuE worker generates, its memory is held, or a job of this server runs there.",
+            macs.Select(mac => (Labels(("machine", mac.Name)), mac.Busy || mac.Holder is not null ? 1.0 : 0)));
 
         var queue = hub.Queue;
         text.Gauge("tonwerk_queue_jobs", "Songs, renders, lyrics drafts and transcriptions waiting in the queue for the memory.",
@@ -68,17 +83,58 @@ public static class MetricsEndpoints
             JobMetrics.Kinds.SelectMany(kind => new[] { "waiting", "running" }.Select(state =>
                 (Labels(("kind", kind), ("state", state)), (double)live.GetValueOrDefault((kind, state))))));
 
+        // Every kind and outcome on this Mac from the start, so a rate has a zero to begin with; other Macs once they ran one.
         var finished = jobs.Finished();
-        text.Counter("tonwerk_jobs_finished_total", "Jobs finished since the server started, by outcome.",
-            JobMetrics.Kinds.SelectMany(kind => JobMetrics.Outcomes.Select(outcome =>
-                (Labels(("kind", kind), ("outcome", outcome)), (double)finished.GetValueOrDefault((kind, outcome))))));
+        var local = jobs.LocalMachine;
+        var series = JobMetrics.Kinds.SelectMany(kind => JobMetrics.Outcomes.Select(outcome => (kind, outcome, local)))
+            .Union(finished.Keys)
+            .OrderBy(key => key.Item1, StringComparer.Ordinal).ThenBy(key => key.Item3, StringComparer.Ordinal).ThenBy(key => key.Item2, StringComparer.Ordinal);
+        text.Counter("tonwerk_jobs_finished_total", "Jobs finished since the server started, by outcome and the Mac they ran on (claude for the cloud).",
+            series.Select(key =>
+                (Labels(("kind", key.Item1), ("outcome", key.Item2), ("machine", key.Item3)), (double)finished.GetValueOrDefault(key))));
 
         text.Histograms("tonwerk_job_duration_seconds", "How long finished jobs worked, waiting for the memory left out.",
-            jobs.Durations().OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (Labels(("kind", pair.Key)), pair.Value)));
+            jobs.Durations()
+                .OrderBy(pair => pair.Key.Kind, StringComparer.Ordinal).ThenBy(pair => pair.Key.Machine, StringComparer.Ordinal)
+                .Select(pair => (Labels(("kind", pair.Key.Kind), ("machine", pair.Key.Machine)), pair.Value)));
+
+        text.Histograms("tonwerk_synthesis_rate", "YuE2's seconds of work per second of audio, as the worker reports each synthesis.",
+            synthesis.Rates()
+                .OrderBy(pair => pair.Key.Engine, StringComparer.Ordinal).ThenBy(pair => pair.Key.Steps)
+                .Select(pair => (Labels(("engine", pair.Key.Engine), ("steps", pair.Key.Steps.ToString(CultureInfo.InvariantCulture))), pair.Value)));
+        text.Histograms("tonwerk_ane_programs_seconds", "How long the Neural Engine's programs took to get ready for a song.",
+            [(Labels(), synthesis.AnePrograms())]);
+
+        var usage = cloud.Totals();
+        text.Counter("tonwerk_claude_requests_total", "Calls to Claude since the server started, by use (lyrics, sketch, translate), model and outcome.",
+            usage.SelectMany(entry => new[] { ("answered", entry.Succeeded), ("failed", entry.Failed) }.Select(outcome =>
+                (Labels(("use", entry.Use), ("model", entry.Model), ("outcome", outcome.Item1)), (double)outcome.Item2))));
+        text.Counter("tonwerk_claude_tokens_total", "Tokens Claude read and wrote since the server started, thinking included in output.",
+            usage.SelectMany(entry => new[] { ("input", entry.Input), ("output", entry.Output) }.Select(direction =>
+                (Labels(("use", entry.Use), ("model", entry.Model), ("direction", direction.Item1)), (double)direction.Item2))));
 
         text.Counter("tonwerk_log_lines_total", "Lines of the collected log since the server started, by source and level.",
             feed.Counts.OrderBy(pair => pair.Key.Source, StringComparer.Ordinal).ThenBy(pair => pair.Key.Level, StringComparer.Ordinal)
                 .Select(pair => (Labels(("source", pair.Key.Source), ("level", pair.Key.Level)), (double)pair.Value)));
+
+        var settings = services.GetRequiredService<IOptions<Backup.BackupOptions>>().Value;
+        var (lastRun, succeeded) = backup.Outcome;
+        // Without a value the families still say they exist (no samples), so the dashboard's names stay checkable.
+        text.Gauge("tonwerk_backup_configured", "A Nextcloud for the backup is set.", settings.Configured ? 1 : 0);
+        text.Gauge("tonwerk_backup_last_run_success", "Whether the last backup succeeded.",
+            lastRun is null ? [] : [(Labels(), lastRun.Success ? 1 : 0)]);
+        text.Gauge("tonwerk_backup_last_run_timestamp_seconds", "When the last backup finished, in Unix seconds.",
+            lastRun is null ? [] : [(Labels(), Seconds(lastRun.FinishedAt))]);
+        text.Gauge("tonwerk_backup_last_success_timestamp_seconds", "When a backup last succeeded, in Unix seconds.",
+            succeeded is { } at ? [(Labels(), Seconds(at))] : []);
+
+        // Prometheus pulls, so these show a Loki that stopped taking the log, or a settings file that lost its address.
+        text.Gauge("tonwerk_loki_shipping", "Shipping the log to Loki is configured.", feed.Shipping ? 1 : 0);
+        text.Gauge("tonwerk_loki_failing", "Loki refuses the log or does not answer.", feed.FailingSince is null ? 0 : 1);
+        text.Gauge("tonwerk_loki_last_sent_timestamp_seconds", "When Loki last took a batch, in Unix seconds.",
+            feed.LastSent is { } sent ? [(Labels(), Seconds(sent))] : []);
+        text.Counter("tonwerk_loki_lines_sent_total", "Lines Loki took since the server started.", feed.SentLines);
+        text.Counter("tonwerk_loki_lines_dropped_total", "Lines given up on after Loki refused them or did not answer.", feed.DroppedLines);
 
         List<(IReadOnlyList<(string, string)>, double)> free = [];
         List<(IReadOnlyList<(string, string)>, double)> size = [];
@@ -103,6 +159,8 @@ public static class MetricsEndpoints
     }
 
     private static IReadOnlyList<(string, string)> Labels(params (string, string)[] labels) => labels;
+
+    private static double Seconds(DateTimeOffset time) => time.ToUnixTimeMilliseconds() / 1000.0;
 
     /// <summary>The volume a path lies on, following it up to a folder that exists; null where the system will not say.</summary>
     private static DriveInfo? Drive(string path)

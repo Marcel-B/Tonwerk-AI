@@ -345,6 +345,7 @@ private struct VersionRow: View {
     @Environment(Player.self) private var player
     let song: Song
     let version: Song.Version
+    @State private var confirmDelete = false
 
     private var playing: Bool {
         player.current?.id == song.id && player.current?.version?.id == version.id && player.isPlaying
@@ -376,17 +377,40 @@ private struct VersionRow: View {
                     .font(.caption)
                     .foregroundStyle(version.stage == "failed" ? Color.red : Color.secondary)
             }
+            // Visible, not only in the context menu, which nobody finds on the Mac or the phone.
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
+                Image(systemName: version.playable ? "trash" : "xmark")
+            }
+            .buttonStyle(.borderless)
+            .help(version.playable ? "Version löschen" : "Abbrechen")
+            .accessibilityLabel(version.playable ? "Version löschen" : "Abbrechen")
         }
         .contextMenu {
             Button(role: .destructive) {
-                if player.current?.version?.id == version.id {
-                    player.stop()
-                }
-                Task { try? await model.deleteVersion(song, version) }
+                confirmDelete = true
             } label: {
                 Label(version.playable ? "Version löschen" : "Abbrechen", systemImage: "trash")
             }
         }
+        .confirmationDialog(
+            version.playable ? "Die Version mit \(version.voice) löschen?" : "Die Version mit \(version.voice) abbrechen?",
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button(version.playable ? "Version löschen" : "Version abbrechen", role: .destructive) { delete() }
+            Button("Behalten", role: .cancel) {}
+        } message: {
+            Text("Der Song selbst bleibt erhalten.")
+        }
+    }
+
+    private func delete() {
+        if player.current?.version?.id == version.id {
+            player.stop()
+        }
+        Task { try? await model.deleteVersion(song, version) }
     }
 
     /// Only whole octaves are offered when a version is asked for.

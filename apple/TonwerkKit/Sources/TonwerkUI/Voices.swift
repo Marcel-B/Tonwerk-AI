@@ -223,6 +223,11 @@ final class VoicesSession {
     var clipEnd: Double = 0
     private(set) var adding = false
 
+    // Own voices of the singing page, whose kept phrase can become a reference voice.
+    private(set) var singingVoices: [Components.Schemas.SingingVoiceInfo] = []
+    var singingChoice: String?
+    private(set) var takingOver = false
+
     /// The server's limits (Seed-VC's): it keeps 25 seconds and refuses a part shorter than 3.
     static let keptSeconds = 25.0
     static let minSeconds = 3.0
@@ -270,7 +275,8 @@ final class VoicesSession {
         async let voiceList: Void = loadVoices()
         async let stemList: Void = loadStems()
         async let swapList: Void = loadSwaps()
-        _ = await (voiceList, stemList, swapList)
+        async let singingList: Void = loadSinging()
+        _ = await (voiceList, stemList, swapList, singingList)
         if models.isEmpty, info?.stemsConfigured == true {
             await loadModels()
         }
@@ -283,6 +289,33 @@ final class VoicesSession {
             voicesProblem = nil
         } catch {
             voicesProblem = error.localizedDescription
+        }
+    }
+
+    /// Without the singing page there is nothing to take over; the rest of the page works as before.
+    private func loadSinging() async {
+        singingVoices = ((try? await model.singing())?.voices ?? []).filter { $0.own == true }
+        if !singingVoices.contains(where: { $0.id == singingChoice }) {
+            singingChoice = singingVoices.first?.id
+        }
+    }
+
+    /// Marked by name, since the copy has an id of its own: taking one over twice is allowed but rarely meant.
+    func takenOver(_ voice: Components.Schemas.SingingVoiceInfo) -> Bool {
+        voices.contains { $0.label == voice.label }
+    }
+
+    /// Copies the singing voice's phrase into the reference voices, so versions and swaps can sing with it.
+    func takeOver() async {
+        guard let id = singingChoice, !takingOver else { return }
+        takingOver = true
+        defer { takingOver = false }
+        do {
+            try await model.addReferenceVoice(fromSinging: id)
+            problem = nil
+            await loadVoices()
+        } catch {
+            problem = error.localizedDescription
         }
     }
 
@@ -798,6 +831,11 @@ extension AppModel {
         if let start { fields.append(("startSeconds", String(start))) }
         if let end { fields.append(("endSeconds", String(end))) }
         _ = try await upload(address("api/voices"), fields: fields, fileField: "file", file: file, accept: [201])
+    }
+
+    /// An own voice of the singing page as a reference voice (`singingVoice` instead of a file), under its own name.
+    func addReferenceVoice(fromSinging id: String) async throws {
+        _ = try await postForm(address("api/voices"), fields: [("singingVoice", id)], accept: [201])
     }
 
     func deleteReferenceVoice(_ id: String) async throws {

@@ -416,7 +416,7 @@ extension AppModel {
     }
 
     /// A multipart form of text fields only.
-    private func postForm(_ url: URL, fields: [(String, String)], accept: Set<Int>) async throws -> Data {
+    func postForm(_ url: URL, fields: [(String, String)], accept: Set<Int>) async throws -> Data {
         let boundary = "tonwerk-\(UUID().uuidString)"
         var body = Data()
         for (name, value) in fields {

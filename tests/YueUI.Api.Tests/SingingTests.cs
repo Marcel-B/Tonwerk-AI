@@ -5,6 +5,7 @@ using Melanchall.DryWetMidi.Common;
 using Melanchall.DryWetMidi.Core;
 using YueToLogic.Core.Abc;
 using YueUI.Api.Singing;
+using YueUI.Api.Voices;
 
 namespace YueUI.Api.Tests;
 
@@ -217,6 +218,30 @@ public sealed class SingingTests : IDisposable
         Assert.Equal(["en", "zh"], (await client.GetFromJsonAsync<SingingInfo>("/api/singing", TestApp.Json))!.Voices.Select(v => v.Id));
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/singing/voices/{voice.Id}/audio")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/singing/voices/{voice.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task An_own_singing_voice_becomes_a_reference_voice_for_swaps_and_versions()
+    {
+        var client = _app.CreateClient();
+        var voice = (await (await client.PostAsync("/api/singing/voices", Form([1, 2], "a.wav", ("label", "Marcel"), ("lyrics", "la la"))))
+            .Content.ReadFromJsonAsync<SingingVoiceCreated>(TestApp.Json))!.Voice;
+        var phrase = await File.ReadAllBytesAsync(Path.Combine(_app.Root, "singing", "voices", $"{voice.Id}.wav"));
+
+        var response = await client.PostAsync("/api/voices", Form(null, null, ("singingVoice", voice.Id)));
+
+        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        Assert.Equal("Marcel", (await response.Content.ReadFromJsonAsync<ReferenceVoice>(TestApp.Json))!.Label);
+        Assert.Equal("Marcel", _app.Voice.Form["label"]);
+        Assert.Equal($"{phrase.Length} bytes", _app.Voice.Form["file"]);
+
+        var named = await client.PostAsync("/api/voices", Form(null, null, ("singingVoice", voice.Id), ("label", "Marcel gesungen")));
+        Assert.Equal(HttpStatusCode.Created, named.StatusCode);
+        Assert.Equal("Marcel gesungen", _app.Voice.Form["label"]);
+
+        // Only own voices, and never beside a file.
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/voices", Form(null, null, ("singingVoice", "en")))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/voices", Form([1], "a.wav", ("singingVoice", voice.Id)))).StatusCode);
     }
 
     [Fact]

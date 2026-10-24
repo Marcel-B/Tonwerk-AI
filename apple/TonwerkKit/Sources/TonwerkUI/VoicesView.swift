@@ -212,9 +212,45 @@ private struct VoicesSessionView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!session.canAdd)
             }
+            if !session.singingVoices.isEmpty {
+                fromSinging
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
+    }
+
+    /// The singing page's own voices: their kept phrase sings versions and swaps too, without recording it again.
+    private var fromSinging: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+            Text("Eigene Stimme aus „Singen“")
+                .font(.subheadline.weight(.semibold))
+            Text("Die Phrase, die „Singen“ von deiner Aufnahme behalten hat (3 bis 12 s), wird hier zur Stimme für Fassungen und „Spur tauschen“. Für den vollen Klang lieber die ganze Aufnahme hochladen.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Picker("Stimme", selection: $session.singingChoice) {
+                    ForEach(session.singingVoices, id: \.id) { voice in
+                        Text(session.takenOver(voice) ? String(localized: "\(voice.label) (schon übernommen)") : voice.label)
+                            .tag(Optional(voice.id))
+                    }
+                }
+                .labelsHidden()
+                Button {
+                    Task { await session.takeOver() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if session.takingOver {
+                            ProgressView().controlSize(.small)
+                        }
+                        Text("Übernehmen")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(session.takingOver || session.singingChoice == nil)
+            }
+        }
     }
 
     /// A recording often starts with talking or silence: the part to keep is found by ear, the server cuts it.

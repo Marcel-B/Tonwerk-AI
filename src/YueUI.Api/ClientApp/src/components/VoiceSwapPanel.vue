@@ -20,6 +20,8 @@ const props = defineProps<{
   live: SwapState[]
   /** The server can separate, so a whole song can be uploaded. */
   canSeparate: boolean
+  /** Counted up when the voices above change, so the picker offers a voice just added (one from the singing page). */
+  voicesRevision?: number
 }>()
 
 const emit = defineEmits<{ error: [message: string]; notice: [message: string] }>()
@@ -64,6 +66,15 @@ watch(
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => props.voicesRevision,
+  () => {
+    if (props.active) {
+      void loadVoices()
+    }
+  },
 )
 
 /** The live state wins: it is at least as new as the list. */

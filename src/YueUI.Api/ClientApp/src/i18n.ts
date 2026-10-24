@@ -1161,6 +1161,11 @@ const messages = {
     voiceFile: 'Aufnahme',
     voiceAdd: 'Hochladen',
     voiceAdding: 'Lädt hoch …',
+    voiceFromSinging: 'Eigene Stimme aus „Singen“',
+    voiceFromSingingAdd: 'Übernehmen',
+    voiceFromSingingTaken: 'schon übernommen',
+    voiceFromSingingHint:
+      'Die Phrase, die „Singen“ von deiner Aufnahme behalten hat (3 bis 12 s), wird hier zur Stimme für Fassungen und „Spur tauschen“. Für den vollen Klang lieber die ganze Aufnahme hochladen.',
     voiceFileHint:
       'Am besten 10 bis 25 Sekunden trockener Gesang ohne Musik. Nach der Wahl der Aufnahme lässt sich der Ausschnitt einstellen; behalten werden höchstens 25 Sekunden.',
     voiceTrimStart: 'Start (s)',
@@ -2579,6 +2584,11 @@ const messages = {
     voiceFile: 'Recording',
     voiceAdd: 'Upload',
     voiceAdding: 'Uploading …',
+    voiceFromSinging: 'Own voice from “Sing”',
+    voiceFromSingingAdd: 'Take over',
+    voiceFromSingingTaken: 'already taken over',
+    voiceFromSingingHint:
+      'The phrase “Sing” kept of your recording (3 to 12 s) becomes a voice for versions and “Swap a vocal track”. For the full sound, rather upload the whole recording.',
     voiceFileHint:
       'Ideally 10 to 25 seconds of dry singing without music. Once a recording is chosen, the part to keep can be set; at most 25 seconds are kept.',
     voiceTrimStart: 'Start (s)',

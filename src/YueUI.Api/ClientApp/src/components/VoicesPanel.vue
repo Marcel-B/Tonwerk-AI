@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import Slider from 'primevue/slider'
 import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
-import { addVoice, deleteVoice, listVoices, voiceAudioUrl } from '../api'
+import Select from 'primevue/select'
+import { addVoice, addVoiceFromSinging, deleteVoice, getSinging, listVoices, voiceAudioUrl } from '../api'
 import { formatDateTime, formatDuration, locale, t, versionProgress } from '../i18n'
 import { peaksOf } from '../waveform'
 import NumberField from './NumberField.vue'
 import WaveformView from './WaveformView.vue'
-import type { ReferenceVoice, VersionState } from '../types'
+import type { ReferenceVoice, SingingVoiceInfo, VersionState } from '../types'
 import { showSong } from '../view'
 
 /**
@@ -21,7 +22,11 @@ const props = defineProps<{
   versions: VersionState[]
 }>()
 
-const emit = defineEmits<{ error: [message: string] }>()
+const emit = defineEmits<{
+  error: [message: string]
+  /** A voice was added or deleted, so other lists of them (the swap's picker) read them again. */
+  changed: []
+}>()
 
 const voices = ref<ReferenceVoice[] | null>(null)
 const loading = ref(false)
@@ -44,6 +49,7 @@ watch(
   (active) => {
     if (active && !loading.value) {
       void load()
+      void loadSinging()
     }
   },
   { immediate: true },
@@ -73,6 +79,7 @@ async function add(): Promise<void> {
   try {
     const [start, end] = trimmed.value
     await addVoice(label.value.trim(), file.value, start, end)
+    emit('changed')
     label.value = ''
     file.value = null
     setPreview(null)
@@ -84,6 +91,53 @@ async function add(): Promise<void> {
     emit('error', message(caught))
   } finally {
     adding.value = false
+  }
+}
+
+// ---- From the singing page -------------------------------------------------------------------------
+
+/**
+ * The singing page's own voices, recorded there with the words they sing. Their phrase is a reference Seed-VC takes as
+ * it is, so one can be copied over instead of recorded again; the copy is a voice of its own here, kept when the
+ * singing voice is deleted.
+ */
+const singingVoices = ref<SingingVoiceInfo[]>([])
+const singingChoice = ref<string | null>(null)
+const takingOver = ref(false)
+
+async function loadSinging(): Promise<void> {
+  try {
+    singingVoices.value = (await getSinging()).voices.filter((v) => v.own)
+    if (!singingVoices.value.some((v) => v.id === singingChoice.value)) {
+      singingChoice.value = singingVoices.value[0]?.id ?? null
+    }
+  } catch {
+    // Without the singing page there is nothing to take over; the rest of the page works as before.
+    singingVoices.value = []
+  }
+}
+
+/** Marked by name, since the copy has an id of its own: taking one over twice is allowed but rarely meant. */
+const singingOptions = computed(() =>
+  singingVoices.value.map((v) => ({
+    id: v.id,
+    label: voices.value?.some((r) => r.label === v.label) ? `${v.label} (${t('voiceFromSingingTaken')})` : v.label,
+  })),
+)
+
+async function takeOver(): Promise<void> {
+  if (!singingChoice.value || takingOver.value) {
+    return
+  }
+  takingOver.value = true
+  try {
+    await addVoiceFromSinging(singingChoice.value)
+    await load()
+    emit('changed')
+  } catch (caught) {
+    emit('error', message(caught))
+  } finally {
+    takingOver.value = false
   }
 }
 
@@ -212,6 +266,7 @@ async function remove(voice: ReferenceVoice): Promise<void> {
     stop()
     await deleteVoice(voice.id)
     await load()
+    emit('changed')
   } catch (caught) {
     emit('error', message(caught))
   }
@@ -316,6 +371,29 @@ const stageSeverity: Record<string, string | undefined> = {
         />
       </li>
     </ul>
+
+    <div v-if="singingVoices.length > 0" class="flex flex-wrap items-end gap-3 border-t border-surface pt-4">
+      <div class="flex min-w-0 flex-[1_1_12rem] flex-col gap-1">
+        <label for="voice-from-singing" class="muted text-sm">{{ t('voiceFromSinging') }}</label>
+        <Select
+          v-model="singingChoice"
+          input-id="voice-from-singing"
+          :options="singingOptions"
+          option-label="label"
+          option-value="id"
+          :disabled="takingOver"
+          fluid
+        />
+      </div>
+      <Button
+        :label="t('voiceFromSingingAdd')"
+        icon="pi pi-copy"
+        :loading="takingOver"
+        :disabled="takingOver || !singingChoice"
+        @click="takeOver"
+      />
+      <p class="muted m-0 basis-full text-sm">{{ t('voiceFromSingingHint') }}</p>
+    </div>
 
     <form class="flex flex-wrap items-end gap-3 border-t border-surface pt-4" @submit.prevent="add">
       <div class="flex min-w-0 flex-[1_1_12rem] flex-col gap-1">

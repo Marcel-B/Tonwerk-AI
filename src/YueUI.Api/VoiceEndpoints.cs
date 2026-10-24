@@ -94,17 +94,35 @@ public static class VoiceEndpoints
         IFormFile? file,
         [FromForm] double? startSeconds,
         [FromForm] double? endSeconds,
+        [FromForm] string? singingVoice,
         VoiceEngine voices,
+        SqliteSingingStore singing,
         CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
+        // A voice of one's own from the singing page: its phrase (3 to 12 s of the recording, 24 kHz) is a reference
+        // Seed-VC takes as it is, so it is copied over like an upload rather than recorded twice.
+        var sung = singingVoice is null ? null : singing.Voices().FirstOrDefault(v => v.Id == singingVoice);
+        var sungAudio = sung is null ? null : singing.VoiceAudioPath(sung.Id);
+        if (singingVoice is not null)
+        {
+            if (sung is null || !File.Exists(sungAudio))
+            {
+                errors["singingVoice"] = ["An own voice of the singing page."];
+            }
+            if (file is not null)
+            {
+                errors["file"] = ["Either a recording or a voice of the singing page, not both."];
+            }
+            label = string.IsNullOrWhiteSpace(label) ? sung?.Label : label;
+        }
+        else if (file is null || file.Length == 0)
+        {
+            errors["file"] = ["A recording of the voice: WAV, MP3, FLAC, M4A or OGG."];
+        }
         if (string.IsNullOrWhiteSpace(label) || label.Trim().Length > 100)
         {
             errors["label"] = ["A name for the voice, up to 100 characters."];
-        }
-        if (file is null || file.Length == 0)
-        {
-            errors["file"] = ["A recording of the voice: WAV, MP3, FLAC, M4A or OGG."];
         }
         // Checked here too so the form hears it in its own words; ChangeMyVoice refuses the same.
         if (startSeconds is { } start && (!double.IsFinite(start) || start < 0))
@@ -121,8 +139,9 @@ public static class VoiceEndpoints
         }
         return await Call(async () =>
         {
-            await using var audio = file!.OpenReadStream();
-            var voice = await voices.AddVoiceAsync(label!.Trim(), audio, file.FileName, startSeconds, endSeconds, cancellationToken);
+            await using var audio = file?.OpenReadStream() ?? File.OpenRead(sungAudio!);
+            var fileName = file?.FileName ?? $"{sung!.Id}.wav";
+            var voice = await voices.AddVoiceAsync(label!.Trim(), audio, fileName, startSeconds, endSeconds, cancellationToken);
             return Results.Created($"/api/voices/{voice.Id}", voice);
         });
     }

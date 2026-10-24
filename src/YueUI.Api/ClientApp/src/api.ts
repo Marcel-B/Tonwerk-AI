@@ -554,6 +554,19 @@ export async function addVoice(label: string, file: File, start?: number, end?: 
   return (await send('/api/voices', { method: 'POST', body: form })).json() as Promise<ReferenceVoice>
 }
 
+/**
+ * Copies an own voice of the singing page (its 3 to 12 s phrase) into the reference voices, so versions and swaps can
+ * sing with it; it keeps the singing voice's name unless another is given.
+ */
+export async function addVoiceFromSinging(singingVoice: string, label?: string): Promise<ReferenceVoice> {
+  const form = new FormData()
+  form.append('singingVoice', singingVoice)
+  if (label) {
+    form.append('label', label)
+  }
+  return (await send('/api/voices', { method: 'POST', body: form })).json() as Promise<ReferenceVoice>
+}
+
 /** Every uploaded recording sung with another voice, newest first. */
 export async function listSwaps(): Promise<SwapState[]> {
   return (await send('/api/swaps')).json() as Promise<SwapState[]>

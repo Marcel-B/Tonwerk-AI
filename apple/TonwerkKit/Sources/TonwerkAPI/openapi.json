@@ -2495,6 +2495,9 @@
                   "endSeconds": {
                     "type": "number",
                     "format": "double"
+                  },
+                  "singingVoice": {
+                    "type": "string"
                   }
                 }
               }

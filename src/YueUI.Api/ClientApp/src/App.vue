@@ -396,6 +396,8 @@ const badges = computed<Partial<Record<View, number>>>(() => ({
  * only what is there.
  */
 const voiceInfo = ref<VoiceInfo>({ voicesConfigured: false, conversionConfigured: false, stemsConfigured: false })
+/** Counted up when the reference voices change, so the swap's picker reads them again. */
+const voicesRevision = ref(0)
 const voicesPage = computed(() => voiceInfo.value.voicesConfigured || voiceInfo.value.stemsConfigured)
 getVoiceInfo()
   .then((info) => (voiceInfo.value = info))
@@ -967,7 +969,12 @@ async function useAsAceTemplate(songId: string): Promise<void> {
         <h2>{{ t('voices') }}</h2>
       </template>
       <template #content>
-        <VoicesPanel :active="view === 'voices'" :versions="versions" @error="show($event, true)" />
+        <VoicesPanel
+          :active="view === 'voices'"
+          :versions="versions"
+          @changed="voicesRevision++"
+          @error="show($event, true)"
+        />
       </template>
     </Card>
     <Card v-if="voiceInfo.voicesConfigured">
@@ -979,6 +986,7 @@ async function useAsAceTemplate(songId: string): Promise<void> {
           :active="view === 'voices'"
           :live="swaps"
           :can-separate="voiceInfo.conversionConfigured"
+          :voices-revision="voicesRevision"
           @notice="show($event)"
           @error="show($event, true)"
         />

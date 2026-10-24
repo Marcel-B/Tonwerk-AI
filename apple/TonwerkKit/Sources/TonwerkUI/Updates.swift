@@ -7,7 +7,9 @@ import SwiftUI
 /// replaces the app and starts it again. In the sandbox it installs through its own launcher service
 /// (`SUEnableInstallerLauncherService`, the mach-lookup exception in Tonwerk.entitlements); the app's network
 /// entitlement lets it download itself. Builds from Xcode carry no key (release-mac.yml puts it in), so there the
-/// updater stays off rather than complaining about a missing key.
+/// updater stays off rather than complaining about a missing key. Info.plist switches automatic checks on
+/// (`SUEnableAutomaticChecks`, so Sparkle does not first ask on the second launch, where a "no" turned them off for
+/// good) and looks every six hours (`SUScheduledCheckInterval`), since releases follow every app change on main.
 @MainActor
 @Observable
 public final class AppUpdates {
@@ -20,7 +22,7 @@ public final class AppUpdates {
 
     public var available: Bool { controller != nil }
 
-    /// Whether Sparkle looks once a day by itself; the user switches it in the settings, Sparkle keeps it.
+    /// Whether Sparkle looks by itself (every six hours); the user switches it in the settings, Sparkle keeps it.
     public var checksAutomatically: Bool = false {
         didSet { controller?.updater.automaticallyChecksForUpdates = checksAutomatically }
     }

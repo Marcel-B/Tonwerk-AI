@@ -7,10 +7,14 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 	<key>SUEnableInstallerLauncherService</key>
 	<true/>
 	<key>SUFeedURL</key>
 	<string>https://github.com/Marcel-B/Tonwerk-AI/releases/latest/download/appcast.xml</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>21600</integer>
 	<key>SUPublicEDKey</key>
 	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
 	<key>UIBackgroundModes</key>

@@ -56,6 +56,31 @@ public sealed class LyricsTimingTests : IDisposable
     }
 
     [Fact]
+    public void Lines_are_cut_as_the_player_shows_them()
+    {
+        const string paragraph =
+            "[Intro] (Heavy distorted synth bass intro, 140 BPM)\n\n" +
+            "[Verse 1] (Cold, robotic female vocals) Neon rain on carbon glass The ghosts of who we were, they pass " +
+            "Where does the circuit end, and I begin? (Slightly more aggressive) I traded breath for silver veins\n\n" +
+            "[Chorus]\nHold on";
+
+        var lines = LyricsAligner.SungLines(paragraph);
+
+        Assert.Equal(
+            [
+                ("Neon rain on carbon glass", "Verse 1"),
+                ("The ghosts of who we were, they pass", "Verse 1"),
+                ("Where does the circuit end, and I begin?", "Verse 1"),
+                ("I traded breath for silver veins", "Verse 1"),
+                ("Hold on", "Chorus"),
+            ],
+            lines);
+        // German nouns are capitalised, so only sentence ends break a German paragraph.
+        const string german = "Ich laufe durch die Stadt im Regen und der Wind singt mir ein Lied von Morgen";
+        Assert.Equal([german], LyricsAligner.SungLines(german).Select(line => line.Text));
+    }
+
+    [Fact]
     public void Subtitles_are_numbered_with_comma_milliseconds()
     {
         var timing = new LyricsTiming([new TimedLine("Rain", null, 1.5, 62.25, 1)], "mix", 1, DateTimeOffset.UnixEpoch);
@@ -104,6 +129,34 @@ public sealed class LyricsTimingTests : IDisposable
         // Deleting the song deletes its timing.
         await client.DeleteAsync($"/api/songs/{run}/song1");
         Assert.Empty(Directory.EnumerateFiles(Path.Combine(_app.Root, "lyrics-timing"), "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task A_timing_of_other_lines_is_answered_and_heard_again()
+    {
+        const string run = "20260921-165850-Neon-Night";
+        _app.AddSong(run, "song1");
+        _app.Listener.Installed = true;
+        _app.Listener.Words = Heard(5, "La", "la");
+        // Made before the lines were cut as shown, or for lyrics changed since.
+        var old = new LyricsTiming([new TimedLine("[verse] La la", null, 1, 2, 2)], "mix", 1, DateTimeOffset.UnixEpoch);
+        var path = Path.Combine(_app.Root, "lyrics-timing", run, "song1.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(old, TestApp.Json));
+        var client = _app.CreateClient();
+
+        var first = (await client.GetFromJsonAsync<TimingAnswer>($"/api/songs/{run}/song1/timing", TestApp.Json))!;
+        Assert.Equal("[verse] La la", Assert.Single(first.Timing!.Lines).Text);
+        Assert.NotEqual("none", first.Info.State);
+
+        TimingAnswer? after = null;
+        for (var tries = 0; tries < 100 && after?.Timing?.Lines[0].Text != "La la"; tries++)
+        {
+            await Task.Delay(50);
+            after = await client.GetFromJsonAsync<TimingAnswer>($"/api/songs/{run}/song1/timing", TestApp.Json);
+        }
+        Assert.Equal(("La la", 5.0), (after!.Timing!.Lines[0].Text, after.Timing.Lines[0].Start));
+        Assert.Single(_app.Listener.Calls);
     }
 
     [Fact]

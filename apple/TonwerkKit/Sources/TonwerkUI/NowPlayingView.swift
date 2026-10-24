@@ -313,7 +313,6 @@ struct NowPlayingView: View {
             ask = false
             if let lines = answer.lines {
                 times = lines
-                return
             }
             guard answer.waiting else { return }
             try? await Task.sleep(for: .seconds(10))
@@ -335,7 +334,7 @@ private struct LyricsPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(shown.enumerated()), id: \.offset) { index, line in
-                        row(line, current: index == active)
+                        row(line, index: index, current: index == active)
                             .id(index)
                     }
                 }
@@ -359,7 +358,7 @@ private struct LyricsPanel: View {
     }
 
     @ViewBuilder
-    private func row(_ line: ShownLine, current: Bool) -> some View {
+    private func row(_ line: ShownLine, index: Int, current: Bool) -> some View {
         if line.section {
             Text(line.text)
                 .font(.caption.weight(.semibold))
@@ -379,12 +378,13 @@ private struct LyricsPanel: View {
                 .animation(.easeOut(duration: 0.3), value: current)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-                .onTapGesture { jump(to: line) }
+                .onTapGesture { jump(to: index) }
         }
     }
 
-    private func jump(to line: ShownLine) {
-        guard let times, let start = line.start(in: times) else { return }
+    private func jump(to index: Int) {
+        guard let times, let start = ShownLine.start(of: index, in: ShownLine.lines(of: lyrics, directions: directions), times: times)
+        else { return }
         player.seek(to: start)
     }
 }

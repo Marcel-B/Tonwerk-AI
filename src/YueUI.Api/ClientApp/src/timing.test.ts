@@ -97,7 +97,26 @@ describe('lyrics shown cleaned', () => {
     expect(at(41)).toBe('Hold on')
     expect(shownAt(lines, paragraphTiming, 8)).toBe(-1)
     const third = lines.find((line) => line.text.startsWith('Where does'))!
-    expect(shownStart(third, paragraphTiming)).toBe(23)
+    expect(shownStart(lines, lines.indexOf(third), paragraphTiming)).toBe(23)
+  })
+
+  it('takes a timing of the shown lines one by one, as the server now makes it', () => {
+    const lines = shownLines(paragraph)
+    const texts = [
+      'Neon rain on carbon glass',
+      'The ghosts of who we were, they pass',
+      'Where does the circuit end, and I begin?',
+      'I traded breath for silver veins',
+      'Hold on',
+    ]
+    const exact: LyricsTiming = {
+      ...timing,
+      lines: texts.map((text, i) => ({ text, section: null, start: 10 + i * 10, end: 18 + i * 10, heard: 4 })),
+    }
+    expect(lines[shownAt(lines, exact, 21)]!.text).toBe('The ghosts of who we were, they pass')
+    expect(lines[shownAt(lines, exact, 51)]!.text).toBe('Hold on')
+    const third = lines.findIndex((line) => line.text.startsWith('Where does'))
+    expect(shownStart(lines, third, exact)).toBe(30)
   })
 
   it('tells whether there is anything to show', () => {

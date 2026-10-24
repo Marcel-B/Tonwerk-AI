@@ -20,7 +20,7 @@ import {
 } from '../player'
 import { getTiming, requestTiming } from '../api'
 import { rate, ratingOf } from '../ratings'
-import { hasDirections, shownAt, shownLines, shownStart, type ShownLine } from '../timing'
+import { hasDirections, shownAt, shownLines, shownStart } from '../timing'
 import type { LyricsTiming } from '../types'
 import { readBands, reducedMotion, setVisual, visuals } from '../spectrum'
 import { coverColour } from '../video'
@@ -138,7 +138,9 @@ async function loadTiming(songId: string, ask: boolean): Promise<void> {
     }
     if (answer.timing) {
       timing.value = { songId, value: answer.timing }
-    } else if (answer.info.state === 'queued' || answer.info.state === 'listening') {
+    }
+    // Also with a timing: an old one is heard again with the lines cut as shown here.
+    if (answer.info.state === 'queued' || answer.info.state === 'listening') {
       timingPoll = window.setTimeout(() => void loadTiming(songId, false), 10_000)
     }
   } catch {
@@ -174,8 +176,8 @@ watch(activeLine, async (index) => {
   line?.scrollIntoView({ block: 'center', behavior: reducedMotion.value ? 'auto' : 'smooth' })
 })
 
-function seekLine(line: ShownLine): void {
-  const start = shownStart(line, currentTiming.value)
+function seekLine(index: number): void {
+  const start = shownStart(lyricLines.value, index, currentTiming.value)
   if (start !== null) {
     scrolledByHand = 0
     seek(start)
@@ -384,7 +386,7 @@ onBeforeUnmount(() => {
               v-else-if="line.text"
               :class="['line', { active: index === activeLine }]"
               :data-shown="index"
-              @click="currentTiming && line.timed >= 0 && seekLine(line)"
+              @click="currentTiming && line.timed >= 0 && seekLine(index)"
             >
               {{ line.text }}
             </p>

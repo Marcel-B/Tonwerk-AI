@@ -140,13 +140,29 @@ function shareTime(sung: ShownLine[]): void {
 }
 
 /**
- * The shown line sung at `seconds`, an index into `lines`, or -1: the timed line from `lineAt`, then the piece of it
- * whose share of its time has begun.
+ * The shown lines the server timed one by one, in its order, or null for a timing made before it cut lines as the
+ * player does (Timing/LyricsAligner.cs `SungLines`); the server hears such a song again, meanwhile `from`/`to` divide
+ * each old line's time.
+ */
+function timedOneByOne(lines: ShownLine[], timing: LyricsTiming): number[] | null {
+  const sung = lines.flatMap((line, i) => (line.timed >= 0 && /[\p{L}\p{N}]/u.test(line.text) ? [i] : []))
+  return sung.length === timing.lines.length && sung.every((i, n) => lines[i]!.text === timing.lines[n]!.text)
+    ? sung
+    : null
+}
+
+/**
+ * The shown line sung at `seconds`, an index into `lines`, or -1: the timed line from `lineAt`, then, for an older
+ * timing, the piece of it whose share of its time has begun.
  */
 export function shownAt(lines: ShownLine[], timing: LyricsTiming | null, seconds: number): number {
   const timed = lineAt(timing, seconds)
   if (timed < 0) {
     return -1
+  }
+  const exact = timedOneByOne(lines, timing!)
+  if (exact) {
+    return exact[timed]!
   }
   const line = timing!.lines[timed]!
   const share = line.end > line.start ? (seconds - line.start) / (line.end - line.start) : 0
@@ -159,9 +175,18 @@ export function shownAt(lines: ShownLine[], timing: LyricsTiming | null, seconds
   return found
 }
 
-/** Where a shown line starts, for a tap on it: its timed line's start plus its share. */
-export function shownStart(piece: ShownLine, timing: LyricsTiming | null): number | null {
-  const line = piece.timed >= 0 ? timing?.lines[piece.timed] : undefined
+/** Where a shown line starts, for a tap on it: its own timed line's start, or for an older timing its share of one. */
+export function shownStart(lines: ShownLine[], index: number, timing: LyricsTiming | null): number | null {
+  const piece = lines[index]
+  if (!timing || !piece || piece.timed < 0) {
+    return null
+  }
+  const exact = timedOneByOne(lines, timing)
+  if (exact) {
+    const n = exact.indexOf(index)
+    return n >= 0 ? timing.lines[n]!.start : null
+  }
+  const line = timing.lines[piece.timed]
   return line ? line.start + piece.from * (line.end - line.start) : null
 }
 

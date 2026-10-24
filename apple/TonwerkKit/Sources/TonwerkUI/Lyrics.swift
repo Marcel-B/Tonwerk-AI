@@ -74,10 +74,20 @@ struct ShownLine: Equatable {
         return shown
     }
 
-    /// The shown line sung at `seconds`, an index into `lines`: the timed line from `LineTimes.line`, then the piece
-    /// of it whose share of its time has begun.
+    /// The shown lines the server timed one by one, in its order, or nil for a timing made before it cut lines as the
+    /// player does (`LyricsAligner.SungLines`); the server hears such a song again, meanwhile `from`/`to` divide each
+    /// old line's time.
+    static func timedOneByOne(_ lines: [ShownLine], times: [LineTimes]) -> [Int]? {
+        let sung = lines.indices.filter { lines[$0].timed != nil && hasLetter(lines[$0].text) }
+        guard sung.count == times.count, zip(sung, times).allSatisfy({ lines[$0].text == $1.text }) else { return nil }
+        return sung
+    }
+
+    /// The shown line sung at `seconds`, an index into `lines`: the timed line from `LineTimes.line`, then, for an
+    /// older timing, the piece of it whose share of its time has begun.
     static func shown(at seconds: Double, in lines: [ShownLine], times: [LineTimes]) -> Int? {
         guard let timed = LineTimes.line(at: seconds, in: times) else { return nil }
+        if let exact = timedOneByOne(lines, times: times) { return exact[timed] }
         let line = times[timed]
         let share = line.end > line.start ? (seconds - line.start) / (line.end - line.start) : 0
         var found: Int?
@@ -87,10 +97,14 @@ struct ShownLine: Equatable {
         return found
     }
 
-    /// Where this line starts, for a tap on it: its timed line's start plus its share.
-    func start(in times: [LineTimes]) -> Double? {
-        guard let timed, times.indices.contains(timed) else { return nil }
-        return times[timed].start + from * (times[timed].end - times[timed].start)
+    /// Where a shown line starts, for a tap on it: its own timed line's start, or for an older timing its share of one.
+    static func start(of index: Int, in lines: [ShownLine], times: [LineTimes]) -> Double? {
+        guard lines.indices.contains(index), let timed = lines[index].timed else { return nil }
+        if let exact = timedOneByOne(lines, times: times) {
+            return exact.firstIndex(of: index).map { times[$0].start }
+        }
+        guard times.indices.contains(timed) else { return nil }
+        return times[timed].start + lines[index].from * (times[timed].end - times[timed].start)
     }
 
     /// Whether the lyrics hold directions in round brackets, so the player offers to show them.
@@ -171,6 +185,8 @@ struct ShownLine: Equatable {
 struct LineTimes: Equatable {
     let start: Double
     let end: Double
+    /// The line as the server timed it, to tell whether it timed the shown lines one by one.
+    var text: String?
 
     /// The timed line sung at `seconds`: the last one started, until the next starts; nil before the first and in a
     /// break that lasts more than four seconds past a line's end, as the web player lights it.
@@ -192,9 +208,11 @@ extension AppModel {
         {
             answer = started
         }
-        if let timing = answer.timing {
-            return (timing.lines.map { LineTimes(start: $0.start, end: $0.end) }, false)
+        let waiting = answer.info.state == "queued" || answer.info.state == "listening"
+        // Also with a timing: an old one is heard again with the lines cut as the player shows them.
+        let lines = answer.timing.map { timing in
+            timing.lines.map { LineTimes(start: $0.start, end: $0.end, text: $0.text) }
         }
-        return (nil, answer.info.state == "queued" || answer.info.state == "listening")
+        return (lines, waiting)
     }
 }

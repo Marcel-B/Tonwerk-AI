@@ -59,8 +59,23 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(at(39), "I traded breath for silver veins")
         XCTAssertEqual(at(41), "Hold on")
         XCTAssertNil(at(8))
-        let third = lines.first { $0.text.hasPrefix("Where does") }
-        XCTAssertEqual(third?.start(in: times), 23)
+        let third = lines.firstIndex { $0.text.hasPrefix("Where does") }!
+        XCTAssertEqual(ShownLine.start(of: third, in: lines, times: times), 23)
+    }
+
+    func testATimingOfTheShownLinesIsTakenOneByOne() {
+        let lines = ShownLine.lines(of: paragraph)
+        let texts = [
+            "Neon rain on carbon glass", "The ghosts of who we were, they pass", "Where does the circuit end, and I begin?",
+            "I traded breath for silver veins", "Hold on",
+        ]
+        let times = texts.enumerated().map {
+            LineTimes(start: 10 + Double($0.offset) * 10, end: 18 + Double($0.offset) * 10, text: $0.element)
+        }
+        XCTAssertEqual(ShownLine.shown(at: 21, in: lines, times: times).map { lines[$0].text }, texts[1])
+        XCTAssertEqual(ShownLine.shown(at: 51, in: lines, times: times).map { lines[$0].text }, "Hold on")
+        let third = lines.firstIndex { $0.text.hasPrefix("Where does") }!
+        XCTAssertEqual(ShownLine.start(of: third, in: lines, times: times), 30)
     }
 
     func testGermanCapitalsAndShortLinesStay() {

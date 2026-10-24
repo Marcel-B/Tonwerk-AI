@@ -30,35 +30,125 @@ public sealed record LyricsTiming(IReadOnlyList<TimedLine> Lines, string Source,
 /// Repeated choruses are why this is a sequence alignment rather than a search per line: the order keeps the second
 /// chorus from taking the first one's words.
 /// </remarks>
-public static class LyricsAligner
+public static partial class LyricsAligner
 {
     /// <summary>Lines shorter than this are stretched to it; a single word still gets its moment.</summary>
     private const double MinLineSeconds = 0.6;
 
-    /// <summary>The lyrics' sung lines with the section they are under; empty lines and tags are left out.</summary>
+    /// <summary>
+    /// The lyrics' sung lines with the section they are under, cut as the full-screen player shows them (the web page's
+    /// <c>timing.ts</c> <c>shownLines</c>, the app's <c>ShownLine</c>; keep the three alike): <c>[Tags]</c> start a
+    /// section wherever they stand, directions in round brackets are left out (they are not sung), and a paragraph
+    /// whose line breaks were lost is broken where a line plausibly ended, so Whisper times each of its lines.
+    /// </summary>
     public static IReadOnlyList<(string Text, string? Section)> SungLines(string lyrics)
     {
         List<(string, string?)> lines = [];
         string? section = null;
+        var english = !LooksGerman(lyrics);
         foreach (var raw in lyrics.Split('\n'))
         {
-            var line = raw.Trim();
-            if (line.Length == 0)
+            foreach (var (kind, text) in Pieces(raw.Trim()))
             {
-                continue;
-            }
-            if (line.StartsWith('[') && line.EndsWith(']'))
-            {
-                section = line[1..^1].Trim();
-                continue;
-            }
-            if (Words(line).Count > 0)
-            {
-                lines.Add((line, section));
+                if (kind == '[')
+                {
+                    section = text[1..^1].Trim();
+                }
+                else if (kind == ' ')
+                {
+                    lines.AddRange(Broken(text, english).Where(piece => Words(piece).Count > 0).Select(piece => (piece, section)));
+                }
             }
         }
         return lines;
     }
+
+    /// <summary>Longer than this, a line is a paragraph whose line breaks were lost (as a chatbot's lyrics often come).</summary>
+    private const int Paragraph = 60;
+
+    /// <summary>A line cut into <c>[tags]</c> ('['), <c>(directions)</c> ('(') and the text between (' ').</summary>
+    private static List<(char Kind, string Text)> Pieces(string line)
+    {
+        List<(char, string)> found = [];
+        var text = new StringBuilder();
+        for (var i = 0; i < line.Length;)
+        {
+            var open = line[i];
+            var end = open switch
+            {
+                '[' => line.IndexOf(']', i + 1),
+                '(' => line.IndexOf(')', i + 1),
+                _ => -1,
+            };
+            if (end > i + 1)
+            {
+                found.Add((' ', text.ToString()));
+                found.Add((open, line[i..(end + 1)]));
+                text.Clear();
+                i = end + 1;
+            }
+            else
+            {
+                text.Append(open);
+                i++;
+            }
+        }
+        found.Add((' ', text.ToString()));
+        return [.. found.Select(p => (p.Item1, Whitespace().Replace(p.Item2, " ").Trim())).Where(p => p.Item2.Length > 0)];
+    }
+
+    /// <summary>
+    /// A paragraph broken after a sentence's end, and in English also before a capital that follows a lower-case word
+    /// ("carbon glass The ghosts"), never before "I". German capitalises every noun, so there only sentence ends count.
+    /// </summary>
+    private static IEnumerable<string> Broken(string text, bool english)
+    {
+        if (text.Length <= Paragraph)
+        {
+            return [text];
+        }
+        List<List<string>> lines = [];
+        foreach (var word in text.Split(' '))
+        {
+            var previous = lines.Count > 0 ? lines[^1][^1] : null;
+            var ends = previous is not null
+                && (SentenceEnd().IsMatch(previous)
+                    || (english && char.IsLower(previous[^1]) && char.IsUpper(word[0]) && !LoneI().IsMatch(word)));
+            if (previous is null || ends)
+            {
+                lines.Add([word]);
+            }
+            else
+            {
+                lines[^1].Add(word);
+            }
+        }
+        return lines.Select(words => string.Join(' ', words));
+    }
+
+    private static bool LooksGerman(string lyrics) => Umlaut().IsMatch(lyrics) || GermanWord().IsMatch(lyrics);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\s+")]
+    private static partial System.Text.RegularExpressions.Regex Whitespace();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"[.!?…][""'”’]?$")]
+    private static partial System.Text.RegularExpressions.Regex SentenceEnd();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^I(['’]|$)")]
+    private static partial System.Text.RegularExpressions.Regex LoneI();
+
+    [System.Text.RegularExpressions.GeneratedRegex("[äöüÄÖÜß]")]
+    private static partial System.Text.RegularExpressions.Regex Umlaut();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(und|ich|nicht|ist|wir|mein|dein|auf|kein)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex GermanWord();
+
+    /// <summary>
+    /// Whether a timing was made from other lines than the lyrics now give: before the lines were cut as the player
+    /// shows them, or for lyrics changed since. Such a song is heard again.
+    /// </summary>
+    public static bool Stale(LyricsTiming timing, string lyrics) =>
+        !timing.Lines.Select(line => line.Text).SequenceEqual(SungLines(lyrics).Select(line => line.Text));
 
     public static LyricsTiming Align(string lyrics, IReadOnlyList<HeardWord> heard, double? duration, string source, DateTimeOffset now)
     {

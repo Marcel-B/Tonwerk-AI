@@ -20,7 +20,7 @@ import {
 } from '../player'
 import { getTiming, requestTiming } from '../api'
 import { rate, ratingOf } from '../ratings'
-import { hasDirections, lineAt, shownLines } from '../timing'
+import { hasDirections, shownAt, shownLines, shownStart } from '../timing'
 import type { LyricsTiming } from '../types'
 import { readBands, reducedMotion, setVisual, visuals } from '../spectrum'
 import { coverColour } from '../video'
@@ -123,7 +123,7 @@ const showLyrics = computed(() => visuals.value.nowPlayingLyrics)
  */
 const timing = ref<{ songId: string; value: LyricsTiming } | null>(null)
 const currentTiming = computed(() => (timing.value?.songId === current.value?.songId ? timing.value!.value : null))
-const activeLine = computed(() => lineAt(currentTiming.value, elapsed.value))
+const activeLine = computed(() => shownAt(lyricLines.value, currentTiming.value, elapsed.value))
 let timingPoll: number | undefined
 
 async function loadTiming(songId: string, ask: boolean): Promise<void> {
@@ -138,7 +138,9 @@ async function loadTiming(songId: string, ask: boolean): Promise<void> {
     }
     if (answer.timing) {
       timing.value = { songId, value: answer.timing }
-    } else if (answer.info.state === 'queued' || answer.info.state === 'listening') {
+    }
+    // Also with a timing: an old one is heard again with the lines cut as shown here.
+    if (answer.info.state === 'queued' || answer.info.state === 'listening') {
       timingPoll = window.setTimeout(() => void loadTiming(songId, false), 10_000)
     }
   } catch {
@@ -170,15 +172,15 @@ watch(activeLine, async (index) => {
   if (index < 0 || Date.now() - scrolledByHand < 4000) {
     return
   }
-  const line = lyricsPanel.value?.querySelector<HTMLElement>(`[data-timed="${index}"]`)
+  const line = lyricsPanel.value?.querySelector<HTMLElement>(`[data-shown="${index}"]`)
   line?.scrollIntoView({ block: 'center', behavior: reducedMotion.value ? 'auto' : 'smooth' })
 })
 
-function seekLine(timed: number): void {
-  const line = currentTiming.value?.lines[timed]
-  if (line) {
+function seekLine(index: number): void {
+  const start = shownStart(lyricLines.value, index, currentTiming.value)
+  if (start !== null) {
     scrolledByHand = 0
-    seek(line.start)
+    seek(start)
   }
 }
 
@@ -382,9 +384,9 @@ onBeforeUnmount(() => {
             <p v-else-if="line.direction" class="direction">{{ line.text.slice(1, -1) }}</p>
             <p
               v-else-if="line.text"
-              :class="['line', { active: line.timed >= 0 && line.timed === activeLine }]"
-              :data-timed="line.timed >= 0 ? line.timed : undefined"
-              @click="currentTiming && line.timed >= 0 && seekLine(line.timed)"
+              :class="['line', { active: index === activeLine }]"
+              :data-shown="index"
+              @click="currentTiming && line.timed >= 0 && seekLine(index)"
             >
               {{ line.text }}
             </p>

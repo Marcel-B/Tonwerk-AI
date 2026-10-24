@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using YueUI.Api.Data;
@@ -8,8 +9,11 @@ namespace YueUI.Api.Stats;
 /// <param name="Rate">Seconds of work per second of audio, the worker's own measure.</param>
 public sealed record SynthesisRecord(DateTimeOffset At, string Song, string Engine, int Steps, double Seconds, double Rate);
 
-/// <summary>Neural Engine programs that became ready for a song: compiled, or taken from the cache.</summary>
-public sealed record AneProgramsRecord(DateTimeOffset At, string Song, double Seconds);
+/// <summary>A Neural Engine program the worker compiled for a song.</summary>
+/// <param name="Waited">The song waited for it (compiled when its synthesis began); otherwise it was compiled in the
+/// background while another song solved. The worker keeps compiled programs only while it runs and holds the model,
+/// so every new worker compiles again.</param>
+public sealed record AneProgramsRecord(DateTimeOffset At, string Song, double Seconds, bool Waited);
 
 /// <summary>Synthesis times per engine and step count (32 is full quality, 8 a draft's default).</summary>
 public sealed record EngineStats(string Engine, int Steps, int Count, double MeanRate, double BestRate, double MeanSeconds, DateTimeOffset LastAt);
@@ -17,10 +21,13 @@ public sealed record EngineStats(string Engine, int Steps, int Count, double Mea
 /// <summary>How often Neural Engine programs were prepared, and how long it took.</summary>
 public sealed record AneProgramStats(int Count, double MeanSeconds, double LongestSeconds, DateTimeOffset? LastAt);
 
+/// <param name="Recent">The latest syntheses, newest first, for the chart.</param>
+/// <param name="AneRecent">The latest compiled Neural Engine programs, newest first.</param>
 public sealed record SynthesisOverview(
     IReadOnlyList<EngineStats> Engines,
     AneProgramStats AnePrograms,
-    IReadOnlyList<SynthesisRecord> Recent);
+    IReadOnlyList<SynthesisRecord> Recent,
+    IReadOnlyList<AneProgramsRecord> AneRecent);
 
 /// <summary>
 /// What YuE2's synthesis took, kept in <c>synth_stats</c> (schema version 33) so the queue page can compare GPU and
@@ -29,7 +36,13 @@ public sealed record SynthesisOverview(
 /// </summary>
 public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<SynthesisStats> logger)
 {
-    public const int RecentCount = 20;
+    public const int RecentCount = 100;
+
+    // Engine column of a compile the song waited for; "ane" rows (from before) were compiled in the background.
+    private const string Waited = "ane-waited";
+
+    // When each song's Neural Engine synthesis began, so a compile it waited for gets its duration.
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _aneStarted = new();
 
     /// <summary>Seconds of work per second of audio: the Neural Engine at full quality is about 3, a draft on the CPU 30.</summary>
     public static readonly double[] RateBuckets = [0.5, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 64];
@@ -50,7 +63,8 @@ public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<Synt
         }
     }
 
-    /// <summary>How long the Neural Engine's programs took to get ready since the server started.</summary>
+    /// <summary>How long the Neural Engine's programs took to get ready since the server started, in the background or
+    /// while a song waited.</summary>
     public Monitoring.Histogram AnePrograms()
     {
         lock (_gate)
@@ -66,6 +80,14 @@ public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<Synt
     // "Background: Neural Engine programs for 20261023-004449-Chomas/song1 ready in 465 s"
     [GeneratedRegex(@"^Background: Neural Engine programs for (?<song>\S+) ready in (?<seconds>[\d.]+) s")]
     private static partial Regex AneLine();
+
+    // "Synthesizing 20261023-004449-Chomas/song1 on the Neural Engine: about 222 s of audio, full quality (32 steps)"
+    [GeneratedRegex(@"^Synthesizing (?<song>\S+) on the Neural Engine\b")]
+    private static partial Regex AneStartLine();
+
+    // "Neural Engine program 1/1 ready for 20261023-004449-Chomas/song1": compiled while the song waited.
+    [GeneratedRegex(@"^Neural Engine program (?<done>\d+)/(?<total>\d+) ready for (?<song>\S+)")]
+    private static partial Regex AneReadyLine();
 
     public static SynthesisRecord? ParseSynthesis(string line, DateTimeOffset at)
     {
@@ -87,7 +109,7 @@ public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<Synt
     {
         var match = AneLine().Match(line.Trim());
         return match.Success
-            ? new AneProgramsRecord(at, match.Groups["song"].Value, double.Parse(match.Groups["seconds"].Value, CultureInfo.InvariantCulture))
+            ? new AneProgramsRecord(at, match.Groups["song"].Value, double.Parse(match.Groups["seconds"].Value, CultureInfo.InvariantCulture), false)
             : null;
     }
 
@@ -115,6 +137,21 @@ public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<Synt
                     _anePrograms.Observe(programs.Seconds);
                 }
                 Insert("ane-programs", programs.Song, "ane", null, programs.Seconds, null, at);
+            }
+            else if (AneStartLine().Match(line.Trim()) is { Success: true } start)
+            {
+                _aneStarted[start.Groups["song"].Value] = at;
+            }
+            else if (AneReadyLine().Match(line.Trim()) is { Success: true } ready
+                && ready.Groups["done"].Value == ready.Groups["total"].Value
+                && _aneStarted.TryRemove(ready.Groups["song"].Value, out var began))
+            {
+                var seconds = Math.Max(0, (at - began).TotalSeconds);
+                lock (_gate)
+                {
+                    _anePrograms.Observe(seconds);
+                }
+                Insert("ane-programs", ready.Groups["song"].Value, Waited, null, seconds, null, at);
             }
         }
         catch (Exception exception)
@@ -166,7 +203,20 @@ public sealed partial class SynthesisStats(SqliteDatabase database, ILogger<Synt
                     reader.GetInt32(3), reader.GetDouble(4), reader.GetDouble(5)));
             }
         }
-        return new SynthesisOverview(engines, programs, recent);
+        var aneRecent = new List<AneProgramsRecord>();
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT at, song_id, seconds, engine FROM synth_stats WHERE kind = 'ane-programs' ORDER BY at DESC, id DESC LIMIT $limit";
+            command.Parameters.AddWithValue("$limit", RecentCount);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                aneRecent.Add(new AneProgramsRecord(
+                    DateTimeOffset.Parse(reader.GetString(0), CultureInfo.InvariantCulture), reader.GetString(1), reader.GetDouble(2),
+                    reader.GetString(3) == Waited));
+            }
+        }
+        return new SynthesisOverview(engines, programs, recent, aneRecent);
     }
 
     private void Insert(string kind, string song, string engine, int? steps, double seconds, double? rate, DateTimeOffset at)

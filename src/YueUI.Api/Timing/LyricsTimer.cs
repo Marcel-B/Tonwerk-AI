@@ -168,6 +168,23 @@ public sealed class LyricsTimer(
     /// <summary>The song's timing, if there is one.</summary>
     public LyricsTiming? Get(string run, string song) => files.Get(run, song);
 
+    /// <summary>
+    /// Queues a song whose timing no longer fits its lyrics' lines (<see cref="LyricsAligner.Stale"/>) to be heard
+    /// again, once; until then the old timing is answered, which the player spreads over the lines by their words.
+    /// </summary>
+    public void RefreshIfStale(string run, string song)
+    {
+        var songId = $"{run}/{song}";
+        if (!Installed || _states.ContainsKey(songId) || Get(run, song) is not { } timing)
+        {
+            return;
+        }
+        if (library.ReadRequest(run, song)?.Lyrics is { } lyrics && LyricsAligner.Stale(timing, lyrics))
+        {
+            Enqueue(songId);
+        }
+    }
+
     public TimingInfo State(string songId) =>
         _states.TryGetValue(songId, out var state) ? state : new TimingInfo(Installed, "none", null);
 

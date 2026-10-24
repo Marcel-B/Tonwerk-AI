@@ -20,10 +20,17 @@ public static class TimingEndpoints
             new TimingSetup(timer.Installed, options.Value.ResolvedPython, options.Value.Model))
             .WithName("GetTimingSetup");
 
+        // A timing made from other lines than the lyrics now give (before the lines were cut as the player shows them)
+        // is answered as it is and heard again in the background; the state says so, so the player looks again.
         api.MapGet("/songs/{run}/{song}/timing", (string run, string song, SongLibrary library, LyricsTimer timer) =>
-            library.SongDirectory(run, song) is null
-                ? Results.NotFound()
-                : Results.Ok(new TimingAnswer(timer.Get(run, song), timer.State($"{run}/{song}"))))
+        {
+            if (library.SongDirectory(run, song) is null)
+            {
+                return Results.NotFound();
+            }
+            timer.RefreshIfStale(run, song);
+            return Results.Ok(new TimingAnswer(timer.Get(run, song), timer.State($"{run}/{song}")));
+        })
             .WithName("GetSongTiming")
             .Produces<TimingAnswer>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound);

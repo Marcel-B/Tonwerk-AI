@@ -313,7 +313,6 @@ struct NowPlayingView: View {
             ask = false
             if let lines = answer.lines {
                 times = lines
-                return
             }
             guard answer.waiting else { return }
             try? await Task.sleep(for: .seconds(10))
@@ -330,12 +329,12 @@ private struct LyricsPanel: View {
 
     var body: some View {
         let shown = ShownLine.lines(of: lyrics, directions: directions)
-        let active = times.flatMap { LineTimes.line(at: player.elapsed, in: $0) }
+        let active = times.flatMap { ShownLine.shown(at: player.elapsed, in: shown, times: $0) }
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(shown.enumerated()), id: \.offset) { index, line in
-                        row(line, active: active)
+                        row(line, index: index, current: index == active)
                             .id(index)
                     }
                 }
@@ -344,8 +343,8 @@ private struct LyricsPanel: View {
             }
             .scrollIndicators(.hidden)
             .onChange(of: active) { _, new in
-                guard let new, let index = shown.firstIndex(where: { $0.timed == new }) else { return }
-                withAnimation(.easeInOut(duration: 0.45)) { proxy.scrollTo(index, anchor: .center) }
+                guard let new else { return }
+                withAnimation(.easeInOut(duration: 0.45)) { proxy.scrollTo(new, anchor: .center) }
             }
         }
         .mask {
@@ -359,7 +358,7 @@ private struct LyricsPanel: View {
     }
 
     @ViewBuilder
-    private func row(_ line: ShownLine, active: Int?) -> some View {
+    private func row(_ line: ShownLine, index: Int, current: Bool) -> some View {
         if line.section {
             Text(line.text)
                 .font(.caption.weight(.semibold))
@@ -372,7 +371,6 @@ private struct LyricsPanel: View {
         } else if line.text.isEmpty {
             Color.clear.frame(height: 2)
         } else {
-            let current = line.timed != nil && line.timed == active
             Text(line.text)
                 .font(.title2.weight(.bold))
                 .foregroundStyle(.white.opacity(times == nil || current ? 1 : 0.38))
@@ -380,13 +378,14 @@ private struct LyricsPanel: View {
                 .animation(.easeOut(duration: 0.3), value: current)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-                .onTapGesture { jump(to: line.timed) }
+                .onTapGesture { jump(to: index) }
         }
     }
 
-    private func jump(to timed: Int?) {
-        guard let timed, let times, times.indices.contains(timed) else { return }
-        player.seek(to: times[timed].start)
+    private func jump(to index: Int) {
+        guard let times, let start = ShownLine.start(of: index, in: ShownLine.lines(of: lyrics, directions: directions), times: times)
+        else { return }
+        player.seek(to: start)
     }
 }
 

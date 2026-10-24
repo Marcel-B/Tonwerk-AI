@@ -81,10 +81,21 @@ export interface AneProgramStats {
   lastAt: string | null
 }
 
+/** A compiled Neural Engine program; `waited` when the song waited for it, else compiled in the background. */
+export interface AneProgramsRecord {
+  at: string
+  song: string
+  seconds: number
+  waited: boolean
+}
+
 export interface SynthesisOverview {
   engines: EngineStats[]
   anePrograms: AneProgramStats
+  /** Newest first. */
   recent: SynthesisRecord[]
+  /** Newest first. */
+  aneRecent: AneProgramsRecord[]
 }
 
 export interface LogEntry {

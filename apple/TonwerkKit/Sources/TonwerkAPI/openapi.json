@@ -7832,6 +7832,31 @@
           }
         }
       },
+      "AneProgramsRecord": {
+        "required": [
+          "at",
+          "song",
+          "seconds",
+          "waited"
+        ],
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "song": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "waited": {
+            "type": "boolean"
+          }
+        }
+      },
       "AneProgramStats": {
         "required": [
           "count",
@@ -12517,7 +12542,8 @@
         "required": [
           "engines",
           "anePrograms",
-          "recent"
+          "recent",
+          "aneRecent"
         ],
         "type": "object",
         "properties": {
@@ -12534,6 +12560,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SynthesisRecord"
+            }
+          },
+          "aneRecent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AneProgramsRecord"
             }
           }
         }

@@ -23,12 +23,20 @@ private struct SpeechSessionView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: SpeechSession
     @State private var importing: Importing?
+    /// Apart from `importing`, since dismissing the importer sets this false before its completion runs, which still
+    /// has to know what the file was picked for.
+    @State private var picking = false
     @State private var saving: URL?
     @State private var deletingVoice: Components.Schemas.SpeechVoice?
 
     enum Importing {
         case voice
         case cleanup
+    }
+
+    private func pick(_ target: Importing) {
+        importing = target
+        picking = true
     }
 
     var body: some View {
@@ -73,7 +81,7 @@ private struct SpeechSessionView: View {
             if model.connection == .live { Task { await session.load() } }
         }
         .fileImporter(
-            isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
+            isPresented: $picking,
             allowedContentTypes: [.audio, .movie]
         ) { result in
             let target = importing
@@ -221,7 +229,7 @@ private struct SpeechSessionView: View {
                     .buttonStyle(.bordered)
                     .disabled(session.savingVoice)
                     Button {
-                        importing = .voice
+                        pick(.voice)
                     } label: {
                         Label("Datei wählen", systemImage: "folder")
                     }
@@ -406,7 +414,7 @@ private struct SpeechSessionView: View {
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
                 Button {
-                    importing = .cleanup
+                    pick(.cleanup)
                 } label: {
                     Label("Datei wählen", systemImage: "folder")
                 }

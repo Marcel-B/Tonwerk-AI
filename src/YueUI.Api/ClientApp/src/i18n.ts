@@ -707,6 +707,21 @@ const messages = {
     delete: 'Löschen',
     keep: 'Behalten',
     deleted: '„{title}“ ist gelöscht.',
+    selectSongs: 'Auswählen',
+    selectSong: '{song} von „{title}“ auswählen',
+    selectedNone: 'Songs zum Löschen auswählen',
+    selectedCount: '{count} ausgewählt · {size}',
+    selectAll: 'Alle auswählen ({count})',
+    selectNone: 'Keine',
+    selectDone: 'Fertig',
+    deleteSelected: '{count} Songs löschen',
+    confirmDeleteSelected: '{count} Songs ({size}) endgültig löschen? Audio, Partitur und Tokens sind danach weg.',
+    confirmDeleteSelectedRuns:
+      '{count} Songs ({size}) endgültig löschen? {runs} Einträge verlieren damit alle Songs und verschwinden aus der Bibliothek.',
+    confirmDeleteSelectedRun:
+      '{count} Songs ({size}) endgültig löschen? Ein Eintrag verliert damit alle Songs und verschwindet aus der Bibliothek.',
+    deletedSelected: '{count} Songs sind gelöscht.',
+    deleteSelectedFailed: '{failed} von {count} Songs konnten nicht gelöscht werden: {message}',
 
     menuCreate: 'Erstellen',
     menuTranscribe: 'Transkription',
@@ -2133,6 +2148,21 @@ const messages = {
     delete: 'Delete',
     keep: 'Keep',
     deleted: '“{title}” has been deleted.',
+    selectSongs: 'Select',
+    selectSong: 'Select {song} of “{title}”',
+    selectedNone: 'Choose songs to delete',
+    selectedCount: '{count} selected · {size}',
+    selectAll: 'Select all ({count})',
+    selectNone: 'None',
+    selectDone: 'Done',
+    deleteSelected: 'Delete {count} songs',
+    confirmDeleteSelected: 'Delete {count} songs ({size}) for good? Their audio, scores and tokens will be gone.',
+    confirmDeleteSelectedRuns:
+      'Delete {count} songs ({size}) for good? {runs} entries lose all their songs and disappear from the library.',
+    confirmDeleteSelectedRun:
+      'Delete {count} songs ({size}) for good? One entry loses all its songs and disappears from the library.',
+    deletedSelected: '{count} songs have been deleted.',
+    deleteSelectedFailed: '{failed} of {count} songs could not be deleted: {message}',
 
     menuCreate: 'Create',
     menuTranscribe: 'Transcription',

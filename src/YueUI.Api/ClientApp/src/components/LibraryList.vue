@@ -12,6 +12,7 @@ import { matchesRun, matchingLines, parseQuery, type SearchScope } from '../sear
 import { matchesTrait, type TraitFilter } from '../traits'
 import { librarySort, sortRuns, type SortedRun } from '../sort'
 import { needsReview, reviewDays } from '../review'
+import { deletionPlan } from '../librarySelection'
 import type { RunInfo, SongInfo, VersionState } from '../types'
 import { focusedSong, focusRequest, view } from '../view'
 import LibraryFilters from './LibraryFilters.vue'
@@ -228,6 +229,123 @@ function askDeleteSong(run: RunInfo, song: SongInfo): void {
   )
 }
 
+// ---- Choosing several songs to delete together ---------------------------------------------------------
+
+const selecting = ref(false)
+const selected = ref(new Set<string>())
+const deleting = ref(false)
+const plan = computed(() => deletionPlan(props.runs, selected.value))
+
+/** Every song the search and filters list now, on every page; one the worker is on cannot go. */
+const selectable = computed(() =>
+  shownRuns.value.flatMap((entry) => entry.songs.map((song) => song.id)).filter((id) => !props.busyIds.has(id)),
+)
+const allSelected = computed(
+  () => selectable.value.length > 0 && selectable.value.every((id) => selected.value.has(id)),
+)
+
+function select(songId: string, on: boolean): void {
+  const next = new Set(selected.value)
+  if (on) {
+    next.add(songId)
+  } else {
+    next.delete(songId)
+  }
+  selected.value = next
+}
+
+/** Adds what is listed to what was chosen before, so a second search can add to the first. */
+function selectAll(): void {
+  selected.value = new Set([...selected.value, ...selectable.value])
+}
+
+function startSelecting(): void {
+  selected.value = new Set()
+  selecting.value = true
+}
+
+function stopSelecting(): void {
+  selecting.value = false
+  selected.value = new Set()
+}
+
+// A song deleted elsewhere, or one the worker took up meanwhile, is no longer chosen.
+watch([() => props.runs, () => props.busyIds], () => {
+  const listed = new Set(props.runs.flatMap((run) => run.songs.map((song) => song.id)))
+  const kept = [...selected.value].filter((id) => listed.has(id) && !props.busyIds.has(id))
+  if (kept.length !== selected.value.size) {
+    selected.value = new Set(kept)
+  }
+})
+
+/** Always asks: deleting cannot be undone, least of all for many songs at once. */
+function askDeleteSelected(): void {
+  const { runIds, songIds, count, bytes } = plan.value
+  if (count === 0) {
+    return
+  }
+  const size = formatBytes(bytes)
+  let message: string
+  if (count === 1) {
+    const run = props.runs.find((entry) => entry.songs.some((song) => selected.value.has(song.id)))!
+    const song = run.songs.find((entry) => selected.value.has(entry.id))!
+    const params = { song: t('songN', { n: song.index }), title: run.title || t('untitled'), size }
+    message = run.songs.length > 1 ? t('confirmDeleteSong', params) : t('confirmDeleteLastSong', params)
+  } else if (runIds.length === 1) {
+    message = t('confirmDeleteSelectedRun', { count, size })
+  } else if (runIds.length > 1) {
+    message = t('confirmDeleteSelectedRuns', { count, size, runs: runIds.length })
+  } else {
+    message = t('confirmDeleteSelected', { count, size })
+  }
+  confirm.require({
+    header: t('confirmDelete'),
+    message,
+    icon: 'pi pi-trash',
+    rejectProps: { label: t('keep'), severity: 'secondary', outlined: true },
+    acceptProps: { label: count === 1 ? t('delete') : t('deleteSelected', { count }), severity: 'danger' },
+    accept: () => deleteSelected(runIds, songIds, count),
+  })
+}
+
+/**
+ * One after another through the library's own endpoints, which refuse a song the worker took up meanwhile; a refusal
+ * does not stop the rest, and what could not go stays chosen.
+ */
+async function deleteSelected(runIds: string[], songIds: string[], count: number): Promise<void> {
+  deleting.value = true
+  let failures = 0
+  let firstError = ''
+  const attempt = async (remove: () => Promise<void>, ids: string[]): Promise<void> => {
+    try {
+      await remove()
+      const next = new Set(selected.value)
+      ids.forEach((id) => next.delete(id))
+      selected.value = next
+    } catch (caught) {
+      failures += ids.length
+      firstError ||= caught instanceof Error ? caught.message : String(caught)
+    }
+  }
+  try {
+    for (const runId of runIds) {
+      const ids = props.runs.find((run) => run.id === runId)?.songs.map((song) => song.id) ?? []
+      await attempt(() => deleteRun(runId), ids)
+    }
+    for (const songId of songIds) {
+      await attempt(() => deleteSong(songId), [songId])
+    }
+  } finally {
+    deleting.value = false
+  }
+  if (failures > 0) {
+    emit('error', t('deleteSelectedFailed', { failed: failures, count, message: firstError }))
+    return
+  }
+  emit('notice', t('deletedSelected', { count }))
+  stopSelecting()
+}
+
 /** The run being renamed; the dialog shows while it is set. */
 const renaming = ref<RunInfo | null>(null)
 const newTitle = ref('')
@@ -270,6 +388,44 @@ async function saveTitle(): Promise<void> {
       :runs="runs"
       :shown="shownRuns.length"
     />
+    <div v-if="runs.length > 0" class="selection" :class="{ active: selecting }">
+      <Button
+        v-if="!selecting"
+        icon="pi pi-check-square"
+        :label="t('selectSongs')"
+        text
+        size="small"
+        @click="startSelecting"
+      />
+      <template v-else>
+        <span class="text-sm">{{
+          plan.count === 0
+            ? t('selectedNone')
+            : t('selectedCount', { count: plan.count, size: formatBytes(plan.bytes) })
+        }}</span>
+        <div class="flex flex-wrap gap-1 ml-auto">
+          <Button
+            v-if="!allSelected"
+            :label="t('selectAll', { count: selectable.length })"
+            text
+            size="small"
+            :disabled="selectable.length === 0"
+            @click="selectAll"
+          />
+          <Button v-else :label="t('selectNone')" text size="small" @click="selected = new Set()" />
+          <Button
+            icon="pi pi-trash"
+            :label="t('delete')"
+            severity="danger"
+            size="small"
+            :disabled="plan.count === 0"
+            :loading="deleting"
+            @click="askDeleteSelected"
+          />
+          <Button :label="t('selectDone')" severity="secondary" text size="small" @click="stopSelecting" />
+        </div>
+      </template>
+    </div>
     <DataView
       :value="shownRuns"
       data-key="id"
@@ -350,6 +506,9 @@ async function saveTitle(): Promise<void> {
                 :voices="voices"
                 :stems="stems ?? false"
                 :live-versions="liveVersions"
+                :selecting="selecting"
+                :selected="selected.has(song.id)"
+                @select="select(song.id, $event)"
                 @play="playSong(run, song)"
                 @rate="rateSong(song, $event)"
                 @use-score="(abc, warnings) => emit('useScore', run, song, abc, warnings)"
@@ -395,6 +554,20 @@ async function saveTitle(): Promise<void> {
 </template>
 
 <style scoped>
+.selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.selection.active {
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-small);
+  background: var(--surface-sunken);
+}
+
 .hits {
   margin: 0.4rem 0 0;
   padding: 0 0 0 0.75rem;

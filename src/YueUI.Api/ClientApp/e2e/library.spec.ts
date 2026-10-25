@@ -136,3 +136,27 @@ test('songs show tempo, key and clarity, and filter by them', async ({ page, api
   await expect(page.getByText('1 von 2 Einträgen')).toBeVisible()
   await expect(page.getByText('Sommerregen')).toBeHidden()
 })
+
+test('songs chosen together are deleted after one question, whole entries in one go', async ({ page, api }) => {
+  await page.goto('#/songs')
+  await page.getByRole('button', { name: 'Auswählen' }).click()
+
+  // The search narrows what "select all" takes.
+  await page.getByRole('searchbox', { name: 'Suchen' }).fill('folk')
+  await page.getByRole('button', { name: 'Alle auswählen (2)' }).click()
+  await page.getByRole('searchbox', { name: 'Suchen' }).fill('')
+  await page.getByRole('checkbox', { name: 'Song 1 von „Nachtzug“ auswählen' }).check()
+  await expect(page.getByText('3 ausgewählt')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Löschen', exact: true }).click()
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toContainText('3 Songs')
+  await dialog.getByRole('button', { name: 'Behalten' }).click()
+  expect(api.calls.filter((call) => call.method === 'DELETE')).toEqual([])
+
+  await page.getByRole('button', { name: 'Löschen', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '3 Songs löschen' }).click()
+  await expect.poll(() => api.callsTo('DELETE', '/api/runs/run-1').length).toBe(1)
+  await expect.poll(() => api.callsTo('DELETE', '/api/runs/run-2').length).toBe(1)
+  expect(api.calls.filter((call) => call.method === 'DELETE' && call.path.startsWith('/api/songs/'))).toEqual([])
+})

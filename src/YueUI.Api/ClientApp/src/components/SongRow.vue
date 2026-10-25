@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import Checkbox from 'primevue/checkbox'
 import { useConfirm } from 'primevue/useconfirm'
 import { audioUrl, coverUrl, deleteVersion, render, scoreUrl, songScore, versionAudioUrl } from '../api'
 import { formatDateTime, formatDuration, t, versionProgress } from '../i18n'
@@ -26,6 +27,9 @@ const props = defineProps<{
   stems: boolean
   /** Versions as the event stream reports them, newer than the listing while they are in the works. */
   liveVersions: VersionState[]
+  /** The list is choosing songs to delete together, so each shows a box. */
+  selecting?: boolean
+  selected?: boolean
 }>()
 
 /** The cover large, to download, with the text it was painted with when it was painted. */
@@ -64,6 +68,7 @@ const emit = defineEmits<{
   aceTemplate: []
   sing: []
   delete: []
+  select: [selected: boolean]
   error: [message: string]
 }>()
 
@@ -213,6 +218,17 @@ const severityByQuality: Record<string, string> = {
 <template>
   <li :class="['song', { 'focused bg-emphasis': focused }]">
     <div class="flex flex-wrap gap-x-3 gap-y-1 items-center">
+      <!-- A song the worker is on cannot be deleted, so it cannot be chosen either. -->
+      <Checkbox
+        v-if="selecting"
+        :model-value="selected"
+        binary
+        :disabled="busy"
+        :input-id="`select-${song.id}`"
+        :aria-label="t('selectSong', { song: t('songN', { n: song.index }), title: run.title || t('untitled') })"
+        v-tooltip="busy ? t('deleteBusy') : undefined"
+        @update:model-value="(value: boolean) => emit('select', value)"
+      />
       <button
         v-if="song.coverUpdatedAt"
         type="button"

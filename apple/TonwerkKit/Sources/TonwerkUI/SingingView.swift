@@ -23,11 +23,19 @@ private struct SingSessionView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: SingSession
     @State private var importing: Importing?
+    /// Apart from `importing`, since dismissing the importer sets this false before its completion runs, which still
+    /// has to know what the file was picked for.
+    @State private var picking = false
     @State private var saving: URL?
     @State private var deletingVoice: Components.Schemas.SingingVoiceInfo?
 
     enum Importing {
         case melody, voice
+    }
+
+    private func pick(_ target: Importing) {
+        importing = target
+        picking = true
     }
 
     var body: some View {
@@ -68,7 +76,7 @@ private struct SingSessionView: View {
             if model.connection == .live { Task { await session.load() } }
         }
         .fileImporter(
-            isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
+            isPresented: $picking,
             allowedContentTypes: importing == .voice
                 ? [.audio, .movie]
                 : [.midi, UTType(filenameExtension: "abc") ?? .plainText, .plainText]
@@ -123,7 +131,7 @@ private struct SingSessionView: View {
                 }
                 Menu {
                     Button("Neu (leer)", systemImage: "doc") { session.clear() }
-                    Button("MIDI-Datei oder score.abc …", systemImage: "folder") { importing = .melody }
+                    Button("MIDI-Datei oder score.abc …", systemImage: "folder") { pick(.melody) }
                     let songs = model.songs.filter(\.hasScore)
                     Menu("Aus der Bibliothek") {
                         if songs.isEmpty {
@@ -287,7 +295,7 @@ private struct SingSessionView: View {
                     .buttonStyle(.bordered)
                     .disabled(session.savingVoice)
                     Button {
-                        importing = .voice
+                        pick(.voice)
                     } label: {
                         Label("WAV oder andere Datei", systemImage: "folder")
                     }

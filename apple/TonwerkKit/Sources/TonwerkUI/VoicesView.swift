@@ -30,6 +30,9 @@ private struct VoicesSessionView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: VoicesSession
     @State private var importing: Importing?
+    /// Apart from `importing`, since dismissing the importer sets this false before its completion runs, which still
+    /// has to know what the file was picked for.
+    @State private var picking = false
     @State private var pending: Pending?
     @State private var saving: URL?
 
@@ -37,6 +40,11 @@ private struct VoicesSessionView: View {
         case voice
         case stems
         case swap
+    }
+
+    private func pick(_ target: Importing) {
+        importing = target
+        picking = true
     }
 
     var body: some View {
@@ -66,7 +74,7 @@ private struct VoicesSessionView: View {
         .task { await session.load() }
         .refreshable { await session.load() }
         .fileImporter(
-            isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
+            isPresented: $picking,
             allowedContentTypes: [.audio, .movie]
         ) { result in
             let target = importing
@@ -185,7 +193,7 @@ private struct VoicesSessionView: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Button {
-                    importing = .voice
+                    pick(.voice)
                 } label: {
                     Label(session.newFile == nil ? "Aufnahme wählen …" : "Andere Aufnahme …", systemImage: "folder")
                 }
@@ -347,7 +355,7 @@ private struct VoicesSessionView: View {
             case .file:
                 HStack {
                     Button {
-                        importing = .stems
+                        pick(.stems)
                     } label: {
                         Label(session.stemFile == nil ? "Datei wählen …" : "Andere Datei …", systemImage: "folder")
                     }
@@ -552,7 +560,7 @@ private struct VoicesSessionView: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Button {
-                    importing = .swap
+                    pick(.swap)
                 } label: {
                     Label(session.swapFile == nil ? "Aufnahme wählen …" : "Andere Aufnahme …", systemImage: "folder")
                 }

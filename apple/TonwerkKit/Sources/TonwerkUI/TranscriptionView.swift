@@ -49,6 +49,9 @@ private struct TranscriptionSessionView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: TranscriptionSession
     @State private var importing: Importing?
+    /// Apart from `importing`, since dismissing the importer sets this false before its completion runs, which still
+    /// has to know what the file was picked for.
+    @State private var picking = false
     @State private var deleting: Components.Schemas.TranscriptionInfo?
     @State private var saving: URL?
     @State private var shown: Set<String> = []
@@ -56,6 +59,11 @@ private struct TranscriptionSessionView: View {
     enum Importing {
         case transcription
         case midi
+    }
+
+    private func pick(_ target: Importing) {
+        importing = target
+        picking = true
     }
 
     var body: some View {
@@ -79,7 +87,7 @@ private struct TranscriptionSessionView: View {
         .task { await session.load() }
         .refreshable { await session.load() }
         .fileImporter(
-            isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
+            isPresented: $picking,
             allowedContentTypes: [.audio, .movie]
         ) { result in
             let target = importing
@@ -118,7 +126,7 @@ private struct TranscriptionSessionView: View {
     private func filePicker(_ file: PickedFile?, for target: Importing) -> some View {
         HStack(spacing: 10) {
             Button {
-                importing = target
+                pick(target)
             } label: {
                 Label("Datei wählen", systemImage: "folder")
             }

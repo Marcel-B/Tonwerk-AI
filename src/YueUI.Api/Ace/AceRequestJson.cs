@@ -23,8 +23,9 @@ public static class AceRequestJson
             ["task_type"] = task,
             ["seed"] = seed,
             ["synth_model"] = ditModel,
-            // 24-bit WAV, stored as FLAC like YuE2's songs; acestep.cpp's own default is a 128 kbit/s MP3.
-            ["output_format"] = "wav24",
+            // Float, which ace-synth writes without its clipping normalisation; AceMastering brings it to 24 bits for
+            // the FLAC. acestep.cpp's own default is a 128 kbit/s MP3.
+            ["output_format"] = "wav32",
         };
         if (lmModel is not null && request.UsesLm)
         {

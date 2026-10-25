@@ -416,7 +416,7 @@ extension AppModel {
     }
 
     /// A multipart form of text fields only.
-    func postForm(_ url: URL, fields: [(String, String)], accept: Set<Int>) async throws -> Data {
+    func postForm(_ url: URL, fields: [(String, String)], accept: Set<Int>, timeout: TimeInterval = 120) async throws -> Data {
         let boundary = "tonwerk-\(UUID().uuidString)"
         var body = Data()
         for (name, value) in fields {
@@ -426,7 +426,7 @@ extension AppModel {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 120
+        request.timeoutInterval = timeout
         let (answer, response) = try await URLSession.shared.upload(for: request, from: body)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard accept.contains(status) else {

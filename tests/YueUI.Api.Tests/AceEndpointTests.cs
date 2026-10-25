@@ -57,7 +57,7 @@ public sealed class AceEndpointTests : IDisposable
         Assert.True(run.UsesLm);
         Assert.Null(run.SourceAudio);
         Assert.Equal(
-            """{"caption":"dark synthwave, female vocals","task_type":"text2music","seed":7,"synth_model":"acestep-v15-turbo-Q8_0.gguf","output_format":"wav24","lm_model":"acestep-5Hz-lm-4B-Q8_0.gguf","vocal_language":"de","duration":90,"lm_batch_size":2}""",
+            """{"caption":"dark synthwave, female vocals","task_type":"text2music","seed":7,"synth_model":"acestep-v15-turbo-Q8_0.gguf","output_format":"wav32","lm_model":"acestep-5Hz-lm-4B-Q8_0.gguf","vocal_language":"de","duration":90,"lm_batch_size":2}""",
             run.Request.ToJsonString());
         // The work folder goes once the run is in place.
         Assert.False(Directory.Exists(run.WorkDirectory));
@@ -134,7 +134,7 @@ public sealed class AceEndpointTests : IDisposable
         Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(song, "audio.flac")), _app.Ace.Source);
         Assert.Equal(
             """{"caption":"jazz piano cover","task_type":"cover","seed":""" + done.Seed
-            + ""","synth_model":"acestep-v15-sft-Q8_0.gguf","output_format":"wav24","lyrics":"[Instrumental]","synth_batch_size":2,"inference_steps":50,"guidance_scale":7,"shift":1,"solver":"dpm3m","audio_cover_strength":0.4}""",
+            + ""","synth_model":"acestep-v15-sft-Q8_0.gguf","output_format":"wav32","lyrics":"[Instrumental]","synth_batch_size":2,"inference_steps":50,"guidance_scale":7,"shift":1,"solver":"dpm3m","audio_cover_strength":0.4}""",
             run.Request.ToJsonString());
         var listed = (await _client.GetFromJsonAsync<List<RunInfo>>("/api/library", TestApp.Json))!;
         Assert.Equal([done.Run, Run], listed.Select(r => r.Id));
@@ -220,6 +220,100 @@ public sealed class AceEndpointTests : IDisposable
         var info = await _client.GetFromJsonAsync<AceInfo>("/api/ace", TestApp.Json);
         Assert.Equal([failed.Id], info!.Jobs.Select(j => j.Id));
         Assert.Empty((await _client.GetFromJsonAsync<List<RunInfo>>("/api/library", TestApp.Json))!);
+    }
+
+    [Fact]
+    public async Task A_brightened_song_keeps_the_switch_for_taking_it_over()
+    {
+        var done = await WaitForJob((await Post(new { caption = "pop", brighten = true })).Id, j => j.Finished);
+
+        Assert.Equal("done", done.Stage);
+        var request = await _client.GetFromJsonAsync<AceSongRequest>($"/api/songs/{done.Run}/song1/ace", TestApp.Json);
+        Assert.True(request!.Brighten);
+        // ace-synth's float WAV goes through the mastering before the FLAC.
+        Assert.Equal(["mastered0.wav"], _app.Mixer.Encoded);
+    }
+
+    [Fact]
+    public async Task A_recording_is_heard_and_answered_for_the_form()
+    {
+        using var form = new MultipartFormDataContent
+        {
+            { new ByteArrayContent([1, 2, 3, 4]), "file", "idee.m4a" },
+            { new StringContent("acestep-5Hz-lm-1.7B-Q8_0.gguf"), "lmModel" },
+        };
+
+        var response = await _client.PostAsync("/api/ace/understand", form);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var heard = await response.Content.ReadFromJsonAsync<AceHeard>(TestApp.Json);
+        Assert.Equal(_app.Ace.Heard, heard);
+        var hearing = Assert.Single(_app.Ace.Hearings);
+        // Through ffmpeg (here a copy) into a WAV first, since ace-understand reads no M4A.
+        Assert.Equal([1, 2, 3, 4], hearing.Audio);
+        Assert.Equal(("acestep-5Hz-lm-1.7B-Q8_0.gguf", "acestep-v15-turbo-Q8_0.gguf"), (hearing.Lm, hearing.Dit));
+        Assert.Contains("audio.wav", _app.Mixer.Decoded);
+        Assert.False(_app.Services.GetRequiredService<ModelMemory>().Holds(LargeModel.Ace));
+    }
+
+    [Fact]
+    public async Task A_library_song_is_heard_from_its_flac()
+    {
+        var directory = _app.AddSong(Run, "song1");
+        using var form = new MultipartFormDataContent { { new StringContent($"{Run}/song1"), "song" } };
+
+        var response = await _client.PostAsync("/api/ace/understand", form);
+
+        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var hearing = Assert.Single(_app.Ace.Hearings);
+        Assert.Equal("acestep-5Hz-lm-4B-Q8_0.gguf", hearing.Lm);
+        Assert.Equal(File.ReadAllBytes(Path.Combine(directory, "audio.flac")), hearing.Audio);
+    }
+
+    [Fact]
+    public async Task Hearing_is_refused_while_the_memory_is_taken_or_without_ace_understand()
+    {
+        var memory = _app.Services.GetRequiredService<ModelMemory>();
+        Assert.True(memory.TryClaim(LargeModel.Images));
+        using (var form = new MultipartFormDataContent { { new ByteArrayContent([1]), "file", "idee.wav" } })
+        {
+            Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsync("/api/ace/understand", form)).StatusCode);
+        }
+        memory.Release(LargeModel.Images);
+
+        _app.Ace.Understands = false;
+        using (var form = new MultipartFormDataContent { { new ByteArrayContent([1]), "file", "idee.wav" } })
+        {
+            var response = await _client.PostAsync("/api/ace/understand", form);
+            Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
+            Assert.Contains("deploy/install-ace.sh", await response.Content.ReadAsStringAsync());
+        }
+
+        using (var form = new MultipartFormDataContent
+        {
+            { new StringContent($"{Run}/song9"), "song" },
+            { new StringContent("missing.gguf"), "lmModel" },
+        })
+        {
+            var response = await _client.PostAsync("/api/ace/understand", form);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var problem = await response.Content.ReadFromJsonAsync<JsonObject>();
+            Assert.Equal(["lmModel", "song"], problem!["errors"]!.AsObject().Select(e => e.Key).Order());
+        }
+        Assert.Empty(_app.Ace.Hearings);
+    }
+
+    [Fact]
+    public async Task What_acestep_heard_fails_with_its_words_and_gives_the_memory_back()
+    {
+        _app.Ace.Failure = "[Ace-Understand] FATAL: cannot read audio";
+        using var form = new MultipartFormDataContent { { new ByteArrayContent([1]), "file", "idee.wav" } };
+
+        var response = await _client.PostAsync("/api/ace/understand", form);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Contains("cannot read audio", await response.Content.ReadAsStringAsync());
+        Assert.False(_app.Services.GetRequiredService<ModelMemory>().Holds(LargeModel.Ace));
     }
 
     private async Task<AceJob> Post(object request)

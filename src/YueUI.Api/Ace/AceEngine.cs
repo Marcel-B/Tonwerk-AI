@@ -32,6 +32,54 @@ public interface IAceEngine
 
     /// <param name="progress">Hears the stage (loading, writing, composing, synthesizing, decoding) and the share of the job done.</param>
     Task<IReadOnlyList<AceOutput>> GenerateAsync(AceRun run, Action<string, double> progress, CancellationToken cancellationToken);
+
+    /// <summary>Whether <see cref="UnderstandAsync"/> can run: acestep.cpp's <c>ace-understand</c> is built.</summary>
+    bool Understands { get; }
+
+    /// <summary>
+    /// Has ACE-Step's LM hear a recording (VAE, tokenizer, LM backwards) and say what it is: caption, lyrics, tempo,
+    /// key, metre, language, length, as it would write them for a song of its own.
+    /// </summary>
+    /// <param name="audio">A WAV of the recording.</param>
+    /// <param name="workDirectory">An empty folder for the request and the answer.</param>
+    /// <param name="lmModel">The LM file to hear with; it must be in <see cref="Files"/>.</param>
+    Task<AceHeard> UnderstandAsync(string audio, string workDirectory, string lmModel, string ditModel, CancellationToken cancellationToken);
+}
+
+/// <summary>What ACE-Step heard in a recording, in the page's terms; null where it could not tell.</summary>
+public sealed record AceHeard(
+    string? Caption,
+    string? Lyrics,
+    int? Bpm,
+    string? Key,
+    int? TimeSignature,
+    string? Language,
+    double? Duration,
+    bool Instrumental)
+{
+    /// <summary>acestep.cpp's request JSON as <c>ace-understand</c> writes it.</summary>
+    public static AceHeard From(JsonObject written)
+    {
+        static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text)
+            && text.Trim() is { Length: > 0 } trimmed ? trimmed : null;
+        static double? Number(JsonNode? node) => node is JsonValue value && value.TryGetValue<double>(out var number)
+            && double.IsFinite(number) && number > 0 ? number : null;
+
+        var lyrics = Text(written["lyrics"]);
+        var language = Text(written["vocal_language"]);
+        var beats = Text(written["timesignature"]) is { } metre
+            && int.TryParse(metre.Split('/')[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var b) ? b : (int?)null;
+        return new AceHeard(
+            Text(written["caption"]),
+            // The LM says "[Instrumental]" for music without a voice, which the form has a switch for.
+            lyrics == AceRequestJson.Instrumental ? null : lyrics,
+            Number(written["bpm"]) is { } bpm ? (int)Math.Round(bpm) : null,
+            Text(written["keyscale"]),
+            beats is { } n && AceSongRequest.TimeSignatures.Contains(n) ? n : null,
+            language is not null && AceSongRequest.Languages.Contains(language) ? language : null,
+            Number(written["duration"]) is { } seconds ? Math.Round(seconds) : null,
+            lyrics == AceRequestJson.Instrumental);
+    }
 }
 
 /// <param name="Lm">The 5 Hz language models (<c>acestep-5Hz-lm-*.gguf</c>), the largest first.</param>
@@ -104,6 +152,28 @@ public sealed partial class AceCppEngine(IOptions<AceOptions> options, ILogger<A
     private const double LmShare = 0.55;
 
     public bool Installed => File.Exists(Tool("ace-lm")) && File.Exists(Tool("ace-synth"));
+
+    public bool Understands => File.Exists(Tool("ace-understand"));
+
+    public async Task<AceHeard> UnderstandAsync(string audio, string workDirectory, string lmModel, string ditModel, CancellationToken cancellationToken)
+    {
+        if (!Understands)
+        {
+            throw new AceException(
+                $"acestep.cpp's ace-understand is not built ({options.Value.ResolvedBinaries}); run deploy/install-ace.sh.",
+                StatusCodes.Status501NotImplemented);
+        }
+        var request = Path.Combine(workDirectory, "understand.json");
+        var answer = Path.Combine(workDirectory, "heard.json");
+        // Only the models: without sampling values ace-understand keeps its own for hearing (temperature 0.3, no top-p).
+        await File.WriteAllTextAsync(request, new JsonObject { ["lm_model"] = lmModel, ["synth_model"] = ditModel }.ToJsonString(), cancellationToken);
+        await RunAsync("ace-understand", ["--models", options.Value.ResolvedModels, "--src-audio", audio, "--request", request, "-o", answer], _ => { }, cancellationToken);
+        if (!File.Exists(answer) || JsonNode.Parse(await File.ReadAllTextAsync(answer, cancellationToken)) is not JsonObject written)
+        {
+            throw new AceException("ace-understand wrote no answer.");
+        }
+        return AceHeard.From(written);
+    }
 
     public AceModelFiles Files() => AceModelFiles.Scan(options.Value.ResolvedModels, options.Value.ResolvedAdapters);
 

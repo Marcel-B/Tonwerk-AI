@@ -209,6 +209,13 @@ public sealed class Machines(
         return FreeHelper(engine) is { } helper ? Remote(helper) : null;
     }
 
+    /// <summary>
+    /// This Mac without waiting, for work a request waits for: the memory claimed and an idle YuE worker shut down, or
+    /// null while YuE2 or another model is in use.
+    /// </summary>
+    public async Task<Placement?> TryLocalAsync(LargeModel model) =>
+        memory.TryClaim(model) ? await LocalAsync(model) : null;
+
     /// <summary>A helper that answered its last poll free, has <paramref name="engine"/>, and runs nothing for this server.</summary>
     public HelperMachine? FreeHelper(string engine)
     {

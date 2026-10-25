@@ -9,8 +9,12 @@ import TonwerkKit
 @MainActor
 @Observable
 final class VoiceRecorder {
-    /// Enough for any model; the server keeps 30 seconds at most.
-    static let maxSeconds = 30
+    /// Enough for any model of the speech lab, whose server keeps 30 seconds at most; ACE-Step hears a minute.
+    let maxSeconds: Int
+
+    init(maxSeconds: Int = 30) {
+        self.maxSeconds = maxSeconds
+    }
 
     private(set) var recording = false
     private(set) var seconds = 0
@@ -39,7 +43,7 @@ final class VoiceRecorder {
             AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48_000, AVNumberOfChannelsKey: 1,
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
         ])
-        guard recorder.record(forDuration: TimeInterval(Self.maxSeconds)) else {
+        guard recorder.record(forDuration: TimeInterval(maxSeconds)) else {
             throw ServerError(String(localized: "Die Aufnahme ließ sich nicht starten."))
         }
         self.recorder = recorder

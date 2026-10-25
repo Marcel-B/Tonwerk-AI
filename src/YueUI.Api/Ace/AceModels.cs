@@ -26,6 +26,7 @@ namespace YueUI.Api.Ace;
 /// <param name="RepaintStart">Seconds; negative adds music before the song.</param>
 /// <param name="RepaintEnd">Seconds; beyond the song's end adds music after it, null for its end.</param>
 /// <param name="Machine">The Mac to make it on: <c>local</c>, a helper's id, or null for whichever is free.</param>
+/// <param name="Brighten">Gives back the highs ACE-Step's VAE loses (<see cref="AceMastering"/>); null or false leaves them.</param>
 public sealed record AceSongRequest(
     string? Title = null,
     string? Caption = null,
@@ -57,7 +58,8 @@ public sealed record AceSongRequest(
     double? CoverStrength = null,
     double? RepaintStart = null,
     double? RepaintEnd = null,
-    string? Machine = null)
+    string? Machine = null,
+    bool? Brighten = null)
 {
     public const int MaxCaptionLength = 2000;
 
@@ -134,6 +136,7 @@ public sealed record AceJob
 /// <summary>What the page needs to offer: whether acestep.cpp is there and which GGUF files it can choose from.</summary>
 /// <param name="Binaries">Where <c>ace-lm</c> and <c>ace-synth</c> are looked for, for the hint when they are missing.</param>
 /// <param name="Ready">Binaries, an LM, a DiT, the text encoder and the VAE are all there.</param>
+/// <param name="Understands">A recording can be heard (<c>ace-understand</c> built and the models complete), on this Mac.</param>
 public sealed record AceInfo(
     bool Installed,
     bool Ready,
@@ -142,7 +145,8 @@ public sealed record AceInfo(
     IReadOnlyList<string> LmModels,
     IReadOnlyList<string> DitModels,
     IReadOnlyList<string> Adapters,
-    IReadOnlyList<AceJob> Jobs);
+    IReadOnlyList<AceJob> Jobs,
+    bool Understands);
 
 /// <summary>A song as ACE-Step was asked for it, stored beside it (<c>ace-request.json</c>) so the page can take it over.</summary>
 public sealed record AceSongSettings(AceSongRequest Request, JsonObject? Written);

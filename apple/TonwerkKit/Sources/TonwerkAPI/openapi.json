@@ -5480,6 +5480,94 @@
         }
       }
     },
+    "/api/ace/understand": {
+      "post": {
+        "operationId": "UnderstandAceAudio",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  },
+                  "song": {
+                    "type": "string"
+                  },
+                  "lmModel": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AceHeard"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sketches/info": {
       "get": {
         "operationId": "GetSketchInfo",
@@ -7472,6 +7560,69 @@
   },
   "components": {
     "schemas": {
+      "AceHeard": {
+        "required": [
+          "caption",
+          "lyrics",
+          "bpm",
+          "key",
+          "timeSignature",
+          "language",
+          "duration",
+          "instrumental"
+        ],
+        "type": "object",
+        "properties": {
+          "caption": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lyrics": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bpm": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "key": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeSignature": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "language": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "duration": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "instrumental": {
+            "type": "boolean"
+          }
+        }
+      },
       "AceInfo": {
         "required": [
           "installed",
@@ -7481,7 +7632,8 @@
           "lmModels",
           "ditModels",
           "adapters",
-          "jobs"
+          "jobs",
+          "understands"
         ],
         "type": "object",
         "properties": {
@@ -7520,6 +7672,9 @@
             "items": {
               "$ref": "#/components/schemas/AceJob"
             }
+          },
+          "understands": {
+            "type": "boolean"
           }
         }
       },
@@ -7805,6 +7960,12 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "brighten": {
+            "type": [
+              "null",
+              "boolean"
             ]
           },
           "usesLm": {

@@ -66,6 +66,8 @@ struct AceForm: Codable, Equatable {
     var repaintEnd: Double?
     /// The Mac that composes; empty lets the server choose.
     var machine = ""
+    /// The highs the VAE loses given back; on for new songs, since without it they sound dull.
+    var brighten = true
 
     init() {}
 
@@ -109,6 +111,7 @@ struct AceForm: Codable, Equatable {
         read(.repaintStart, &repaintStart)
         read(.repaintEnd, &repaintEnd)
         read(.machine, &machine)
+        read(.brighten, &brighten)
     }
 
     private static let key = "aceForm"
@@ -197,6 +200,7 @@ struct AceForm: Codable, Equatable {
         put("repaintStart", task == .repaint ? repaintStart : nil)
         put("repaintEnd", task == .repaint ? repaintEnd : nil)
         put("machine", text(machine))
+        put("brighten", brighten)
         return body
     }
 
@@ -235,6 +239,41 @@ struct AceForm: Codable, Equatable {
         coverStrength = request.coverStrength
         repaintStart = request.repaintStart
         repaintEnd = request.repaintEnd
+        // A song from before the switch was made without it, and taking it over should make it again.
+        brighten = request.brighten ?? false
+    }
+
+    /// What ACE-Step heard in a recording laid over the form as a new song, as the web page's `withHeard`: its
+    /// description, words, tempo, key, metre, language and length where it could tell, the model's choice where it
+    /// could not; title, models, seed and the rest stay.
+    func hearing(_ heard: Components.Schemas.AceHeard) -> AceForm {
+        var form = self
+        form.task = .text2music
+        form.caption = heard.caption ?? caption
+        form.lyrics = heard.instrumental ? "" : (heard.lyrics ?? "")
+        form.instrumental = heard.instrumental
+        form.language = heard.language ?? ""
+        form.bpm = heard.bpm.map(Int.init)
+        form.key = Self.pickerKey(of: heard.key)
+        form.timeSignature = heard.timeSignature.map(Int.init)
+        form.duration = heard.duration.map { min(600, max(10, $0)) }
+        return form
+    }
+
+    /// A key as the LM wrote it ("G# Minor", "Bb major") as the picker's entry, or empty for one it does not list,
+    /// as `aceKeyOf`.
+    static func pickerKey(of text: String?) -> String {
+        let parts = (text ?? "").split(separator: " ", omittingEmptySubsequences: true)
+        guard parts.count == 2, let letter = parts[0].first, "ABCDEFGabcdefg".contains(letter), parts[0].count <= 2
+        else { return "" }
+        let mode = parts[1].lowercased()
+        guard mode == "major" || mode == "minor" else { return "" }
+        var accidental = String(parts[0].dropFirst())
+        accidental = accidental == "♯" ? "#" : accidental == "♭" ? "b" : accidental
+        guard ["", "#", "b"].contains(accidental) else { return "" }
+        let root = letter.uppercased() + accidental
+        let key = "\(["D#": "Eb", "G#": "Ab", "A#": "Bb"][root] ?? root) \(mode)"
+        return keys.contains(key) ? key : ""
     }
 
     /// YuE2's language building blocks (`StyleBlocks`) as ACE-Step's codes.
@@ -292,6 +331,12 @@ final class AceSession {
     private(set) var info: Components.Schemas.AceInfo?
     private(set) var loading = false
     private(set) var sending = false
+    /// While ACE-Step hears a recording or song for the form.
+    private(set) var hearing = false
+    /// A minute leaves room to sing a verse; a hummed idea needs seconds.
+    let recorder = VoiceRecorder(maxSeconds: 60)
+    /// The library song to hear, `run/songN`.
+    var hearSong = ""
     var problem: String?
     var notice: String?
 
@@ -374,6 +419,44 @@ final class AceSession {
         }
     }
 
+    /// Records until stopped (or a minute), then has ACE-Step hear it.
+    func toggleRecording() async {
+        if recorder.recording {
+            recorder.stop()
+            return
+        }
+        do {
+            try await recorder.start { [weak self] file in
+                guard let self, let file else { return }
+                Task { await self.hear(file: file) }
+            }
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    func hear(file: PickedFile) async {
+        await hear { try await $0.understandAce(file: file, lmModel: $0.aceForm.lmModel) }
+    }
+
+    func hear(song: String) async {
+        await hear { try await $0.understandAce(song: song, lmModel: $0.aceForm.lmModel) }
+    }
+
+    private func hear(_ ask: (AppModel) async throws -> Components.Schemas.AceHeard) async {
+        hearing = true
+        defer { hearing = false }
+        do {
+            let heard = try await ask(model)
+            model.aceForm = model.aceForm.hearing(heard)
+            problem = nil
+            notice = String(localized: "Formular aus der Aufnahme gefüllt.")
+        } catch {
+            notice = nil
+            problem = error.localizedDescription
+        }
+    }
+
     /// The job's request back in the form, with the seed it was made with, to vary one thing.
     func reuse(_ job: Components.Schemas.AceJob) {
         var request = job.request
@@ -432,6 +515,22 @@ extension AppModel {
     func composeAce(_ form: AceForm) async throws -> Components.Schemas.AceJob {
         let (data, _) = try await call("POST", address("api/ace"), json: form.request, accept: [202])
         return try decode(Components.Schemas.AceJob.self, data)
+    }
+
+    /// `POST api/ace/understand` with a recording: what ACE-Step heard, for the form.
+    func understandAce(file: PickedFile, lmModel: String) async throws -> Components.Schemas.AceHeard {
+        let fields = lmModel.isEmpty ? [] : [("lmModel", lmModel)]
+        let (data, _) = try await uploadFile(address("api/ace/understand"), fields: fields, fileField: "file", file: file, accept: [200])
+        return try decode(Components.Schemas.AceHeard.self, data)
+    }
+
+    /// `POST api/ace/understand` with a library song.
+    func understandAce(song: String, lmModel: String) async throws -> Components.Schemas.AceHeard {
+        var fields = [("song", song)]
+        if !lmModel.isEmpty { fields.append(("lmModel", lmModel)) }
+        // A whole song takes ACE-Step's LM a while longer than a hummed idea.
+        let data = try await postForm(address("api/ace/understand"), fields: fields, accept: [200], timeout: 600)
+        return try decode(Components.Schemas.AceHeard.self, data)
     }
 
     func deleteAceJob(_ id: String) async throws {

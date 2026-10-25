@@ -263,4 +263,21 @@ final class CreateFormTests: XCTestCase {
         XCTAssertEqual(ServerError.text(of: Data(missing.utf8)), "No worker at /x.")
         XCTAssertNil(ServerError.text(of: Data()))
     }
+
+    func testChosenSongsGoAsWholeRunsWhereEverySongIsChosen() {
+        let library = [
+            Song(run: "a", name: "song1", title: "A", number: 1, bytes: 10),
+            Song(run: "a", name: "song2", title: "A", number: 2, bytes: 20),
+            Song(run: "b", name: "song1", title: "B", number: 1, bytes: 5),
+            Song(run: "b", name: "song2", title: "B", number: 2, bytes: 7),
+        ]
+
+        let deletion = SongDeletion(picked: ["a/song1", "a/song2", "b/song2", "gone/song1"], library: library)
+
+        XCTAssertEqual(deletion.runs, ["a"])
+        XCTAssertEqual(deletion.songs.map(\.id), ["b/song2"])
+        XCTAssertEqual(deletion.count, 3)
+        XCTAssertEqual(deletion.bytes, 37)
+        XCTAssertEqual(SongDeletion(picked: [], library: library).count, 0)
+    }
 }

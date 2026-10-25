@@ -19,6 +19,12 @@ struct SongList: View {
     /// The song whose deletion waits for its confirmation.
     @State private var deleting: Song?
     @State private var deleteProblem: String?
+    /// Choosing several songs to delete together (library and review list, not a playlist).
+    @State private var picking = false
+    @State private var picked = Set<Song.ID>()
+    /// The chosen songs' deletion, waiting for its confirmation.
+    @State private var bulk: SongDeletion?
+    @State private var bulkDeleting = false
     @AppStorage("librarySort") private var sort = LibrarySort.newest
     @AppStorage("ratingFilter") private var storedFilter = 0
     #if os(macOS)
@@ -43,7 +49,7 @@ struct SongList: View {
     }
 
     var body: some View {
-        withDetails(content)
+        withPicking(withDetails(content))
             .onChange(of: model.revealing, initial: true) { revealIfAsked() }
             .confirmationDialog(
                 deleting.map { "„\($0.displayTitle)“ löschen?" } ?? "",
@@ -95,6 +101,8 @@ struct SongList: View {
                 } else {
                     ContentUnavailableView.search(text: query)
                 }
+            } else if picking {
+                pickList
             } else {
                 songList
             }
@@ -118,6 +126,13 @@ struct SongList: View {
                 .disabled(!shown.contains(where: \.hasAudio))
                 if playlist == nil {
                     orderMenu
+                    Button {
+                        picking ? stopPicking() : startPicking()
+                    } label: {
+                        Label(picking ? "Auswahl beenden" : "Auswählen",
+                              systemImage: picking ? "checkmark.circle.fill" : "checkmark.circle")
+                    }
+                    .disabled(shown.isEmpty && !picking)
                 }
                 #if os(macOS)
                 Button {
@@ -223,6 +238,130 @@ struct SongList: View {
         }
     }
     #endif
+
+    // MARK: Choosing several songs to delete together
+
+    /// Every listed song: what the search and the rating filter let through, so "all" means the hits.
+    private var allPicked: Bool {
+        !shown.isEmpty && shown.allSatisfy { picked.contains($0.id) }
+    }
+
+    private var deletion: SongDeletion {
+        SongDeletion(picked: picked, library: model.songs)
+    }
+
+    private func startPicking() {
+        picked = []
+        picking = true
+    }
+
+    private func stopPicking() {
+        picking = false
+        picked = []
+    }
+
+    private func toggle(_ id: Song.ID) {
+        if picked.contains(id) {
+            picked.remove(id)
+        } else {
+            picked.insert(id)
+        }
+    }
+
+    /// A tap chooses rather than plays; the boxes stand where the cover's play state would draw the eye first.
+    private var pickList: some View {
+        List {
+            ForEach(shown) { song in
+                let on = picked.contains(song.id)
+                HStack(spacing: 10) {
+                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                        .imageScale(.large)
+                        .foregroundStyle(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
+                    SongRow(song: song, playing: player.current?.id == song.id)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { toggle(song.id) }
+                .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+            }
+        }
+        #if os(macOS)
+        .listStyle(.inset(alternatesRowBackgrounds: true))
+        #else
+        .listStyle(.plain)
+        #endif
+    }
+
+    private var pickBar: some View {
+        let deletion = deletion
+        return HStack(spacing: 12) {
+            Text(verbatim: deletion.count == 0
+                ? String(localized: "Songs zum Löschen wählen")
+                : String(localized: "\(deletion.count) gewählt · \(deletion.size)"))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if allPicked {
+                Button("Keine") { picked = [] }
+            } else {
+                Button("Alle (\(shown.count))") { picked.formUnion(shown.map(\.id)) }
+            }
+            Button(role: .destructive) {
+                bulk = deletion
+            } label: {
+                if bulkDeleting {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Löschen", systemImage: "trash")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .disabled(deletion.count == 0 || bulkDeleting)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    private func withPicking(_ content: some View) -> some View {
+        content
+            .safeAreaInset(edge: .bottom) {
+                if picking { pickBar }
+            }
+            // A song deleted elsewhere is no longer chosen.
+            .onChange(of: songs) {
+                let listed = Set(songs.map(\.id))
+                picked.formIntersection(listed)
+            }
+            .confirmationDialog(
+                bulk?.question ?? "",
+                isPresented: Binding(get: { bulk != nil }, set: { if !$0 { bulk = nil } }),
+                titleVisibility: .visible, presenting: bulk
+            ) { deletion in
+                Button(
+                    deletion.count == 1
+                        ? String(localized: "Löschen") : String(localized: "\(deletion.count) Songs löschen"),
+                    role: .destructive
+                ) {
+                    Task { await deleteChosen(deletion) }
+                }
+            } message: { deletion in
+                Text(deletion.detail)
+            }
+    }
+
+    private func deleteChosen(_ deletion: SongDeletion) async {
+        bulkDeleting = true
+        let result = await model.deleteSongs(deletion)
+        bulkDeleting = false
+        picked.subtract(result.deleted)
+        if let problem = result.problem {
+            deleteProblem = String(localized: "\(result.failed) von \(deletion.count) Songs blieben: \(problem)")
+        } else {
+            stopPicking()
+        }
+    }
 
     private var orderMenu: some View {
         Menu {

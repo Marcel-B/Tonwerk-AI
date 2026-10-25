@@ -24,6 +24,7 @@ private struct AceSessionView: View {
     @Bindable var session: AceSession
     @AppStorage("aceAdvancedOpen") private var advancedOpen = false
     @State private var lyricsCaret = LyricsCaret()
+    @State private var pickingRecording = false
 
     private var auto: Text { Text("automatisch") }
 
@@ -42,6 +43,9 @@ private struct AceSessionView: View {
                 }
             }
 
+            if session.info?.ready == true {
+                hear
+            }
             task
             song
             lyrics
@@ -57,6 +61,71 @@ private struct AceSessionView: View {
             if model.connection == .live { Task { await session.load() } }
         }
         .onChange(of: model.aceForm) { model.saveAceForm() }
+        .fileImporter(isPresented: $pickingRecording, allowedContentTypes: [.audio, .movie]) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                do {
+                    await session.hear(file: try await PickedFile.copy(from: url))
+                } catch {
+                    session.problem = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    // MARK: Hear
+
+    /// A hummed idea, a file or a library song heard by ACE-Step, which fills in the form (`AceHearPanel.vue`).
+    private var hear: some View {
+        let unavailable = session.info?.understands != true
+        let busy = session.hearing || unavailable
+        return Section {
+            Text(unavailable
+                 ? "Zum Zuhören braucht ACE-Step ace-understand auf dem Mac (deploy/install-ace.sh)."
+                 : "Summen, pfeifen, singen oder einen Song wählen: ACE-Step hört zu und füllt Beschreibung, Text, Tempo, Tonart, Takt und Länge aus. Die Melodie selbst wird nicht übernommen.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Button {
+                    Task { await session.toggleRecording() }
+                } label: {
+                    if session.recorder.recording {
+                        Label("Fertig · \(session.recorder.seconds) s", systemImage: "stop.circle")
+                    } else {
+                        Label("Aufnehmen", systemImage: "mic")
+                    }
+                }
+                .tint(session.recorder.recording ? .red : nil)
+                .disabled(busy)
+                Button {
+                    pickingRecording = true
+                } label: {
+                    Label("Datei wählen", systemImage: "square.and.arrow.down")
+                }
+                .disabled(busy || session.recorder.recording)
+            }
+            .buttonStyle(.bordered)
+            Picker("Song aus der Bibliothek", selection: $session.hearSong) {
+                Text("Song wählen").tag("")
+                ForEach(sources) { song in
+                    Text(song.number.map { "\(song.title) · Song \($0)" } ?? song.title).tag(song.id)
+                }
+            }
+            Button {
+                Task { await session.hear(song: session.hearSong) }
+            } label: {
+                Label("Anhören", systemImage: "headphones")
+            }
+            .disabled(busy || session.recorder.recording || session.hearSong.isEmpty)
+            if session.hearing {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("ACE-Step hört zu …").foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            CardHeading("Aus Aufnahme füllen", systemImage: "mic")
+        }
     }
 
     private func notReady(_ info: Components.Schemas.AceInfo) -> some View {
@@ -223,6 +292,14 @@ private struct AceSessionView: View {
                 }
             }
             .pickerStyle(.segmented)
+            Toggle(isOn: $model.aceForm.brighten) {
+                VStack(alignment: .leading) {
+                    Text("Höhen ausgleichen")
+                    Text("Der Klang-Decoder von ACE-Step verliert die hohen Töne, die Songs klingen dumpf. Hebt sie ab 12 kHz sanft an (+6 dB).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             HStack {
                 Button {
                     Task { await session.send() }

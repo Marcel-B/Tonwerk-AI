@@ -1111,6 +1111,20 @@ export interface AceSongRequest {
   repaintEnd?: number | null
   /** The Mac to compose on: `local` or a helper's id; null for whichever is free. */
   machine?: string | null
+  /** Gives back the highs ACE-Step's VAE loses (+6 dB from 12 kHz); null or false leaves them. */
+  brighten?: boolean | null
+}
+
+/** What ACE-Step heard in a recording or song (`POST /api/ace/understand`); null where it could not tell. */
+export interface AceHeard {
+  caption: string | null
+  lyrics: string | null
+  bpm: number | null
+  key: string | null
+  timeSignature: number | null
+  language: string | null
+  duration: number | null
+  instrumental: boolean
 }
 
 export type AceStage =
@@ -1157,6 +1171,8 @@ export interface AceInfo {
   ditModels: string[]
   adapters: string[]
   jobs: AceJob[]
+  /** Whether a recording can be heard to fill in the form (`ace-understand` on this Mac). */
+  understands: boolean
 }
 
 /** A written song sketch planned by Claude (Sketches/SketchModels.cs `SketchPlan`). */

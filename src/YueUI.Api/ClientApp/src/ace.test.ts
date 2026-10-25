@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { aceKeys, defaultAceForm, fromAceRequest, toAceRequest, withAceTemplate } from './ace'
+import { aceKeyOf, aceKeys, defaultAceForm, fromAceRequest, toAceRequest, withAceTemplate, withHeard } from './ace'
 
 describe('toAceRequest', () => {
   test('a new song sends only what was set, the rest left to the model', () => {
@@ -78,8 +78,83 @@ describe('toAceRequest', () => {
 describe('fromAceRequest', () => {
   test('a song comes back with its own seed, the rest at the defaults', () => {
     const form = fromAceRequest({ caption: 'pop', seed: 8, lyrics: 'Written by the LM', batch: null })
-    expect(form).toEqual({ ...defaultAceForm(), caption: 'pop', seed: '8', lyrics: 'Written by the LM' })
+    // Made before the highs could be given back, so made again without.
+    expect(form).toEqual({
+      ...defaultAceForm(),
+      caption: 'pop',
+      seed: '8',
+      lyrics: 'Written by the LM',
+      brighten: false,
+    })
     expect(toAceRequest(form).seed).toBe(8)
+    expect(fromAceRequest({ caption: 'pop', brighten: true }).brighten).toBe(true)
+  })
+})
+
+describe('withHeard', () => {
+  const heard = {
+    caption: 'dreamy synth-pop, hummed melody',
+    lyrics: '[Verse]\nLa la',
+    bpm: 96,
+    key: 'D# Minor',
+    timeSignature: 3,
+    language: 'en',
+    duration: 4,
+    instrumental: false,
+  }
+
+  test('what was heard replaces the song, the way it is made stays', () => {
+    const form = {
+      ...defaultAceForm(),
+      title: 'Idee',
+      ditModel: 'xl.gguf',
+      seed: '5',
+      task: 'cover' as const,
+      bpm: 120,
+    }
+    expect(withHeard(form, heard)).toEqual({
+      ...form,
+      task: 'text2music',
+      caption: 'dreamy synth-pop, hummed melody',
+      lyrics: '[Verse]\nLa la',
+      language: 'en',
+      bpm: 96,
+      key: 'Eb minor',
+      timeSignature: 3,
+      // A hummed idea of four seconds still asks for the shortest song.
+      duration: 10,
+    })
+  })
+
+  test('what it could not tell goes back to the model', () => {
+    const form = { ...defaultAceForm(), caption: 'mine', lyrics: 'old', language: 'de', key: 'C major', bpm: 100 }
+    const blank = {
+      caption: null,
+      lyrics: null,
+      bpm: null,
+      key: 'H major',
+      timeSignature: null,
+      language: null,
+      duration: null,
+      instrumental: true,
+    }
+    expect(withHeard(form, blank)).toMatchObject({
+      caption: 'mine',
+      lyrics: '',
+      instrumental: true,
+      language: '',
+      key: '',
+      bpm: null,
+      duration: null,
+    })
+  })
+
+  test("keys as the LM writes them become the picker's", () => {
+    expect(aceKeyOf('Bb major')).toBe('Bb major')
+    expect(aceKeyOf(' g♯ minor ')).toBe('Ab minor')
+    expect(aceKeyOf('F#  Major')).toBe('F# major')
+    expect(aceKeyOf('C')).toBe('')
+    expect(aceKeyOf(null)).toBe('')
   })
 })
 

@@ -296,7 +296,9 @@ public sealed class AceComposer(
             // Counted from 1, as YuE Studio names its songs.
             var song = Path.Combine(staged, $"song{index + 1}");
             Directory.CreateDirectory(song);
-            await mixer.EncodeFlacAsync(output.Wave, Path.Combine(song, "audio.flac"), cancellationToken);
+            var mastered = Path.Combine(work, $"mastered{index}.wav");
+            await Task.Run(() => AceMastering.Process(output.Wave, mastered, job.Request.Brighten == true), cancellationToken);
+            await mixer.EncodeFlacAsync(mastered, Path.Combine(song, "audio.flac"), cancellationToken);
 
             var written = output.Request.DeepClone().AsObject();
             // The LM's 5 Hz codes are of no use once the song is there, and take kilobytes.
@@ -315,7 +317,7 @@ public sealed class AceComposer(
             await Write(song, "result.json", new JsonObject
             {
                 ["title"] = job.Title,
-                ["audio_seconds"] = WaveSeconds(output.Wave),
+                ["audio_seconds"] = WaveSeconds(mastered),
                 ["engine"] = "ace-step",
             });
             await Write(song, SongLibrary.AceFile, written);

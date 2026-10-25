@@ -4,12 +4,13 @@ import Message from 'primevue/message'
 import Panel from 'primevue/panel'
 import { computed, ref, watch } from 'vue'
 import { ApiError, composeAce, deleteAceJob, getAce } from '../api'
-import { aceForm, aceKeys, aceLanguages, defaultAceForm, fromAceRequest, toAceRequest, usesLm } from '../ace'
+import { aceForm, aceKeys, aceLanguages, defaultAceForm, fromAceRequest, toAceRequest, usesLm, withHeard } from '../ace'
 import { formatDateTime, formatDuration, t } from '../i18n'
 import { insertSectionTag, shout } from '../lyricsTags'
-import type { AceInfo, AceJob, AceStage, AceTask, RunInfo } from '../types'
+import type { AceHeard, AceInfo, AceJob, AceStage, AceTask, RunInfo } from '../types'
 import { showSong, songHref } from '../view'
 import { ranOnNote } from '../machines'
+import AceHearPanel from './AceHearPanel.vue'
 import FieldHelp from './FieldHelp.vue'
 import MachinePicker from './MachinePicker.vue'
 import OptionalNumberField from './OptionalNumberField.vue'
@@ -261,6 +262,13 @@ async function removeJob(job: AceJob): Promise<void> {
   }
 }
 
+/** What ACE-Step heard laid over the form; the fields it filled show what it took. */
+function heard(result: AceHeard): void {
+  form.value = withHeard(form.value, result)
+  fieldErrors.value = {}
+  emit('notice', t('aceHearDone'))
+}
+
 /** The job's request back in the form, with the seed it was made with, to vary one thing. */
 function reuse(job: AceJob): void {
   form.value = fromAceRequest({ ...job.request, seed: job.seed }, form.value.machine)
@@ -317,6 +325,15 @@ function message(caught: unknown): string {
         <span class="text-sm">{{ t('aceNotInstalledPath', { binaries: info.binaries, models: info.models }) }}</span>
       </div>
     </Message>
+
+    <AceHearPanel
+      v-if="info?.ready"
+      :runs="runs"
+      :lm-model="form.lmModel"
+      :disabled="!info.understands"
+      @heard="heard"
+      @error="emit('error', $event)"
+    />
 
     <form class="grid grid-cols-1 items-start gap-4 md:grid-cols-2" @submit.prevent="send">
       <Card>
@@ -568,6 +585,13 @@ function message(caught: unknown): string {
                     :aria-label="t('aceBatch')"
                   />
                 </div>
+              </div>
+              <div class="flex items-start gap-2">
+                <Checkbox v-model="form.brighten" input-id="ace-brighten" binary class="mt-0.5" />
+                <label for="ace-brighten">
+                  {{ t('aceBrighten') }}
+                  <small class="muted block">{{ t('aceBrightenHint') }}</small>
+                </label>
               </div>
               <div class="flex flex-wrap items-center gap-3">
                 <Button

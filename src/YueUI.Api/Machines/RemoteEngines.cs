@@ -228,6 +228,11 @@ public sealed class RemoteEngines(HelperClient client, Machines machines)
         /// <summary>The helper's files as last polled: the job names the models it has.</summary>
         public AceModelFiles Files() => machines.StatusOf(helper)?.Ace ?? new AceModelFiles([], [], false, false, []);
 
+        public bool Understands => false;
+
+        public Task<AceHeard> UnderstandAsync(string audio, string workDirectory, string lmModel, string ditModel, CancellationToken cancellationToken) =>
+            throw new AceException("Recordings are heard on this Mac.", StatusCodes.Status501NotImplemented);
+
         public async Task<IReadOnlyList<AceOutput>> GenerateAsync(AceRun run, Action<string, double> progress, CancellationToken cancellationToken)
         {
             Dictionary<string, string> inputs = [];

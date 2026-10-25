@@ -1,7 +1,10 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using YueUI.Api.Ace;
 using YueUI.Api.Library;
+using YueUI.Api.Memory;
+using YueUI.Api.Voices;
 
 namespace YueUI.Api;
 
@@ -12,6 +15,9 @@ namespace YueUI.Api;
 public static class AceEndpoints
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    /// <summary>A hummed idea is a few seconds; a whole song as WAV some tens of MB.</summary>
+    public const long MaxUnderstandBytes = 200L * 1024 * 1024;
 
     public static RouteGroupBuilder MapAceEndpoints(this RouteGroupBuilder api)
     {
@@ -26,7 +32,8 @@ public static class AceEndpoints
                 files.Lm,
                 files.Dit,
                 files.Adapters,
-                composer.Jobs());
+                composer.Jobs(),
+                engine.Understands && files.Complete);
         })
             .WithName("GetAce")
             .Produces<AceInfo>(StatusCodes.Status200OK);
@@ -68,7 +75,116 @@ public static class AceEndpoints
             .WithName("GetSongAceRequest")
             .Produces<AceSongRequest>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound);
+        api.MapPost("/ace/understand", UnderstandAsync)
+            // A recording is posted from a plain form; there is no login and no cookie that a forged request could use.
+            .DisableAntiforgery()
+            .WithFormOptions(multipartBodyLengthLimit: MaxUnderstandBytes)
+            .WithMetadata(new RequestSizeLimitAttribute(MaxUnderstandBytes))
+            .WithName("UnderstandAceAudio")
+            .Produces<AceHeard>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
         return api;
+    }
+
+    /// <summary>
+    /// A recording (hummed, whistled, sung, or a whole song) or a library song heard by ACE-Step's LM, answered with
+    /// what the page's form takes: caption, lyrics, tempo, key, metre, language, length. Answered within the request,
+    /// since a recording takes well under a minute; the models need the memory, so it is refused (409) while YuE2 or
+    /// another model has it rather than waiting where a phone would give up. Only on this Mac.
+    /// </summary>
+    private static async Task<IResult> UnderstandAsync(
+        IFormFile? file,
+        [FromForm] string? song,
+        [FromForm] string? lmModel,
+        IAceEngine engine,
+        IAudioMixer mixer,
+        SongLibrary library,
+        Machines.Machines machines,
+        IOptions<AceOptions> options,
+        ILoggerFactory loggers,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        string? source = null;
+        if (!string.IsNullOrWhiteSpace(song))
+        {
+            if (song.Split('/') is [var run, var name] && library.SongDirectory(run, name) is { } directory
+                && File.Exists(Path.Combine(directory, "audio.flac")))
+            {
+                source = Path.Combine(directory, "audio.flac");
+            }
+            else
+            {
+                errors["song"] = ["A song of the library."];
+            }
+        }
+        else if (file is null || file.Length == 0)
+        {
+            errors["file"] = ["A recording or a song is required."];
+        }
+        var files = engine.Files();
+        if (lmModel is not null && !files.Lm.Contains(lmModel))
+        {
+            errors["lmModel"] = ["One of the LMs in the models folder."];
+        }
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+        if (!engine.Understands || !files.Complete)
+        {
+            return Results.Problem(
+                $"acestep.cpp's ace-understand or its models are missing ({options.Value.ResolvedBinaries}); run deploy/install-ace.sh.",
+                statusCode: StatusCodes.Status501NotImplemented);
+        }
+        await using var placement = await machines.TryLocalAsync(LargeModel.Ace);
+        if (placement is null)
+        {
+            return Results.Problem(
+                "YuE2, ACE-Step or another model is using the memory right now; try again once it is free.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+        var folder = Directory.CreateTempSubdirectory("yueui-ace-hear-").FullName;
+        try
+        {
+            if (source is null)
+            {
+                source = Path.Combine(folder, "upload" + AudioMidiEndpoints.SafeExtension(file!.FileName));
+                await using var target = File.Create(source);
+                await file.CopyToAsync(target, cancellationToken);
+            }
+            // ace-understand reads WAV and MP3; a phone's recording is M4A or WebM, the library's songs FLAC.
+            var audio = Path.Combine(folder, "audio.wav");
+            try
+            {
+                await mixer.DecodeAsync(source, audio, cancellationToken);
+            }
+            catch (Exception exception) when (exception is VoiceServiceException or InvalidOperationException)
+            {
+                return Results.Problem(title: "The recording could not be read.", detail: exception.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+            var heard = await engine.UnderstandAsync(audio, folder, lmModel ?? files.Lm[0], files.Dit[0], cancellationToken);
+            return Results.Ok(heard);
+        }
+        catch (AceException exception)
+        {
+            loggers.CreateLogger(typeof(AceEndpoints)).LogWarning("ACE-Step could not hear the recording: {Message}", exception.Message);
+            return Results.Problem(exception.Message, statusCode: exception.Status);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     private static IResult Compose(

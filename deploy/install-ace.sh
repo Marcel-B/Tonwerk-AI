@@ -51,7 +51,7 @@ echo "Models: $MODELS"
 
 command -v cmake >/dev/null 2>&1 || brew install cmake
 
-if [ "$(cat "$BINARIES/tonwerk-stamp" 2>/dev/null || true)" != "$STAMP" ] || [ ! -x "$BINARIES/ace-synth" ]; then
+if [ "$(cat "$BINARIES/tonwerk-stamp" 2>/dev/null || true)" != "$STAMP" ] || [ ! -x "$BINARIES/ace-synth" ] || [ ! -x "$BINARIES/ace-understand" ]; then
   if [ ! -d "$SOURCE/.git" ]; then
     mkdir -p "$(dirname "$SOURCE")"
     git clone "$REPOSITORY" "$SOURCE"
@@ -66,7 +66,7 @@ if [ "$(cat "$BINARIES/tonwerk-stamp" 2>/dev/null || true)" != "$STAMP" ] || [ !
   cmake --build "$BINARIES" --config Release -j "$(sysctl -n hw.ncpu)"
   echo "$STAMP" > "$BINARIES/tonwerk-stamp"
 fi
-for tool in ace-lm ace-synth; do
+for tool in ace-lm ace-synth ace-understand; do
   [ -x "$BINARIES/$tool" ] || { echo "$tool was not built in $BINARIES." >&2; exit 1; }
 done
 

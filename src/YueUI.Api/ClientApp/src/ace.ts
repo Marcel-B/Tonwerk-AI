@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue'
-import type { AceSongRequest, AceTask } from './types'
+import type { AceHeard, AceSongRequest, AceTask } from './types'
 
 /**
  * The ACE-Step page's form, kept per browser like the create page's. Null and empty strings leave a value to the
@@ -42,6 +42,8 @@ export interface AceForm {
   repaintEnd: number | null
   /** The Mac that composes; empty lets the server choose. */
   machine: string
+  /** The highs the VAE loses given back; on for new songs, since without it they sound dull. */
+  brighten: boolean
 }
 
 export function defaultAceForm(): AceForm {
@@ -77,6 +79,7 @@ export function defaultAceForm(): AceForm {
     repaintStart: null,
     repaintEnd: null,
     machine: '',
+    brighten: true,
   }
 }
 
@@ -175,6 +178,7 @@ export function toAceRequest(form: AceForm): AceSongRequest {
     repaintStart: form.task === 'repaint' ? form.repaintStart : null,
     repaintEnd: form.task === 'repaint' ? form.repaintEnd : null,
     machine: text(form.machine),
+    brighten: form.brighten,
   }
 }
 
@@ -217,6 +221,28 @@ export function fromAceRequest(request: AceSongRequest, machine = ''): AceForm {
     coverStrength: request.coverStrength ?? null,
     repaintStart: request.repaintStart ?? null,
     repaintEnd: request.repaintEnd ?? null,
+    // A song from before the switch was made without it, and taking it over should make it again.
+    brighten: request.brighten ?? false,
+  }
+}
+
+/**
+ * What ACE-Step heard in a recording laid over the form, as a new song: its description, words, tempo, key, metre,
+ * language and length replace the form's where it could tell, and leave the field to the model where it could not;
+ * title, models, seed and the rest stay. A recording without words makes no instrumental unless ACE-Step heard one.
+ */
+export function withHeard(form: AceForm, heard: AceHeard): AceForm {
+  return {
+    ...form,
+    task: 'text2music',
+    caption: heard.caption ?? form.caption,
+    lyrics: heard.instrumental ? '' : (heard.lyrics ?? ''),
+    instrumental: heard.instrumental,
+    language: heard.language ?? '',
+    bpm: heard.bpm,
+    key: aceKeyOf(heard.key),
+    timeSignature: heard.timeSignature,
+    duration: heard.duration === null ? null : Math.min(600, Math.max(10, heard.duration)),
   }
 }
 
@@ -321,6 +347,21 @@ export const aceLanguages = [
 export const aceKeys = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'].flatMap((root) =>
   ['major', 'minor'].map((mode) => `${root} ${mode}`),
 )
+
+/** Sharps the picker lists as flats, as ACE-Step's LM writes either. */
+const enharmonic: Record<string, string> = { 'D#': 'Eb', 'G#': 'Ab', 'A#': 'Bb' }
+
+/** A key as the LM wrote it ("G# Minor", "Bb major") as the picker's entry, or empty for one it does not list. */
+export function aceKeyOf(text: string | null): string {
+  const match = /^\s*([A-Ga-g])\s*([#b♯♭]?)\s+(major|minor)\s*$/i.exec(text ?? '')
+  if (!match) {
+    return ''
+  }
+  const accidental = match[2] === '♯' ? '#' : match[2] === '♭' ? 'b' : (match[2] ?? '')
+  const root = match[1]!.toUpperCase() + accidental
+  const key = `${enharmonic[root] ?? root} ${match[3]!.toLowerCase()}`
+  return aceKeys.includes(key) ? key : ''
+}
 
 /**
  * The page's form, here rather than in the page: the page loads on first use, and the library's "use everything"

@@ -178,6 +178,53 @@ public sealed class AceEngineTests : IDisposable
         Assert.False(File.Exists(Path.Combine(binaries, "synth-ran")));
     }
 
+    [Fact]
+    public async Task Ace_understand_hears_a_recording_with_the_models_it_is_told()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        var binaries = Path.Combine(_root, "build");
+        Script(Path.Combine(binaries, "ace-understand"), """
+            echo "$@" > "$(dirname "$0")/understand-arguments"
+            while [ $# -gt 0 ]; do case "$1" in --request) request="$2"; shift ;; -o) out="$2"; shift ;; esac; shift; done
+            cp "$request" "$(dirname "$0")/understand-request"
+            printf '%s' '{"caption":"lofi piano, soft vocals","lyrics":"[Verse]\nHum","bpm":84,"keyscale":"Eb major","timesignature":"3","vocal_language":"en","duration":31.6,"audio_codes":"1,2"}' > "$out"
+            """);
+        var work = Directory.CreateDirectory(Path.Combine(_root, "work")).FullName;
+        var engine = new AceCppEngine(
+            Microsoft.Extensions.Options.Options.Create(new AceOptions { Root = _root, Binaries = binaries }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AceCppEngine>.Instance);
+
+        Assert.True(engine.Understands);
+        var heard = await engine.UnderstandAsync("/tmp/idee.wav", work, "lm.gguf", "dit.gguf", CancellationToken.None);
+
+        Assert.Equal(new AceHeard("lofi piano, soft vocals", "[Verse]\nHum", 84, "Eb major", 3, "en", 32, false), heard);
+        Assert.Equal(
+            $"--models {Path.Combine(_root, "models")} --src-audio /tmp/idee.wav --request {Path.Combine(work, "understand.json")} -o {Path.Combine(work, "heard.json")}",
+            (await File.ReadAllTextAsync(Path.Combine(binaries, "understand-arguments"))).Trim());
+        Assert.Equal("""{"lm_model":"lm.gguf","synth_model":"dit.gguf"}""", (await File.ReadAllTextAsync(Path.Combine(binaries, "understand-request"))).Trim());
+    }
+
+    [Fact]
+    public void What_was_heard_keeps_only_what_the_form_can_take()
+    {
+        var heard = AceHeard.From(new System.Text.Json.Nodes.JsonObject
+        {
+            ["caption"] = " ",
+            ["lyrics"] = "[Instrumental]",
+            ["bpm"] = 0,
+            ["keyscale"] = "A minor",
+            ["timesignature"] = "5",
+            ["vocal_language"] = "unknown",
+            ["duration"] = 0.0,
+        });
+
+        Assert.Equal(new AceHeard(null, null, null, "A minor", null, null, null, true), heard);
+        Assert.Equal(4, AceHeard.From(new System.Text.Json.Nodes.JsonObject { ["timesignature"] = "4/4" }).TimeSignature);
+    }
+
     private static void Script(string path, string body)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

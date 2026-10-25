@@ -62,6 +62,7 @@ import type {
   ImageState,
   AceInfo,
   AceJob,
+  AceHeard,
   AceSongRequest,
   SketchInfo,
   SketchResult,
@@ -1066,6 +1067,26 @@ export async function deleteImage(id: string): Promise<void> {
 
 export async function getAce(): Promise<AceInfo> {
   return (await send('/api/ace')).json() as Promise<AceInfo>
+}
+
+/**
+ * Has ACE-Step hear a recording (hummed, sung, a whole song) or a library song and answers what the form takes. Runs
+ * within the request; refused with 409 while another model has the memory.
+ */
+export async function understandAce(
+  source: { file: Blob; name: string } | { song: string },
+  lmModel?: string,
+): Promise<AceHeard> {
+  const form = new FormData()
+  if ('song' in source) {
+    form.append('song', source.song)
+  } else {
+    form.append('file', source.file, source.name)
+  }
+  if (lmModel) {
+    form.append('lmModel', lmModel)
+  }
+  return (await send('/api/ace/understand', { method: 'POST', body: form })).json() as Promise<AceHeard>
 }
 
 /** Queues a song for ACE-Step; its progress arrives as `ace` events, the songs in the library once done. */

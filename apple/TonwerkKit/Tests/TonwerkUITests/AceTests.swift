@@ -75,6 +75,40 @@ final class AceTests: XCTestCase {
         XCTAssertTrue(form.enrichCaption)
     }
 
+    func testNewSongsAreBrightenedButOldOnesAreMadeAgainAsTheyWere() throws {
+        XCTAssertEqual(AceForm().request["brighten"] as? Bool, true)
+        let old = try JSONDecoder.tonwerk().decode(Components.Schemas.AceSongRequest.self, from: Data(#"{"caption":"lofi"}"#.utf8))
+        XCTAssertFalse(AceForm(request: old).brighten)
+        let bright = try JSONDecoder.tonwerk().decode(
+            Components.Schemas.AceSongRequest.self, from: Data(#"{"caption":"lofi","brighten":true}"#.utf8))
+        XCTAssertTrue(AceForm(request: bright).brighten)
+        XCTAssertTrue(try JSONDecoder().decode(AceForm.self, from: Data(#"{"caption":"rock"}"#.utf8)).brighten)
+    }
+
+    func testWhatWasHeardFillsTheFormAsANewSong() throws {
+        let data = Data(#"{"caption":"dreamy synth-pop","lyrics":"[Verse]\nLa la","bpm":96,"key":"D# Minor","timeSignature":3,"language":"en","duration":4,"instrumental":false}"#.utf8)
+        let heard = try JSONDecoder.tonwerk().decode(Components.Schemas.AceHeard.self, from: data)
+        var form = AceForm()
+        form.title = "Idee"
+        form.task = .cover
+        form.ditModel = "xl.gguf"
+        let filled = form.hearing(heard)
+        XCTAssertEqual(filled.task, .text2music)
+        XCTAssertEqual(filled.caption, "dreamy synth-pop")
+        XCTAssertEqual(filled.lyrics, "[Verse]\nLa la")
+        XCTAssertEqual(filled.bpm, 96)
+        XCTAssertEqual(filled.key, "Eb minor")
+        XCTAssertEqual(filled.timeSignature, 3)
+        XCTAssertEqual(filled.language, "en")
+        XCTAssertEqual(filled.duration, 10, "a hummed idea still asks for the shortest song")
+        XCTAssertEqual(filled.title, "Idee")
+        XCTAssertEqual(filled.ditModel, "xl.gguf")
+        XCTAssertEqual(AceForm.pickerKey(of: " g♯ minor"), "Ab minor")
+        XCTAssertEqual(AceForm.pickerKey(of: "Bb major"), "Bb major")
+        XCTAssertEqual(AceForm.pickerKey(of: "H major"), "")
+        XCTAssertEqual(AceForm.pickerKey(of: nil), "")
+    }
+
     func testAStoredFormOfAnOlderVersionKeepsWhatItCanRead() throws {
         let data = Data(#"{"caption":"rock","batch":"three","task":"unknown"}"#.utf8)
         let form = try JSONDecoder().decode(AceForm.self, from: data)

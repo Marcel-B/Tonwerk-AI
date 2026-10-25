@@ -1449,6 +1449,30 @@ public sealed class FakeAce : Ace.IAceEngine
         return outputs;
     }
 
+    public bool Understands { get; set; } = true;
+
+    /// <summary>What it says it heard; the recordings it was given (their bytes) and the models it was told.</summary>
+    public Ace.AceHeard Heard { get; set; } = new("dreamy synth-pop, hummed melody", null, 96, "D minor", 4, "en", 30, false);
+
+    public List<(byte[] Audio, string Lm, string Dit)> Hearings { get; } = [];
+
+    /// <summary>Held open to keep a hearing running; completed by default.</summary>
+    public TaskCompletionSource HearGate { get; set; } = CompletedGate();
+
+    public async Task<Ace.AceHeard> UnderstandAsync(string audio, string workDirectory, string lmModel, string ditModel, CancellationToken cancellationToken)
+    {
+        lock (Hearings)
+        {
+            Hearings.Add((File.ReadAllBytes(audio), lmModel, ditModel));
+        }
+        await HearGate.Task.WaitAsync(cancellationToken);
+        if (Failure is { } failure)
+        {
+            throw new Ace.AceException(failure);
+        }
+        return Heard;
+    }
+
     private static TaskCompletionSource CompletedGate()
     {
         var gate = new TaskCompletionSource();

@@ -239,7 +239,7 @@ public static partial class AudioMidiEndpoints
     internal static string TrackName(string stem) =>
         IsVoice(stem) ? "Vocal" : stem.Length == 0 ? "Track" : char.ToUpperInvariant(stem[0]) + stem[1..].Replace('_', ' ');
 
-    private static string SafeExtension(string name)
+    internal static string SafeExtension(string name)
     {
         var extension = Path.GetExtension(name);
         return extension.Length is > 1 and <= 6 && extension[1..].All(char.IsAsciiLetterOrDigit) ? extension : ".audio";

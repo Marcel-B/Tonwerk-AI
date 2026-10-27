@@ -521,6 +521,23 @@ export interface BackupRun {
   scheduled: boolean
 }
 
+/** Whether songs can be handed to Tonregal, the music library; the menus offer it only then. */
+export interface TonregalStatus {
+  configured: boolean
+}
+
+/**
+ * A song handed to Tonregal: `imported` (filed under `libraryPath`), `matched` (accepted, filed shortly) or
+ * `rejected` (the same file is there already, see `error`). `repeated` when Tonregal kept an earlier handover.
+ */
+export interface TonregalTransfer {
+  jobId: number
+  state: string
+  libraryPath: string | null
+  error: string | null
+  repeated: boolean
+}
+
 /** The Nextcloud backup; `done` of `total` files while it runs. */
 export interface BackupStatus {
   configured: boolean

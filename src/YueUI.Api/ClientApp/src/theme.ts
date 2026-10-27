@@ -4,6 +4,7 @@ import button from '@primeuix/themes/aura/button'
 import card from '@primeuix/themes/aura/card'
 import checkbox from '@primeuix/themes/aura/checkbox'
 import confirmdialog from '@primeuix/themes/aura/confirmdialog'
+import contextmenu from '@primeuix/themes/aura/contextmenu'
 import dataview from '@primeuix/themes/aura/dataview'
 import dialog from '@primeuix/themes/aura/dialog'
 import divider from '@primeuix/themes/aura/divider'
@@ -49,6 +50,7 @@ export default {
     card,
     checkbox,
     confirmdialog,
+    contextmenu,
     dataview,
     dialog,
     divider,

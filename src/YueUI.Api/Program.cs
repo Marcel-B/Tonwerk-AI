@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using YueUI.Api;
 using YueUI.Api.AudioMidi;
 using YueUI.Api.Backup;
+using YueUI.Api.Tonregal;
 using YueUI.Api.Data;
 using YueUI.Api.Export;
 using YueUI.Api.Library;
@@ -198,6 +199,11 @@ builder.Services.AddHttpClient(WebDavClient.HttpClientName);
 builder.Services.AddSingleton<CloudBackup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<CloudBackup>());
 
+// Hands songs to Tonregal, the music library; off until Tonregal is configured.
+builder.Services.Configure<TonregalOptions>(builder.Configuration.GetSection(TonregalOptions.Section));
+builder.Services.AddHttpClient(TonregalClient.HttpClientName);
+builder.Services.AddSingleton<TonregalClient>();
+
 // Every log message, the worker's output and the updater's log in daily files, read on the log page.
 builder.Services.Configure<LogOptions>(builder.Configuration.GetSection(LogOptions.Section));
 builder.Services.AddSingleton<LogFeed>();
@@ -245,6 +251,7 @@ api.MapLoraEndpoints();
 api.MapLibraryEndpoints();
 api.MapTimingEndpoints();
 api.MapExportEndpoints();
+api.MapTonregalEndpoints();
 api.MapCoverEndpoints();
 api.MapTranscriptionEndpoints();
 api.MapLyricsEndpoints();

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import Checkbox from 'primevue/checkbox'
+import ContextMenu from 'primevue/contextmenu'
 import { useConfirm } from 'primevue/useconfirm'
 import { audioUrl, coverUrl, deleteVersion, render, scoreUrl, songScore, versionAudioUrl } from '../api'
 import { formatDateTime, formatDuration, t, versionProgress } from '../i18n'
@@ -9,6 +10,7 @@ import { ratingOf } from '../ratings'
 import type { RunInfo, SongInfo, VersionState } from '../types'
 import { keyLabel, tempoTag, unclearBelow } from '../traits'
 import { imageFileName, openViewer } from '../imageViewer'
+import { openExport, openTonregalFor, tonregalReady } from '../export'
 import { openVideo } from '../video'
 import { octaveOptions, stepOptions, strengthOptions } from '../voiceChoices'
 import PlaylistToggle from './PlaylistToggle.vue'
@@ -73,6 +75,34 @@ const emit = defineEmits<{
 }>()
 
 const confirm = useConfirm()
+
+/** A right click on a song with audio: play, export and, where it is set up, into Tonregal. */
+const contextMenu = useTemplateRef<InstanceType<typeof ContextMenu>>('contextMenu')
+const contextItems = computed(() => [
+  { label: t('play'), icon: 'pi pi-play', command: () => emit('play') },
+  {
+    label: t('shareOrExport'),
+    icon: 'pi pi-share-alt',
+    command: () =>
+      openExport({
+        songId: props.song.id,
+        title: props.run.title,
+        style: props.run.style,
+        cover: props.song.coverUpdatedAt ? coverUrl(props.song.id, props.song.coverUpdatedAt) : undefined,
+      }),
+  },
+  ...(tonregalReady.value
+    ? [{ label: t('tonregalSend'), icon: 'pi pi-book', command: () => openTonregalFor(props.song.id, props.run.title) }]
+    : []),
+])
+
+function openContextMenu(event: MouseEvent): void {
+  // Text fields and the score keep the browser's own menu, to copy from them.
+  if (!props.song.hasAudio || (event.target as HTMLElement).closest('input, textarea, pre')) {
+    return
+  }
+  contextMenu.value?.show(event)
+}
 
 function failed(caught: unknown): void {
   emit('error', caught instanceof Error ? caught.message : String(caught))
@@ -216,7 +246,8 @@ const severityByQuality: Record<string, string> = {
 </script>
 
 <template>
-  <li :class="['song', { 'focused bg-emphasis': focused }]">
+  <li :class="['song', { 'focused bg-emphasis': focused }]" @contextmenu="openContextMenu">
+    <ContextMenu ref="contextMenu" :model="contextItems" />
     <div class="flex flex-wrap gap-x-3 gap-y-1 items-center">
       <!-- A song the worker is on cannot be deleted, so it cannot be chosen either. -->
       <Checkbox

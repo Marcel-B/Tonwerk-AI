@@ -2,6 +2,8 @@ import type {
   AudioMidiInfo,
   AudioMidiSettings,
   BackupStatus,
+  TonregalStatus,
+  TonregalTransfer,
   CoverPainting,
   GenerateRequest,
   LogEntry,
@@ -395,6 +397,28 @@ export async function exportSongFile(
   const name = fileName(response.headers.get('Content-Disposition')) ?? `Tonwerk.${format === 'small' ? 'm4a' : format}`
   const blob = await response.blob()
   return new File([blob], name, { type: blob.type })
+}
+
+export async function getTonregal(): Promise<TonregalStatus> {
+  return (await send('/api/tonregal')).json() as Promise<TonregalStatus>
+}
+
+/** The song as tagged FLAC into Tonregal; waits until Tonregal has filed it, some seconds at most. */
+export async function sendToTonregal(
+  songId: string,
+  artist: string,
+  genre: string,
+  cover: Blob | null,
+): Promise<TonregalTransfer> {
+  const form = new FormData()
+  form.append('artist', artist)
+  form.append('genre', genre)
+  if (cover) {
+    form.append('cover', cover, 'cover.jpg')
+  }
+  return (
+    await send(`/api/songs/${songId}/tonregal`, { method: 'POST', body: form })
+  ).json() as Promise<TonregalTransfer>
 }
 
 /** Saves a fetched file the way a download link would. */

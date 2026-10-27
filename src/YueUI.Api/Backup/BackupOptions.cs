@@ -76,56 +76,7 @@ public sealed class BackupOptions
 
     public bool Configured => BaseUri is not null && ResolvedUsername is not null && ResolvedPassword is not null;
 
-    /// <summary>The environment variable, else the env file's line, else the setting; null when none has a value.</summary>
-    private string? Value(string name, string? setting) =>
-        Clean(Environment.GetEnvironmentVariable(name)) ?? Clean(ReadEnvFile().GetValueOrDefault(name)) ?? Clean(setting);
-
-    private Dictionary<string, string> ReadEnvFile()
-    {
-        var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (string.IsNullOrWhiteSpace(EnvFile))
-        {
-            return values;
-        }
-        var path = EnvFile.StartsWith("~/", StringComparison.Ordinal)
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), EnvFile[2..])
-            : EnvFile;
-        try
-        {
-            if (!File.Exists(path))
-            {
-                return values;
-            }
-            foreach (var raw in File.ReadLines(path))
-            {
-                var line = raw.Trim();
-                if (line.StartsWith("export ", StringComparison.Ordinal))
-                {
-                    line = line[7..].TrimStart();
-                }
-                if (line.Length == 0 || line[0] == '#' || line.IndexOf('=') is not (> 0 and var equals))
-                {
-                    continue;
-                }
-                values[line[..equals].Trim()] = line[(equals + 1)..];
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-        }
-        return values;
-    }
-
-    /// <summary>Trimmed and without surrounding quotes, as module-o-mat's <c>Normalize</c> reads them; null when empty.</summary>
-    private static string? Clean(string? value)
-    {
-        var trimmed = value?.Trim() ?? "";
-        if (trimmed.Length >= 2 && (trimmed[0], trimmed[^1]) is ('"', '"') or ('\'', '\''))
-        {
-            trimmed = trimmed[1..^1].Trim();
-        }
-        return trimmed.Length > 0 ? trimmed : null;
-    }
+    private string? Value(string name, string? setting) => EnvValues.Resolve(name, EnvFile, setting);
 
     /// <summary>The daily start, or null for manual backups only (or a time that does not parse).</summary>
     public TimeOnly? DailyAt => TimeOnly.TryParse(At, System.Globalization.CultureInfo.InvariantCulture, out var at) ? at : null;

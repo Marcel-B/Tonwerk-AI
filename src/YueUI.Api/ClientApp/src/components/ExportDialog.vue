@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
-import { exportSongFile, saveBlob } from '../api'
+import { exportSongFile, saveBlob, sendToTonregal } from '../api'
 import {
   drawCover,
   exportFormats,
@@ -13,14 +13,21 @@ import {
   type ExportTarget,
 } from '../export'
 import { t } from '../i18n'
+import type { TonregalTransfer } from '../types'
 
 /**
  * App.vue holds the one dialog for sharing and exporting; the library, the player and the playlist open it through
  * `openExport`/`openExportFor`. The file is made first, then saved or handed to the share sheet from a fresh tap,
- * since Safari refuses `navigator.share` once the tap that asked for it is a few seconds old.
+ * since Safari refuses `navigator.share` once the tap that asked for it is a few seconds old. Opened with
+ * `tonregal` (`openTonregalFor`, the library's right click and the player's menu), it hands the song as FLAC to
+ * Tonregal instead, with the same artist, genre and cover, and says where Tonregal filed it.
  */
 type Step =
-  { step: 'options' } | { step: 'preparing' } | { step: 'ready'; file: File } | { step: 'failed'; message: string }
+  | { step: 'options' }
+  | { step: 'preparing' }
+  | { step: 'ready'; file: File }
+  | { step: 'sent'; transfer: TonregalTransfer }
+  | { step: 'failed'; message: string }
 
 const settings = loadExportSettings()
 const format = ref<ExportFormat>(settings.format)
@@ -35,6 +42,23 @@ const state = ref<Step>({ step: 'options' })
 const drawn = ref<Blob | null>(null)
 const drawnUrl = ref<string | null>(null)
 const coverUrl = computed(() => exportTarget.value?.cover ?? drawnUrl.value)
+
+const toTonregal = computed(() => exportTarget.value?.tonregal === true)
+
+/** What Tonregal did with the song, in a sentence. */
+const sentText = computed(() => {
+  if (state.value.step !== 'sent') {
+    return ''
+  }
+  const { transfer } = state.value
+  if (transfer.state === 'imported') {
+    return t(transfer.repeated ? 'tonregalKept' : 'tonregalFiled', { path: transfer.libraryPath ?? '' })
+  }
+  if (transfer.state === 'rejected') {
+    return t('tonregalRejected', { message: transfer.error ?? '' })
+  }
+  return transfer.error ? t('tonregalFailed', { message: transfer.error }) : t('tonregalAccepted')
+})
 
 const formatOptions = computed(() =>
   exportFormats.map((value) => ({ value, label: value === 'small' ? t('exportFormatSmall') : value.toUpperCase() })),
@@ -85,6 +109,18 @@ async function start(): Promise<void> {
   saveExportSettings({ format: format.value, artist: artist.value.trim() })
   state.value = { step: 'preparing' }
   try {
+    if (target.tonregal) {
+      const transfer = await sendToTonregal(
+        target.songId,
+        artist.value.trim(),
+        genre.value.trim(),
+        target.cover ? null : drawn.value,
+      )
+      if (exportTarget.value === target) {
+        state.value = { step: 'sent', transfer }
+      }
+      return
+    }
     const file = await exportSongFile(
       target.songId,
       format.value,
@@ -138,13 +174,13 @@ function close(): void {
   <Dialog
     :visible="exportTarget !== null"
     modal
-    :header="t('exportTitle', { title: exportTarget?.title ?? '' })"
+    :header="t(toTonregal ? 'tonregalTitle' : 'exportTitle', { title: exportTarget?.title ?? '' })"
     :draggable="false"
     :style="{ width: 'min(26rem, calc(100vw - 2rem))' }"
     @update:visible="(open: boolean) => !open && close()"
   >
     <form v-if="state.step === 'options'" class="flex flex-col gap-3" @submit.prevent="start">
-      <div class="flex flex-col gap-1">
+      <div v-if="!toTonregal" class="flex flex-col gap-1">
         <SelectButton
           v-model="format"
           :options="formatOptions"
@@ -168,20 +204,37 @@ function close(): void {
       </div>
       <label class="flex flex-col gap-1">
         <span>{{ t('exportArtist') }}</span>
-        <InputText v-model="artist" fluid :placeholder="t('exportArtistPlaceholder')" maxlength="200" />
+        <InputText
+          v-model="artist"
+          fluid
+          :placeholder="t('exportArtistPlaceholder')"
+          maxlength="200"
+          :required="toTonregal"
+        />
       </label>
       <label class="flex flex-col gap-1">
         <span>{{ t('exportGenre') }}</span>
         <InputText v-model="genre" fluid maxlength="200" />
       </label>
-      <p class="m-0 muted text-sm">{{ t('exportIncludes') }}</p>
+      <p class="m-0 muted text-sm">{{ t(toTonregal ? 'tonregalIncludes' : 'exportIncludes') }}</p>
       <div class="flex justify-end">
-        <Button type="submit" :label="t('exportStart')" icon="pi pi-download" />
+        <Button
+          type="submit"
+          :label="t(toTonregal ? 'tonregalStart' : 'exportStart')"
+          :icon="toTonregal ? 'pi pi-book' : 'pi pi-download'"
+          :disabled="toTonregal && artist.trim() === ''"
+        />
       </div>
     </form>
     <div v-else-if="state.step === 'preparing'" class="flex items-center gap-3">
       <i class="pi pi-spin pi-spinner text-xl" aria-hidden="true" />
-      <span>{{ t('exportPreparing') }}</span>
+      <span>{{ t(toTonregal ? 'tonregalSending' : 'exportPreparing') }}</span>
+    </div>
+    <div v-else-if="state.step === 'sent'" class="flex flex-col gap-3">
+      <p :class="['m-0', { danger: state.transfer.state === 'rejected' }]" role="status">{{ sentText }}</p>
+      <div class="flex justify-end">
+        <Button :label="t('tonregalDone')" @click="close" />
+      </div>
     </div>
     <div v-else-if="state.step === 'ready'" class="flex flex-col gap-3">
       <p class="m-0">{{ t('shareReady', { name: state.file.name }) }}</p>
@@ -197,7 +250,9 @@ function close(): void {
       </div>
     </div>
     <div v-else class="flex flex-col gap-3">
-      <p class="m-0 danger" role="status">{{ t('exportFailed', { message: state.message }) }}</p>
+      <p class="m-0 danger" role="status">
+        {{ t(toTonregal ? 'tonregalFailed' : 'exportFailed', { message: state.message }) }}
+      </p>
       <div class="flex justify-end">
         <Button :label="t('exportBack')" severity="secondary" text @click="state = { step: 'options' }" />
       </div>

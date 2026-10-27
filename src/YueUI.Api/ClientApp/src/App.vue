@@ -4,6 +4,7 @@ import {
   aceSongRequest,
   coverUrl,
   getStorage,
+  getTonregal,
   getVoiceInfo,
   listLibrary,
   songRequest,
@@ -32,7 +33,7 @@ import { current, refreshTracks } from './player'
 import { loadPlaylists, playlistIds } from './playlist'
 import { ratings, setRatings } from './ratings'
 import { reviewCount, reviewDays } from './review'
-import { exportTarget, registerExportLookup } from './export'
+import { exportTarget, registerExportLookup, tonregalReady } from './export'
 import { videoTarget } from './video'
 import { imageTarget } from './images'
 import { viewedImage } from './imageViewer'
@@ -526,8 +527,13 @@ async function loadLibrary(): Promise<void> {
   libraryLoading.value = true
   try {
     // The free space is a hint only; the library shows without it.
-    const [library, space] = await Promise.all([listLibrary(), getStorage().catch(() => null)])
+    const [library, space, tonregal] = await Promise.all([
+      listLibrary(),
+      getStorage().catch(() => null),
+      getTonregal().catch(() => null),
+    ])
     runs.value = library
+    tonregalReady.value = tonregal?.configured ?? false
     refreshTracks(library)
     setRatings(library)
     storage.value = space

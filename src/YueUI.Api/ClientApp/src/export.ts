@@ -18,6 +18,8 @@ export interface ExportTarget {
   style: string
   /** The song's own cover, which the server puts in unless another one is sent. */
   cover?: string
+  /** Into Tonregal, the music library, instead of a file to save or share. */
+  tonregal?: boolean
 }
 
 export const exportTarget = ref<ExportTarget | null>(null)
@@ -41,6 +43,14 @@ export function exportTargetFor(songId: string, title = ''): ExportTarget {
 /** Opens the dialog for a song known only by its id. */
 export function openExportFor(songId: string, title = ''): void {
   openExport(exportTargetFor(songId, title))
+}
+
+/** Tonregal is set up on the server (`GET /api/tonregal`), so the menus offer handing a song to it. */
+export const tonregalReady = ref(false)
+
+/** Opens the dialog to hand a song to Tonregal: the same artist, genre and cover as an export. */
+export function openTonregalFor(songId: string, title = ''): void {
+  openExport({ ...exportTargetFor(songId, title), tonregal: true })
 }
 
 export interface ExportSettings {

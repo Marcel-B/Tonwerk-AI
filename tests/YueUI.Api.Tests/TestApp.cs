@@ -110,6 +110,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeLoki Loki { get; } = new();
 
+    public FakeTonregal Tonregal { get; } = new();
+
+    /// <summary>Where the fake Tonregal is expected; null (the default) leaves the handover off.</summary>
+    public string? TonregalUrl { get; set; }
+
     public FakeHuggingFace HuggingFace { get; } = new();
 
     /// <summary>Where the fake Loki is expected; null (the default) leaves shipping the log off.</summary>
@@ -306,6 +311,15 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.TransientRetryDelay = TimeSpan.Zero;
             });
             services.AddHttpClient(WebDavClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeNextcloud.Handler(Nextcloud));
+            services.Configure<global::YueUI.Api.Tonregal.TonregalOptions>(options =>
+            {
+                options.Url = TonregalUrl;
+                options.ApiKey = FakeTonregal.Key;
+                options.EnvFile = null;
+                options.PollInterval = TimeSpan.FromMilliseconds(10);
+                options.Wait = TimeSpan.FromSeconds(5);
+            });
+            services.AddHttpClient(global::YueUI.Api.Tonregal.TonregalClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeTonregal.Handler(Tonregal));
             services.Configure<Monitoring.MonitoringOptions>(options =>
             {
                 options.Loki.Url = LokiUrl;
@@ -1078,6 +1092,91 @@ public sealed class FakeSpeech : ISpeechEngine
         gate.SetResult();
         return gate;
     }
+}
+
+/// <summary>
+/// Tonregal's ingest API: takes a song under its key, answers 202 with a <c>matched</c> job (200 for an externalId it
+/// knows), and files it as <c>imported</c> after <see cref="PollsUntilFiled"/> polls.
+/// </summary>
+public sealed class FakeTonregal
+{
+    public const string Key = "tonregal-key";
+
+    private readonly Lock _gate = new();
+
+    public List<(string FileName, string? ContentType, byte[] File, JsonElement Metadata, string? CoverType)> Received { get; } = [];
+
+    public int Polls { get; private set; }
+
+    public int PollsUntilFiled { get; set; } = 1;
+
+    /// <summary>Answers every request with this and a problem detail instead, e.g. 401 for a wrong key.</summary>
+    public HttpStatusCode? Status { get; set; }
+
+    /// <summary>The state a filed job ends in; <c>rejected</c> stands for a file Tonregal has already.</summary>
+    public string Outcome { get; set; } = "imported";
+
+    public sealed class Handler(FakeTonregal tonregal) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (tonregal.Status is { } status)
+            {
+                return new HttpResponseMessage(status)
+                {
+                    Content = JsonContent.Create(new { title = "Refused", detail = "Wrong API key." }),
+                };
+            }
+            if (!request.Headers.TryGetValues("X-Api-Key", out var keys) || keys.Single() != Key)
+            {
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            }
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Post && path == "/api/ingest")
+            {
+                // The handler gets the client's own form, so its parts are there as they were added.
+                var form = (MultipartFormDataContent)request.Content!;
+                HttpContent? Part(string name) => form.FirstOrDefault(part => part.Headers.ContentDisposition!.Name!.Trim('"') == name);
+                var file = Part("file")!;
+                var bytes = await file.ReadAsByteArrayAsync(cancellationToken);
+                var json = JsonDocument.Parse(await Part("metadata")!.ReadAsStringAsync(cancellationToken)).RootElement.Clone();
+                var coverType = Part("cover")?.Headers.ContentType?.MediaType;
+                lock (tonregal._gate)
+                {
+                    var externalId = json.GetProperty("externalId").GetString()!;
+                    var repeated = tonregal.Received.Any(received => received.Metadata.GetProperty("externalId").GetString() == externalId);
+                    tonregal.Received.Add((
+                        file.Headers.ContentDisposition!.FileName!.Trim('"'),
+                        file.Headers.ContentType?.MediaType,
+                        bytes,
+                        json,
+                        coverType));
+                    return new HttpResponseMessage(repeated ? HttpStatusCode.OK : HttpStatusCode.Accepted)
+                    {
+                        Content = JsonContent.Create(tonregal.Job(externalId)),
+                    };
+                }
+            }
+            if (request.Method == HttpMethod.Get && path == "/api/ingest/7")
+            {
+                lock (tonregal._gate)
+                {
+                    tonregal.Polls++;
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = JsonContent.Create(tonregal.Job(tonregal.Received[^1].Metadata.GetProperty("externalId").GetString()!)),
+                    };
+                }
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
+    }
+
+    private object Job(string externalId) => Polls < PollsUntilFiled
+        ? new { id = 7, externalId, state = "matched", libraryPath = (string?)null, error = (string?)null }
+        : Outcome == "imported"
+            ? new { id = 7, externalId, state = "imported", libraryPath = (string?)"Marcel/2026 - Neon Night/01 - Neon Night.flac", error = (string?)null }
+            : new { id = 7, externalId, state = Outcome, libraryPath = (string?)null, error = (string?)"Already in the library." };
 }
 
 /// <summary>A Nextcloud's WebDAV: keeps uploaded files by path, answers MKCOL with 201 once and 405 after.</summary>

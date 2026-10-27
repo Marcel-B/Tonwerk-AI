@@ -2,7 +2,7 @@
 import { computed, useTemplateRef } from 'vue'
 import type Menu from 'primevue/menu'
 import { t } from '../i18n'
-import { exportTargetFor, openExportFor } from '../export'
+import { exportTargetFor, openExportFor, openTonregalFor, tonregalReady } from '../export'
 import { openVideo } from '../video'
 import { showSong } from '../view'
 
@@ -29,6 +29,9 @@ const items = computed(() => [
   { label: t('useAsNewSong'), icon: 'pi pi-clone', command: () => emit('newSong', props.songId) },
   { label: t('shareOrExport'), icon: 'pi pi-share-alt', command: () => openExportFor(props.songId) },
   { label: t('musicVideo'), icon: 'pi pi-video', command: () => openVideo(exportTargetFor(props.songId)) },
+  ...(tonregalReady.value
+    ? [{ label: t('tonregalSend'), icon: 'pi pi-book', command: () => openTonregalFor(props.songId) }]
+    : []),
 ])
 </script>
 

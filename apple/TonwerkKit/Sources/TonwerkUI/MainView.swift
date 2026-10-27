@@ -233,6 +233,7 @@ private struct Dialogs: ViewModifier {
         @Bindable var model = model
         content
             .exportSheet(for: $model.sharing)
+            .tonregalSheet(for: $model.handingOver)
             .paintSheet(for: $model.painting)
             .sheet(item: $model.singing) { song in
                 SingSheet(song: song)

@@ -524,6 +524,22 @@ export interface BackupRun {
 /** Whether songs can be handed to Tonregal, the music library; the menus offer it only then. */
 export interface TonregalStatus {
   configured: boolean
+  /** The address in use; the key never leaves the server. */
+  url: string | null
+  keySet: boolean
+  /** The settings can change address and key (no environment variable on the server sets them). */
+  editable: boolean
+}
+
+export interface TonregalSettings {
+  url: string | null
+  /** Empty keeps the key set. */
+  apiKey: string | null
+}
+
+export interface TonregalCheck {
+  state: 'ok' | 'key' | 'setup' | 'unreachable' | 'failed' | 'notConfigured'
+  detail: string | null
 }
 
 /**

@@ -1088,6 +1088,78 @@
             }
           }
         }
+      },
+      "put": {
+        "operationId": "SetTonregalSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TonregalSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TonregalStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tonregal/check": {
+      "post": {
+        "operationId": "CheckTonregal",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TonregalCheck"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/songs/{run}/{song}/tonregal": {
@@ -13012,13 +13084,67 @@
           }
         }
       },
+      "TonregalCheck": {
+        "required": [
+          "state",
+          "detail"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "TonregalSettings": {
+        "required": [
+          "url",
+          "apiKey"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "apiKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "TonregalStatus": {
         "required": [
-          "configured"
+          "configured",
+          "url",
+          "keySet",
+          "editable"
         ],
         "type": "object",
         "properties": {
           "configured": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "keySet": {
+            "type": "boolean"
+          },
+          "editable": {
             "type": "boolean"
           }
         }

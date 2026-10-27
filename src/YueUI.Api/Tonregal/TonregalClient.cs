@@ -22,8 +22,27 @@ public sealed record TonregalMetadata(
 /// <summary>A job in Tonregal (its <c>IngestJobDto</c>): <c>imported</c> with <see cref="LibraryPath"/> means it is filed.</summary>
 public sealed record TonregalJob(int Id, string ExternalId, string State, string? LibraryPath, string? Error);
 
-/// <summary>Tonregal refused or could not be reached; the message is Tonregal's own where it gave one.</summary>
-public sealed class TonregalException(string message) : Exception(message);
+/// <summary>What a check of address and key found; the apps say it in their language by <see cref="State"/>.</summary>
+/// <param name="State"><c>ok</c>, <c>key</c> (Tonregal does not know the key), <c>setup</c> (Tonregal has no ingest
+/// keys), <c>unreachable</c>, <c>failed</c> (another answer, see <see cref="Detail"/>) or <c>notConfigured</c>.</param>
+public sealed record TonregalCheck(string State, string? Detail)
+{
+    public const string Ok = "ok";
+    public const string Key = "key";
+    public const string Setup = "setup";
+    public const string Unreachable = "unreachable";
+    public const string Failed = "failed";
+    public const string NotConfigured = "notConfigured";
+}
+
+/// <summary>
+/// Tonregal refused or could not be reached; the message is Tonregal's own where it gave one, <see cref="Status"/> its
+/// HTTP status where it answered (401: the key is not one of its <c>Tonregal:Ingest:Keys</c>).
+/// </summary>
+public sealed class TonregalException(string message, int? status = null) : Exception(message)
+{
+    public int? Status { get; } = status;
+}
 
 /// <summary>
 /// Tonregal's ingest API: <c>POST /api/ingest</c> (multipart: the file, the metadata as JSON, the cover) and
@@ -69,6 +88,36 @@ public sealed class TonregalClient(IHttpClientFactory clients, IOptions<Tonregal
         return await ReadJobAsync(response, cancellationToken);
     }
 
+    /// <summary>
+    /// Asks Tonregal for a job that cannot exist: 404 means address and key are right, since Tonregal checks the key
+    /// first (401 for an unknown one, 503 while it has no ingest keys at all).
+    /// </summary>
+    public async Task<TonregalCheck> CheckAsync(CancellationToken cancellationToken)
+    {
+        if (!options.Value.Configured)
+        {
+            return new TonregalCheck(TonregalCheck.NotConfigured, null);
+        }
+        try
+        {
+            using var response = await SendAsync(HttpMethod.Get, "api/ingest/0", null, cancellationToken);
+            return new TonregalCheck(TonregalCheck.Ok, null);
+        }
+        catch (TonregalException exception)
+        {
+            return new TonregalCheck(
+                exception.Status switch
+                {
+                    404 => TonregalCheck.Ok,
+                    401 => TonregalCheck.Key,
+                    503 => TonregalCheck.Setup,
+                    null => TonregalCheck.Unreachable,
+                    _ => TonregalCheck.Failed,
+                },
+                exception.Status == 404 ? null : exception.Message);
+        }
+    }
+
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content, CancellationToken cancellationToken)
     {
         var settings = options.Value;
@@ -105,7 +154,8 @@ public sealed class TonregalClient(IHttpClientFactory clients, IOptions<Tonregal
             catch (JsonException)
             {
             }
-            throw new TonregalException($"Tonregal answered {(int)response.StatusCode}{(problem is null ? "" : $": {problem}")}");
+            throw new TonregalException(
+                $"Tonregal answered {(int)response.StatusCode}{(problem is null ? "" : $": {problem}")}", (int)response.StatusCode);
         }
     }
 

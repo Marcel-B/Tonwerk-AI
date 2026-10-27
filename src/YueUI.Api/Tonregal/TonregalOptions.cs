@@ -9,7 +9,8 @@ namespace YueUI.Api.Tonregal;
 /// <remarks>
 /// Address and key stay out of the repository: <c>TONREGAL_URL</c> and <c>TONREGAL_API_KEY</c> as environment variables
 /// or lines of <see cref="EnvFile"/>, like the backup's Nextcloud (<see cref="EnvValues"/>). The key is the one under
-/// <c>Tonregal:Ingest:Keys:tonwerk-ai</c> in Tonregal's <c>appsettings.Production.json</c>.
+/// <c>Tonregal:Ingest:Keys:tonwerk-ai</c> in Tonregal's <c>appsettings.Production.json</c>. The settings of both apps
+/// write the env file (<c>PUT /api/tonregal</c>), so nobody needs a shell on the Mac for it.
 /// </remarks>
 public sealed class TonregalOptions
 {
@@ -42,4 +43,7 @@ public sealed class TonregalOptions
     public string? ResolvedKey => EnvValues.Resolve(KeyVariable, EnvFile, ApiKey);
 
     public bool Configured => BaseUri is not null && ResolvedKey is not null;
+
+    /// <summary>Whether an environment variable sets address or key, which the settings page then cannot change.</summary>
+    public static bool SetByEnvironment => EnvValues.FromEnvironment(UrlVariable) || EnvValues.FromEnvironment(KeyVariable);
 }

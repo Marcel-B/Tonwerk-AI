@@ -5,12 +5,14 @@ import type { MenuItem } from 'primevue/menuitem'
 import { disablePush, enablePush, initPush, pushState, updatePushLanguage } from '../push'
 import { formatDateTime, locale, setLocale, t } from '../i18n'
 import { reload, standalone } from '../update'
-import { ApiError, getBackup, startBackup } from '../api'
-import type { BackupStatus } from '../types'
+import { ApiError, getBackup, getTonregal, startBackup } from '../api'
+import type { BackupStatus, TonregalStatus } from '../types'
+import { tonregalReady } from '../export'
+import TonregalSettings from './TonregalSettings.vue'
 
 /**
  * What is set once per device rather than used while working: notifications, the language, the Nextcloud backup (only
- * when the server has one configured) and, in the home-screen app, a reload. Behind one button, so the menu bar keeps
+ * when the server has one configured), Tonregal's address and key (for the server) and, in the home-screen app, a reload. Behind one button, so the menu bar keeps
  * its room for the pages.
  */
 const emit = defineEmits<{ notice: [text: string, error: boolean] }>()
@@ -25,8 +27,20 @@ const items = computed<MenuItem[]>(() => [
   },
   { label: t('language'), icon: 'pi pi-globe', command: () => setLocale(locale.value === 'de' ? 'en' : 'de') },
   ...(standalone ? [{ label: t('reload'), icon: 'pi pi-refresh', command: reload }] : []),
+  ...(tonregal.value
+    ? [{ label: `${t('tonregalSettings')} …`, icon: 'pi pi-box', command: () => (tonregalOpen.value = true) }]
+    : []),
   ...backupItems.value,
 ])
+
+// Null on a server from before the settings had it, which leaves the entry out.
+const tonregal = ref<TonregalStatus | null>(null)
+const tonregalOpen = ref(false)
+
+function tonregalSaved(status: TonregalStatus): void {
+  tonregal.value = status
+  tonregalReady.value = status.configured
+}
 
 const backup = ref<BackupStatus | null>(null)
 const backupItems = computed<MenuItem[]>(() => {
@@ -58,11 +72,13 @@ const backupItems = computed<MenuItem[]>(() => {
 
 async function open(event: Event): Promise<void> {
   menu.value?.toggle(event)
-  try {
-    backup.value = await getBackup()
-  } catch {
+  const [backupStatus, tonregalStatus] = await Promise.all([
     // An older server without the backup, or no connection: the menu just leaves it out.
-  }
+    getBackup().catch(() => null),
+    getTonregal().catch(() => null),
+  ])
+  backup.value = backupStatus ?? backup.value
+  tonregal.value = tonregalStatus && 'editable' in tonregalStatus ? tonregalStatus : null
 }
 
 async function backUp(): Promise<void> {
@@ -136,4 +152,5 @@ async function toggle(): Promise<void> {
     @click="void open($event)"
   />
   <Menu ref="menu" :model="items" popup />
+  <TonregalSettings v-if="tonregal" v-model:visible="tonregalOpen" :status="tonregal" @saved="tonregalSaved" />
 </template>

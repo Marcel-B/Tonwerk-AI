@@ -268,7 +268,7 @@ struct TonregalSettingsSection: View {
                 let key = apiKey.trimmingCharacters(in: .whitespaces)
                 request.httpBody = try JSONSerialization.data(withJSONObject: [
                     "url": url.trimmingCharacters(in: .whitespaces),
-                    "apiKey": key.isEmpty ? NSNull() : key,
+                    "apiKey": key.isEmpty ? NSNull() as Any : key as Any,
                 ])
                 let (answer, response) = try await URLSession.shared.data(for: request)
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {

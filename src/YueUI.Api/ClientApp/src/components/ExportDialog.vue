@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
-import { exportSongFile, saveBlob, sendToTonregal } from '../api'
+import { ApiError, exportSongFile, saveBlob, sendToTonregal } from '../api'
 import {
   drawCover,
   exportFormats,
@@ -134,7 +134,14 @@ async function start(): Promise<void> {
     }
   } catch (caught) {
     if (exportTarget.value === target) {
-      state.value = { step: 'failed', message: caught instanceof Error ? caught.message : String(caught) }
+      // Tonregal's own refusal of the key is English and says nothing about where to set it.
+      const message =
+        caught instanceof ApiError && caught.problem.tonregalStatus === 401
+          ? t('tonregalKey')
+          : caught instanceof Error
+            ? caught.message
+            : String(caught)
+      state.value = { step: 'failed', message }
     }
   }
 }

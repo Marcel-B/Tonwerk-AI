@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
+using YueUI.Api.Tonregal;
 
 namespace YueUI.Api.Tests;
 
@@ -77,7 +78,9 @@ public sealed class TonregalEndpointTests : IDisposable
         var response = await Send("song1");
 
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
-        Assert.Contains("401: Wrong API key.", await response.Content.ReadAsStringAsync());
+        var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains("401: Wrong API key.", problem.GetProperty("detail").GetString());
+        Assert.Equal(401, problem.GetProperty("tonregalStatus").GetInt32());
     }
 
     [Fact]
@@ -108,6 +111,66 @@ public sealed class TonregalEndpointTests : IDisposable
         var form = new MultipartFormDataContent { { new StringContent("Marcel"), "artist" } };
         Assert.Equal(HttpStatusCode.NotImplemented, (await off.CreateClient().PostAsync($"/api/songs/{Run}/song1/tonregal", form)).StatusCode);
     }
+
+    [Fact]
+    public async Task The_settings_write_address_and_key_into_the_env_file_and_the_check_finds_them_right()
+    {
+        var envFile = Path.Combine(_app.Root, "config", "tonregal.env");
+        Directory.CreateDirectory(Path.GetDirectoryName(envFile)!);
+        File.WriteAllLines(envFile, ["# Tonregal", "OTHER=1", "TONREGAL_API_KEY=old"]);
+        using var app = new TestApp { TonregalEnvFile = envFile };
+        var client = app.CreateClient();
+
+        var before = (await client.GetFromJsonAsync<TonregalStatus>("/api/tonregal"))!;
+        Assert.Equal(new TonregalStatus(false, null, true, true), before);
+
+        var response = await client.PutAsJsonAsync("/api/tonregal", new TonregalSettings(" http://tonregal.test:5100/ ", FakeTonregal.Key));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            new TonregalStatus(true, "http://tonregal.test:5100", true, true),
+            await response.Content.ReadFromJsonAsync<TonregalStatus>());
+        Assert.Equal(["# Tonregal", "OTHER=1", $"TONREGAL_API_KEY={FakeTonregal.Key}", "TONREGAL_URL=http://tonregal.test:5100"], File.ReadAllLines(envFile));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(envFile));
+        }
+        Assert.Equal(new TonregalCheck("ok", null), await Check(client));
+
+        // An empty key keeps the one set; a wrong one is what the check names.
+        await client.PutAsJsonAsync("/api/tonregal", new TonregalSettings("http://tonregal.test:5100", ""));
+        Assert.Contains($"TONREGAL_API_KEY={FakeTonregal.Key}", File.ReadAllLines(envFile));
+        await client.PutAsJsonAsync("/api/tonregal", new TonregalSettings("http://tonregal.test:5100", "wrong"));
+        Assert.Equal("key", (await Check(client)).State);
+
+        // An empty address turns the handover off.
+        await client.PutAsJsonAsync("/api/tonregal", new TonregalSettings("", null));
+        Assert.False((await client.GetFromJsonAsync<TonregalStatus>("/api/tonregal"))!.Configured);
+        Assert.Equal("notConfigured", (await Check(client)).State);
+    }
+
+    [Fact]
+    public async Task The_settings_refuse_a_bad_address_and_need_an_env_file()
+    {
+        using var app = new TestApp { TonregalEnvFile = Path.Combine(_app.Root, "tonregal.env") };
+        var bad = await app.CreateClient().PutAsJsonAsync("/api/tonregal", new TonregalSettings("ftp://tonregal", "key"));
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+
+        var fixedByServer = await _app.CreateClient().PutAsJsonAsync("/api/tonregal", new TonregalSettings("http://x", "key"));
+        Assert.Equal(HttpStatusCode.Conflict, fixedByServer.StatusCode);
+        Assert.False((await _app.CreateClient().GetFromJsonAsync<TonregalStatus>("/api/tonregal"))!.Editable);
+    }
+
+    [Fact]
+    public async Task The_check_says_when_tonregal_has_no_ingest_keys_or_cannot_be_reached()
+    {
+        _app.Tonregal.Status = HttpStatusCode.ServiceUnavailable;
+        Assert.Equal("setup", (await Check(_app.CreateClient())).State);
+        _app.Tonregal.Status = null;
+        Assert.Equal("ok", (await Check(_app.CreateClient())).State);
+    }
+
+    private static async Task<TonregalCheck> Check(HttpClient client) =>
+        (await (await client.PostAsync("/api/tonregal/check", null)).Content.ReadFromJsonAsync<TonregalCheck>())!;
 
     private Task<HttpResponseMessage> Send(string song, string artist = "Marcel", string? genre = null)
     {

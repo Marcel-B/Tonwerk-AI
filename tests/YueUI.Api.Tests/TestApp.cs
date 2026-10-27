@@ -115,6 +115,9 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// <summary>Where the fake Tonregal is expected; null (the default) leaves the handover off.</summary>
     public string? TonregalUrl { get; set; }
 
+    /// <summary>Tonregal's env file, which the settings write; null (the default) leaves them unable to.</summary>
+    public string? TonregalEnvFile { get; set; }
+
     public FakeHuggingFace HuggingFace { get; } = new();
 
     /// <summary>Where the fake Loki is expected; null (the default) leaves shipping the log off.</summary>
@@ -315,7 +318,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
             {
                 options.Url = TonregalUrl;
                 options.ApiKey = FakeTonregal.Key;
-                options.EnvFile = null;
+                options.EnvFile = TonregalEnvFile;
                 options.PollInterval = TimeSpan.FromMilliseconds(10);
                 options.Wait = TimeSpan.FromSeconds(5);
             });

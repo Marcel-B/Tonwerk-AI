@@ -2,6 +2,8 @@ import type {
   AudioMidiInfo,
   AudioMidiSettings,
   BackupStatus,
+  TonregalCheck,
+  TonregalSettings,
   TonregalStatus,
   TonregalTransfer,
   CoverPainting,
@@ -86,6 +88,8 @@ export class ApiError extends Error {
     readonly status: number,
     /** Field errors of a validation problem, keyed by the request's property names. */
     readonly errors: Record<string, string[]> = {},
+    /** The whole problem answer, for extensions such as `tonregalStatus`. */
+    readonly problem: Record<string, unknown> = {},
   ) {
     super(message)
   }
@@ -401,6 +405,16 @@ export async function exportSongFile(
 
 export async function getTonregal(): Promise<TonregalStatus> {
   return (await send('/api/tonregal')).json() as Promise<TonregalStatus>
+}
+
+/** Writes Tonregal's address and key into the server's env file; answers the new status. */
+export async function setTonregal(settings: TonregalSettings): Promise<TonregalStatus> {
+  return (await send('/api/tonregal', json('PUT', settings))).json() as Promise<TonregalStatus>
+}
+
+/** Asks Tonregal with the address and key set whether it would take a song. */
+export async function checkTonregal(): Promise<TonregalCheck> {
+  return (await send('/api/tonregal/check', { method: 'POST' })).json() as Promise<TonregalCheck>
 }
 
 /** The song as tagged FLAC into Tonregal; waits until Tonregal has filed it, some seconds at most. */
@@ -1330,6 +1344,7 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
       problem?.detail ?? problem?.title ?? `HTTP ${response.status}`,
       response.status,
       problem?.errors ?? {},
+      problem ?? {},
     )
   }
   return response

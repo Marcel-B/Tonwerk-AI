@@ -90,6 +90,9 @@ struct SettingsView: View {
                     Button("Anderen Server verwenden", role: .destructive) { model.disconnect() }
                 }
             }
+            if !model.isDemo {
+                TonregalSettingsSection()
+            }
             #if os(macOS) && canImport(Sparkle)
             UpdateSection()
             #endif

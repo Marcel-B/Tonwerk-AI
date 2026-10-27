@@ -25,6 +25,13 @@ struct PlayerBar: View {
                         } label: {
                             Label("In der Bibliothek zeigen", systemImage: "music.note.list")
                         }
+                        if model.tonregalReady {
+                            Button {
+                                model.handingOver = song
+                            } label: {
+                                Label("In Tonregal übernehmen …", systemImage: "books.vertical")
+                            }
+                        }
                     }
                     Spacer(minLength: 8)
                     // The small analyzer, as in the web player's bar; a tap opens the large one.

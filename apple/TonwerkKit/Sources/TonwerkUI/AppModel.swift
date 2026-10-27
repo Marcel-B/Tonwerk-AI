@@ -38,6 +38,10 @@ public final class AppModel {
     var revealing: String?
     /// The song the share dialog is open for, from a song's menu.
     var sharing: Song?
+    /// The song the Tonregal dialog is open for, from a song's menu (``tonregalReady`` only).
+    var handingOver: Song?
+    /// The server hands songs to Tonregal (`GET api/tonregal`), so the menus offer it.
+    var tonregalReady = false
     /// The Logic page's state, made when it is first opened.
     var logic: LogicSession?
     /// The synthesizers' named and per-track sounds, made on first use (``soundLibrary``).
@@ -190,6 +194,7 @@ public final class AppModel {
         logPage = nil
         storagePage = nil
         machines = []
+        tonregalReady = false
         templateList = nil
         worker = nil
         memoryHolder = nil
@@ -218,7 +223,8 @@ public final class AppModel {
                 async let library: Void = reloadLibrary()
                 async let lists: Void = reloadPlaylists()
                 async let helpers: Void = loadMachines()
-                _ = await (library, lists, helpers)
+                async let tonregal: Void = loadTonregal()
+                _ = await (library, lists, helpers, tonregal)
                 for try await event in try await tonwerk.events() {
                     connection = .live
                     handle(event)

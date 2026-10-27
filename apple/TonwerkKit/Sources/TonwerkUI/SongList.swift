@@ -437,6 +437,14 @@ struct SongList: View {
             Label("Teilen …", systemImage: "square.and.arrow.up")
         }
         .disabled(!song.hasAudio)
+        if model.tonregalReady {
+            Button {
+                model.handingOver = song
+            } label: {
+                Label("In Tonregal übernehmen …", systemImage: "books.vertical")
+            }
+            .disabled(!song.hasAudio)
+        }
         Button {
             model.painting = song
         } label: {

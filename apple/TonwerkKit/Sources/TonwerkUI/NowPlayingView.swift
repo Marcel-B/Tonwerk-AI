@@ -16,6 +16,7 @@ struct NowPlayingView: View {
     @State private var times: [LineTimes]?
     @State private var scrubbing: Double?
     @State private var sharing: Song?
+    @State private var handingOver: Song?
 
     var body: some View {
         if let song = player.current {
@@ -59,6 +60,7 @@ struct NowPlayingView: View {
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
         .exportSheet(for: $sharing)
+        .tonregalSheet(for: $handingOver)
     }
 
     private func backdrop(_ song: Song) -> some View {
@@ -99,16 +101,41 @@ struct NowPlayingView: View {
             .buttonStyle(.plain)
             .help("In der Bibliothek zeigen")
             .accessibilityLabel("In der Bibliothek zeigen")
-            Button {
-                sharing = song
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.title3)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
+            if model.tonregalReady {
+                // Two ways out of the app behind one button: a file, or into the music library.
+                Menu {
+                    Button {
+                        sharing = song
+                    } label: {
+                        Label("Teilen …", systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        handingOver = song
+                    } label: {
+                        Label("In Tonregal übernehmen …", systemImage: "books.vertical")
+                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .accessibilityLabel("Teilen")
+            } else {
+                Button {
+                    sharing = song
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Teilen")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Teilen")
             switchButton("chart.bar.fill", on: $showAnalyzer, label: "Analyzer")
             switchButton("sparkles", on: $showEffects, label: "Effekte")
                 .help(reduceMotion ? "Das System wünscht weniger Bewegung, die Effekte bleiben still." : "Effekte")

@@ -19,6 +19,8 @@ struct SongList: View {
     /// The song whose deletion waits for its confirmation.
     @State private var deleting: Song?
     @State private var deleteProblem: String?
+    /// The song whose rename dialog is open.
+    @State private var renaming: Song?
     /// Choosing several songs to delete together (library and review list, not a playlist).
     @State private var picking = false
     @State private var picked = Set<Song.ID>()
@@ -76,6 +78,7 @@ struct SongList: View {
             } message: {
                 Text(deleteProblem ?? "")
             }
+            .renamingSong($renaming)
     }
 
     @ViewBuilder
@@ -400,6 +403,11 @@ struct SongList: View {
             #endif
         } label: {
             Label("Details", systemImage: "info.circle")
+        }
+        Button {
+            renaming = song
+        } label: {
+            Label("Umbenennen …", systemImage: "pencil")
         }
         Button {
             Task { await model.useInForm(song) }

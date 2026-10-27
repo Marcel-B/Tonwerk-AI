@@ -1,7 +1,7 @@
 import SwiftUI
 import TonwerkKit
 
-/// One song beside the list, what the web page's `SongRow.vue` unfolds: title to rename, stars, what it was made with,
+/// One song beside the list, what the web page's `SongRow.vue` unfolds: title with its rename dialog, stars, what it was made with,
 /// its versions with other voices, the note, style and lyrics. Made anew per song (`.id`), so its fields start from
 /// that song.
 struct SongDetail: View {
@@ -10,7 +10,8 @@ struct SongDetail: View {
     let song: Song
     /// The list it was chosen from, for what plays after it.
     let list: [Song]
-    @State private var title: String
+    /// The song while its rename dialog is open.
+    @State private var renaming: Song?
     @State private var note: String
     @State private var problem: String?
     @State private var sharing: Song?
@@ -21,7 +22,6 @@ struct SongDetail: View {
     init(song: Song, list: [Song]) {
         self.song = song
         self.list = list
-        _title = State(initialValue: song.title)
         _note = State(initialValue: song.note ?? "")
     }
 
@@ -68,6 +68,7 @@ struct SongDetail: View {
             let text = note
             Task { try? await model.setNote(song, text) }
         }
+        .renamingSong($renaming)
     }
 
     private var playing: Bool {
@@ -80,11 +81,20 @@ struct SongDetail: View {
         VStack(spacing: 12) {
             CoverEditor(song: song)
                 .padding(.bottom, 4)
-            TextField("Titel", text: $title)
-                .textFieldStyle(.plain)
-                .font(.title2.weight(.bold))
-                .multilineTextAlignment(.center)
-                .onSubmit { Task { await rename() } }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(song.title)
+                    .font(.title2.weight(.bold))
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
+                Button {
+                    renaming = song
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(.borderless)
+                .help("Umbenennen")
+                .accessibilityLabel("Umbenennen")
+            }
             if song.originalTitle != song.title {
                 Text("Ursprünglich „\(song.originalTitle)“")
                     .font(.caption)
@@ -241,16 +251,6 @@ struct SongDetail: View {
             sent = job == nil
                 ? String(localized: "Wird gerendert, der Fortschritt steht in der Warteschlange.")
                 : String(localized: "Wartet in der Warteschlange.")
-            problem = nil
-        } catch {
-            problem = error.localizedDescription
-        }
-    }
-
-    private func rename() async {
-        guard title.trimmingCharacters(in: .whitespacesAndNewlines) != song.title else { return }
-        do {
-            try await model.rename(song, to: title)
             problem = nil
         } catch {
             problem = error.localizedDescription

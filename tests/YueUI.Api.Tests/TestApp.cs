@@ -123,6 +123,14 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// <summary>Where the fake Loki is expected; null (the default) leaves shipping the log off.</summary>
     public string? LokiUrl { get; set; }
 
+    public FakeLlmGate LlmGate { get; } = new();
+
+    /// <summary>Where the fake LLM gate is expected; null (the default) leaves Tonwerk unlisted there.</summary>
+    public string? LlmGateUrl { get; set; }
+
+    /// <summary>Extra models listed at the gate (<c>LlmGate:Models</c>).</summary>
+    public List<Api.Lyrics.LlmGateModel> LlmGateModels { get; } = [];
+
     /// <summary>The backup folder in the fake Nextcloud; null (the default) leaves the backup off.</summary>
     public string? NextcloudUrl { get; set; }
 
@@ -330,6 +338,13 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.Loki.BatchDelay = TimeSpan.FromMilliseconds(10);
             });
             services.AddHttpClient(Monitoring.LokiShipper.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeLoki.Handler(Loki));
+            services.Configure<Api.Lyrics.LlmGateOptions>(options =>
+            {
+                options.Url = LlmGateUrl;
+                options.Models = [.. LlmGateModels];
+                options.RetryAfter = TimeSpan.FromMilliseconds(20);
+            });
+            services.AddHttpClient(Api.Lyrics.LlmGateRegistration.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeLlmGate.Handler(LlmGate));
             services.AddHttpClient(YueUI.Api.Images.ImageLoraLibrary.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeHuggingFace.Handler(HuggingFace));
             if (_fakeWorker)
             {
@@ -1617,6 +1632,45 @@ public sealed class FakeAudioMidi : AudioMidi.IAudioMidiEngine
         }
         await File.WriteAllBytesAsync(job.Output, Output?.Invoke(job) ?? Midi, cancellationToken);
         return new AudioMidi.AudioMidiResult(Notes, 1.5);
+    }
+}
+
+/// <summary>The LLM gate's registration (<c>PUT /gate/apps/{app}</c>): keeps every body it is sent.</summary>
+public sealed class FakeLlmGate
+{
+    private readonly Lock _gate = new();
+    private readonly List<(string Path, JsonObject Body)> _registrations = [];
+
+    /// <summary>How many of the next requests fail as if nothing listened on the port.</summary>
+    public int Unreachable { get; set; }
+
+    public (string Path, JsonObject Body)[] Registrations()
+    {
+        lock (_gate)
+        {
+            return [.. _registrations];
+        }
+    }
+
+    public sealed class Handler(FakeLlmGate gate) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            lock (gate._gate)
+            {
+                if (gate.Unreachable > 0)
+                {
+                    gate.Unreachable--;
+                    throw new HttpRequestException("Connection refused");
+                }
+            }
+            var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
+            lock (gate._gate)
+            {
+                gate._registrations.Add((request.RequestUri!.AbsolutePath, body));
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+        }
     }
 }
 

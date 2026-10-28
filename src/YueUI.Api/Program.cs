@@ -67,6 +67,11 @@ builder.Services.AddSingleton<LyricsWriter>();
 builder.Services.AddSingleton<ICloudLyricsModel, ClaudeLyricsModel>();
 builder.Services.AddHttpClient(LyricsWriter.HttpClientName, (services, client) =>
     client.Timeout = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<LyricsOptions>>().Value.Timeout);
+// Tells the LLM gate, the other apps' queue in front of LM Studio, which models are Tonwerk's (LlmGate:Url).
+builder.Services.Configure<LlmGateOptions>(builder.Configuration.GetSection(LlmGateOptions.Section));
+builder.Services.AddHttpClient(LlmGateRegistration.HttpClientName);
+builder.Services.AddSingleton<LlmGateRegistration>();
+builder.Services.AddHostedService(services => services.GetRequiredService<LlmGateRegistration>());
 // Logic Pro projects and MIDI read back into scores, by YueToLogic.Core in this process.
 builder.Services.Configure<LogicOptions>(builder.Configuration.GetSection(LogicOptions.Section));
 builder.Services.AddYueToLogic();

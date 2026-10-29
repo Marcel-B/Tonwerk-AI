@@ -502,6 +502,14 @@ Oder mit den bisherigen Optionen über das Einrichtungsskript, damit Updates die
 
 Klein 9B und Krea 2 liegen auf Hugging Face hinter ihren Lizenzen: auf [huggingface.co/black-forest-labs/FLUX.2-klein-9B](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B) bzw. [huggingface.co/krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) annehmen, ein Lese-Token für das Konto anlegen und auf dem Mac in `~/.config/tonwerk/huggingface.token` speichern. Die anderen brauchen das nicht. `deploy/move-to-volume.sh images` verlegt die Modelle aller fünf, sie liegen im selben Hugging-Face-Cache. Die Gewichte, die ComfyUI schon geladen hat, nutzt mflux nicht; es lädt sie im Format von Hugging Face neu.
 
+**Über img-o-mat malen.** Statt der eigenen Umgebungen kann Tonwerk über [img-o-mat](https://github.com/Marcel-B/img-o-mat) malen, den Dienst, der die Bildmodelle für alle Apps bereithält (Container auf Proxmox, gemalt wird auf oi-o-mat). Dazu einmal in `~/Library/Application Support/YueUI/app/appsettings.Production.json`:
+
+```json
+{ "Images": { "Service": "http://img-o-mat:1236" } }
+```
+
+Dann prüft img-o-mat Lizenzfilter und Speicherbedarf der Modelle, Tonwerk schickt Prompt, LoRAs und Referenzbilder dorthin und malt mit Vorrang vor anderen Apps. Ob ein Modell heruntergeladen ist, zeigt img-o-mats Seite (`http://img-o-mat:1236/`), dort lädt man es auch herunter. Malt img-o-mat gerade für eine andere App (sie kommt über die LLM-Schranke), wartet Tonwerk mit YuE2 und den anderen Modellen, bis das Bild fertig ist. Bildbeschreibung, Übersetzung, LoRA-Bibliothek und Cover-Stile bleiben in Tonwerk. Ohne `Service` malt Tonwerk wie bisher selbst. Noch nicht gegen das echte img-o-mat getestet.
+
 ## Songs mit ACE-Step
 
 Neben YuE2 macht [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) Songs, über [acestep.cpp](https://github.com/ServeurpersoCom/acestep.cpp) (GGML mit Metal) und die quantisierten Modelle von [Serveurperso/ACE-Step-1.5-GGUF](https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF), MIT-lizenziert. Es hat eine eigene Seite unter **Werkzeuge → ACE-Step**, weil seine Parameter andere sind:

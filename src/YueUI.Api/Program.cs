@@ -162,7 +162,13 @@ builder.Services.AddSingleton<ISingingEngine, SoulXSingerEngine>();
 builder.Services.AddSingleton<SingingStudio>();
 builder.Services.AddHostedService(services => services.GetRequiredService<SingingStudio>());
 builder.Services.Configure<ImageOptions>(builder.Configuration.GetSection(ImageOptions.Section));
-builder.Services.AddSingleton<IImageEngine, MfluxEngine>();
+// With img-o-mat configured it paints there; without, on this Mac's own runners as before.
+builder.Services.AddSingleton<IImageEngine>(services =>
+    string.IsNullOrWhiteSpace(services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ImageOptions>>().Value.Service)
+        ? ActivatorUtilities.CreateInstance<MfluxEngine>(services)
+        : ActivatorUtilities.CreateInstance<ImgOMatEngine>(services));
+builder.Services.AddHttpClient(ImgOMatEngine.HttpClientName);
+builder.Services.AddHostedService<ImageServiceWatch>();
 builder.Services.AddSingleton<IPromptTranslator, ClaudePromptTranslator>();
 builder.Services.AddSingleton<ImageLoraLibrary>();
 builder.Services.AddSingleton<CoverStyleLibrary>();

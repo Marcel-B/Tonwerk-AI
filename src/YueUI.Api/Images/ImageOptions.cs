@@ -10,6 +10,19 @@ public sealed class ImageOptions
     public const string Section = "Images";
 
     /// <summary>
+    /// img-o-mat's address (<c>http://img-o-mat:1236</c>), the service that paints for every app; set, Tonwerk paints
+    /// through it (<see cref="ImgOMatEngine"/>) and the Python environments, model cache and token below are not used
+    /// here. Empty paints with the local runners (<see cref="MfluxEngine"/>), as before.
+    /// </summary>
+    public string? Service { get; set; }
+
+    /// <summary>How old img-o-mat's list of models may be before it is asked again (in the background).</summary>
+    public TimeSpan ServiceRefresh { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How often <see cref="ImageServiceWatch"/> asks img-o-mat whether another app's picture paints.</summary>
+    public TimeSpan BusyInterval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// Where the environment and the downloaded models live. Default: <c>images</c> in the app's data folder
     /// (<c>~/Library/Application Support/YuE UI/images</c> on macOS), where the install script puts them too.
     /// </summary>

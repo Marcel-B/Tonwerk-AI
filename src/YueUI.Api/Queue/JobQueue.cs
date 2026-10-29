@@ -431,7 +431,8 @@ public sealed class JobQueue(
         // Announced before looking: the other models claim the memory first and then look at the worker
         // (Memory/ModelMemory.cs), so one of the two always sees the other.
         host.ExpectSongs(voice, command);
-        if (memory.Holder is not null || VersionOverdue())
+        // Taken also while img-o-mat paints another app's picture here (ModelMemory.Outside).
+        if (memory.Taken || VersionOverdue())
         {
             host.ExpectNoSongs();
             return false;

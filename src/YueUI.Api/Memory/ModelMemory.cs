@@ -56,6 +56,34 @@ public sealed class ModelMemory(WorkerHost host, Status.StatusHub hub, ILogger<M
     /// <summary>The large model besides YuE2 that holds the memory, or null.</summary>
     public LargeModel? Holder => Volatile.Read(ref _holder) is > 0 and var code ? (LargeModel)(code - 1) : null;
 
+    private string? _outside;
+
+    /// <summary>
+    /// Another app's picture that img-o-mat paints on this Mac (<see cref="Images.ImageServiceWatch"/>), as
+    /// "app (model)", or null. It holds the memory like a holder without being one of Tonwerk's: nothing here claims
+    /// while it paints, and songs wait, but it is no reason in <c>/api/idle</c>, which the LLM gate reads and would
+    /// then hold back the very app that paints.
+    /// </summary>
+    public string? Outside => Volatile.Read(ref _outside);
+
+    /// <summary>Whether a holder or <see cref="Outside"/> takes the memory.</summary>
+    public bool Taken => Holder is not null || Outside is not null;
+
+    public void SetOutside(string? painting)
+    {
+        if (Interlocked.Exchange(ref _outside, painting) is var before && before != painting)
+        {
+            if (painting is not null)
+            {
+                logger.LogInformation("img-o-mat paints for {Painting}; Tonwerk's models wait", painting);
+            }
+            else if (before is not null)
+            {
+                logger.LogInformation("img-o-mat's picture for {Painting} is done", before);
+            }
+        }
+    }
+
     /// <summary>Whether <paramref name="model"/> holds the memory.</summary>
     public bool Holds(LargeModel model) => Volatile.Read(ref _holder) == Code(model);
 
@@ -66,7 +94,7 @@ public sealed class ModelMemory(WorkerHost host, Status.StatusHub hub, ILogger<M
     /// <returns>False when it has to wait; also when it already holds the memory, since one model does one thing at a time.</returns>
     public bool TryClaim(LargeModel model)
     {
-        if (host.InUse || Interlocked.CompareExchange(ref _holder, Code(model), 0) != 0)
+        if (host.InUse || Outside is not null || Interlocked.CompareExchange(ref _holder, Code(model), 0) != 0)
         {
             return false;
         }

@@ -129,6 +129,18 @@ jobs:
           test -s "$app/Contents/Resources/AppIcon.icns"
           xcrun assetutil --info "$app/Contents/Resources/Assets.car" | grep -c '"Name" : "AppIcon"'
 
+      # The app speaks German and English: the string catalogs must reach the bundle, and a language it does not have
+      # falls back to English (the development region).
+      - name: Check the Mac app's languages
+        working-directory: apple
+        run: |
+          app=$(find build/Build/Products -maxdepth 2 -name Tonwerk-AI.app -type d | head -1)
+          ls -d "$app"/Contents/Resources/*.lproj
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDevelopmentRegion' "$app/Contents/Info.plist")" = en
+          plutil -p "$app/Contents/Resources/en.lproj/Localizable.strings" | grep -F '"Bibliothek" => "Library"'
+          plutil -p "$app/Contents/Resources/de.lproj/Localizable.strings" | grep -F '"Bibliothek" => "Bibliothek"'
+          plutil -p "$app/Contents/Resources/en.lproj/InfoPlist.strings" | grep -F NSMicrophoneUsageDescription
+
       - name: Build the app for iPhone
         working-directory: apple
         run: >-
@@ -158,8 +170,8 @@ jobs:
 
       - name: Check English translations
         run: |
-          find "$RUNNER_TEMP/strings" -name '*.stringsdata' | wc -l
           python3 ../Support/localizations.py places "$RUNNER_TEMP/strings"
+          python3 ../Support/localizations.py check "$RUNNER_TEMP/strings" ../Tonwerk/Localizable.xcstrings
 
   frontend-tests:
     name: Frontend tests

@@ -106,7 +106,7 @@
 				};
 			};
 			buildConfigurationList = A7492CCDE30BE8F54F16B52E /* Build configuration list for PBXProject "Tonwerk" */;
-			developmentRegion = de;
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				de,

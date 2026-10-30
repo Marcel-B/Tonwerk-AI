@@ -132,7 +132,7 @@ struct AdvancedSection: View {
         @Bindable var model = model
         let available = loras?.loras ?? []
         let chosen = available.first { $0.name == model.form.lora }
-        return LabeledField(hint: loraHint(chosen, available: available)) {
+        return LabeledField(hint: "\(loraHint(chosen, available: available))") {
             VStack(alignment: .leading) {
                 Picker("Klang-LoRA", selection: $model.form.lora) {
                     Text("keine (Standard)").tag("")

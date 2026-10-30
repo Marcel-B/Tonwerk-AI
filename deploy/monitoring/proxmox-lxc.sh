@@ -166,6 +166,9 @@ if [ "$PVE_EXPORTER" = 1 ]; then
     pct push "$CTID" "$PVE_FILE" "$TARGET_DIR/pve.yml" --perms 600
     rm -f "$PVE_FILE"
   fi
+  # The exporter's image runs as prometheus (uid 101), not root: mode 600 stays, the owner is that user. Done on every
+  # run so a pve.yml written by an earlier version of this script is fixed too.
+  in_ct "chown 101:101 '$TARGET_DIR/pve.yml'"
   in_ct "grep -q '^COMPOSE_PROFILES=' '$TARGET_DIR/.env' || echo COMPOSE_PROFILES=pve >> '$TARGET_DIR/.env'"
   if ! in_ct "test -f '$TARGET_DIR/prometheus/pve/proxmox.yml'"; then
     HOST_IP="$(ip -4 -o addr show "$BRIDGE" | awk '{ print $4 }' | cut -d/ -f1 | head -n 1)"

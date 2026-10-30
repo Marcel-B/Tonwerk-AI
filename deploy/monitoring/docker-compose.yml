@@ -70,6 +70,8 @@ services:
     image: prompve/prometheus-pve-exporter:3.10.1
     restart: unless-stopped
     profiles: [pve]
+    # Its default [::]:9221 fails where Docker gives the container no IPv6; Prometheus reaches it over IPv4 anyway.
+    command: --web.listen-address=0.0.0.0:9221
     volumes:
       - ./pve.yml:/etc/prometheus/pve.yml:ro
 

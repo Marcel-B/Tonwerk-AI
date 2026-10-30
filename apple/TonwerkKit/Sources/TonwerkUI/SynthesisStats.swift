@@ -71,7 +71,7 @@ struct SynthesisStatsView: View {
                     Self.legend(Self.colour(engine), engine, hollow: false)
                 }
                 if entries.contains(where: { $0.steps < 32 }) {
-                    Self.legend(.secondary, "weniger als 32 Schritte", hollow: true)
+                    Self.legend(.secondary, String(localized: "weniger als 32 Schritte"), hollow: true)
                 }
             }
             Chart(Array(entries.enumerated()), id: \.offset) { index, entry in
@@ -110,8 +110,8 @@ struct SynthesisStatsView: View {
         return VStack(alignment: .leading, spacing: 4) {
             Text("Neural-Engine-Programme kompiliert (Minuten)").font(.caption.weight(.medium))
             HStack(spacing: 12) {
-                Self.legend(ane, "Song hat gewartet", hollow: false)
-                Self.legend(ane, "im Hintergrund", hollow: true)
+                Self.legend(ane, String(localized: "Song hat gewartet"), hollow: false)
+                Self.legend(ane, String(localized: "im Hintergrund"), hollow: true)
             }
             Chart(Array(entries.enumerated()), id: \.offset) { index, entry in
                 BarMark(x: .value("Kompilieren", Double(index)), y: .value("Minuten", entry.seconds / 60), width: .ratio(0.7))

@@ -12,19 +12,19 @@ public enum CoverBlocks {
 
         var name: String {
             switch self {
-            case .medium: "Coverart"
-            case .era: "Ära"
-            case .light: "Licht und Farbe"
-            case .framing: "Bildaufbau"
+            case .medium: String(localized: "Coverart")
+            case .era: String(localized: "Ära")
+            case .light: String(localized: "Licht und Farbe")
+            case .framing: String(localized: "Bildaufbau")
             }
         }
 
         var hint: String {
             switch self {
-            case .medium: "Wie das Bild gemacht ist. Eine Art zur Zeit, eine neue ersetzt die alte."
-            case .era: "Der Look einer Zeit, wie auf Platten von damals."
-            case .light: "Stimmung über Licht und Farben; zwei passen meist zusammen."
-            case .framing: "Was im Bild wo steht."
+            case .medium: String(localized: "Wie das Bild gemacht ist. Eine Art zur Zeit, eine neue ersetzt die alte.")
+            case .era: String(localized: "Der Look einer Zeit, wie auf Platten von damals.")
+            case .light: String(localized: "Stimmung über Licht und Farben; zwei passen meist zusammen.")
+            case .framing: String(localized: "Was im Bild wo steht.")
             }
         }
     }
@@ -38,69 +38,69 @@ public enum CoverBlocks {
 
     /// In the order the description lists them. A medium is one of a kind: choosing one replaces the other.
     public static let all: [Block] = [
-        Block(key: "photo", group: .medium, name: "Fotografie",
+        Block(key: "photo", group: .medium, name: String(localized: "Fotografie"),
               text: "Shot as a photograph, natural film grain, shallow depth of field."),
-        Block(key: "oil", group: .medium, name: "Ölgemälde",
+        Block(key: "oil", group: .medium, name: String(localized: "Ölgemälde"),
               text: "Painted in oil on canvas, visible brush strokes."),
-        Block(key: "watercolour", group: .medium, name: "Aquarell",
+        Block(key: "watercolour", group: .medium, name: String(localized: "Aquarell"),
               text: "A soft watercolour painting, bleeding washes on paper."),
-        Block(key: "pencil", group: .medium, name: "Bleistiftskizze",
+        Block(key: "pencil", group: .medium, name: String(localized: "Bleistiftskizze"),
               text: "A graphite pencil sketch on textured paper, visible strokes and cross-hatching, monochrome."),
-        Block(key: "charcoal", group: .medium, name: "Kohlezeichnung",
+        Block(key: "charcoal", group: .medium, name: String(localized: "Kohlezeichnung"),
               text: "A charcoal drawing, smudged deep blacks and soft grey tones."),
-        Block(key: "ink", group: .medium, name: "Tuschezeichnung",
+        Block(key: "ink", group: .medium, name: String(localized: "Tuschezeichnung"),
               text: "An ink drawing with bold brush lines and hatching, black on white paper."),
-        Block(key: "lineArt", group: .medium, name: "Linienzeichnung",
+        Block(key: "lineArt", group: .medium, name: String(localized: "Linienzeichnung"),
               text: "Clean line art, thin even outlines on a flat background."),
-        Block(key: "screenPrint", group: .medium, name: "Siebdruck",
+        Block(key: "screenPrint", group: .medium, name: String(localized: "Siebdruck"),
               text: "A screen print in two or three flat inks, slightly misregistered, on grainy paper."),
-        Block(key: "collage", group: .medium, name: "Collage",
+        Block(key: "collage", group: .medium, name: String(localized: "Collage"),
               text: "A collage of cut paper and old photographs with torn edges."),
-        Block(key: "render", group: .medium, name: "3D-Render",
+        Block(key: "render", group: .medium, name: String(localized: "3D-Render"),
               text: "A 3D render with soft studio lighting and smooth materials."),
-        Block(key: "anime", group: .medium, name: "Anime",
+        Block(key: "anime", group: .medium, name: String(localized: "Anime"),
               text: "A still from a hand-drawn anime film."),
-        Block(key: "bauhaus", group: .medium, name: "Bauhaus",
+        Block(key: "bauhaus", group: .medium, name: String(localized: "Bauhaus"),
               text: "A minimal Bauhaus composition of simple geometric shapes in primary colours."),
-        Block(key: "instant", group: .medium, name: "Sofortbild",
+        Block(key: "instant", group: .medium, name: String(localized: "Sofortbild"),
               text: "A faded instant photo with soft colours and a slight vignette."),
-        Block(key: "jazz60s", group: .era, name: "60er Jazz-Platte",
+        Block(key: "jazz60s", group: .era, name: String(localized: "60er Jazz-Platte"),
               text: "Like a 1960s jazz record sleeve, bold flat colour fields."),
-        Block(key: "vinyl70s", group: .era, name: "70er Rock-Platte",
+        Block(key: "vinyl70s", group: .era, name: String(localized: "70er Rock-Platte"),
               text: "With the look of a 1970s rock record sleeve, warm faded colours."),
-        Block(key: "synthwave80s", group: .era, name: "80er Synthwave",
+        Block(key: "synthwave80s", group: .era, name: String(localized: "80er Synthwave"),
               text: "1980s synthwave look, a neon grid, chrome and a setting sun."),
-        Block(key: "rave90s", group: .era, name: "90er Rave-Flyer",
+        Block(key: "rave90s", group: .era, name: String(localized: "90er Rave-Flyer"),
               text: "Like a 1990s rave flyer, acid colours and blurred motion."),
-        Block(key: "y2k", group: .era, name: "Y2K",
+        Block(key: "y2k", group: .era, name: String(localized: "Y2K"),
               text: "Y2K aesthetic, glossy chrome and iridescent plastic."),
-        Block(key: "cassette", group: .era, name: "Lo-Fi-Kassette",
+        Block(key: "cassette", group: .era, name: String(localized: "Lo-Fi-Kassette"),
               text: "Lo-fi cassette aesthetic, washed-out colours, dust and tape grain."),
-        Block(key: "neon", group: .light, name: "Neon bei Nacht",
+        Block(key: "neon", group: .light, name: String(localized: "Neon bei Nacht"),
               text: "Lit by neon signs at night, wet reflections."),
-        Block(key: "goldenHour", group: .light, name: "Goldene Stunde",
+        Block(key: "goldenHour", group: .light, name: String(localized: "Goldene Stunde"),
               text: "Warm golden-hour light, long shadows."),
-        Block(key: "blackWhite", group: .light, name: "Schwarzweiß",
+        Block(key: "blackWhite", group: .light, name: String(localized: "Schwarzweiß"),
               text: "Black and white, strong contrast."),
-        Block(key: "pastel", group: .light, name: "Pastell",
+        Block(key: "pastel", group: .light, name: String(localized: "Pastell"),
               text: "Soft pastel colours."),
-        Block(key: "dramatic", group: .light, name: "Kontrastreich",
+        Block(key: "dramatic", group: .light, name: String(localized: "Kontrastreich"),
               text: "High contrast, deep shadows, dramatic light."),
-        Block(key: "duotone", group: .light, name: "Duoton",
+        Block(key: "duotone", group: .light, name: String(localized: "Duoton"),
               text: "A duotone of two strong colours."),
-        Block(key: "mist", group: .light, name: "Nebel",
+        Block(key: "mist", group: .light, name: String(localized: "Nebel"),
               text: "A misty, hazy atmosphere."),
-        Block(key: "portrait", group: .framing, name: "Porträt",
+        Block(key: "portrait", group: .framing, name: String(localized: "Porträt"),
               text: "A close portrait of a single figure in the centre."),
-        Block(key: "landscape", group: .framing, name: "Weite Landschaft",
+        Block(key: "landscape", group: .framing, name: String(localized: "Weite Landschaft"),
               text: "A wide landscape with a small figure in it."),
-        Block(key: "closeUp", group: .framing, name: "Nahaufnahme",
+        Block(key: "closeUp", group: .framing, name: String(localized: "Nahaufnahme"),
               text: "An extreme close-up of one object."),
-        Block(key: "symmetric", group: .framing, name: "Symmetrisch",
+        Block(key: "symmetric", group: .framing, name: String(localized: "Symmetrisch"),
               text: "A strictly symmetrical composition."),
-        Block(key: "space", group: .framing, name: "Viel Leerraum",
+        Block(key: "space", group: .framing, name: String(localized: "Viel Leerraum"),
               text: "Lots of empty space around a small central motif."),
-        Block(key: "above", group: .framing, name: "Von oben",
+        Block(key: "above", group: .framing, name: String(localized: "Von oben"),
               text: "Seen from directly above."),
     ]
 

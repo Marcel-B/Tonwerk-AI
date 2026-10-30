@@ -172,7 +172,7 @@ private struct WritingSessionView: View {
             if !mine {
                 HStack(spacing: 14) {
                     if let used = message.model {
-                        Text(message.stopped == true ? "\(used) · angehalten" : used)
+                        Text(message.stopped == true ? String(localized: "\(used) · angehalten") : used)
                     }
                     Button {
                         _ = Clipboard.copy(message.text)

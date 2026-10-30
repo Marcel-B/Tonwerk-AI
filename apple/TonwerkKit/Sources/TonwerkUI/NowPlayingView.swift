@@ -159,7 +159,7 @@ struct NowPlayingView: View {
         }
     }
 
-    private func switchButton(_ symbol: String, on: Binding<Bool>, label: String) -> some View {
+    private func switchButton(_ symbol: String, on: Binding<Bool>, label: LocalizedStringKey) -> some View {
         Button {
             on.wrappedValue.toggle()
         } label: {

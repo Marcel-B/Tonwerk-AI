@@ -1,0 +1,74 @@
+{
+  "sourceLanguage" : "de",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI"
+          }
+        }
+      }
+    },
+    "NSBluetoothAlwaysUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI spielt Spuren auf Bluetooth-MIDI-Instrumenten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI plays tracks on Bluetooth MIDI instruments."
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI verbindet sich mit deinem Tonwerk-Server im lokalen Netz."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI connects to your Tonwerk server on the local network."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI nimmt deine Stimme nur auf, wenn du im Sprachlabor oder beim Singen „Aufnehmen“ wählst: als Vorlage für die Sprachmodelle oder als eigene Singstimme."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI only records your voice when you choose “Record” in the speech lab or when singing: as a reference for the speech models or as your own singing voice."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

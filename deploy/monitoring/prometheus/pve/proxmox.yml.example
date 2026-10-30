@@ -1,0 +1,5 @@
+# Copy to proxmox.yml (proxmox-lxc.sh with PVE_EXPORTER=1 does it): the Proxmox host's address in the home network,
+# without port (the exporter asks :8006).
+- targets: [192.168.1.10]
+  labels:
+    app: proxmox

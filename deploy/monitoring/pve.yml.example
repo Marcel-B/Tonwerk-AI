@@ -1,0 +1,9 @@
+# Copy to pve.yml (mode 600; proxmox-lxc.sh with PVE_EXPORTER=1 writes it). A token of the user monitoring@pve with
+# only the role PVEAuditor on /, privilege separated; revoke it under Datacenter > Permissions > API Tokens.
+# It stays in this container: pve.yml is in .gitignore and the exporter publishes no port.
+default:
+  user: monitoring@pve
+  token_name: exporter
+  token_value: 00000000-0000-0000-0000-000000000000
+  # Proxmox' own certificate is self-signed; the exporter only talks to it in the home network.
+  verify_ssl: false

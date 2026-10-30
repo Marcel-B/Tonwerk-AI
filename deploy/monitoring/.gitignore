@@ -2,3 +2,5 @@
 prometheus/targets/*.yml
 prometheus/probes/*.yml
 !prometheus/probes/websites.yml
+pve.yml
+prometheus/pve/*.yml

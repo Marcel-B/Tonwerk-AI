@@ -45,7 +45,7 @@
       },
       "targets": [
         {
-          "expr": "up{job=\"apps\"}",
+          "expr": "up{job=~\"apps|proxmox\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -98,7 +98,25 @@
             }
           ]
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(oi-o-mat|proxmox)$"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Dashboard öffnen",
+                    "url": "/d/hosts"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "reduceOptions": {
@@ -114,7 +132,7 @@
         "justifyMode": "center",
         "orientation": "auto"
       },
-      "description": "Jede App aus prometheus/targets/. Ein Klick öffnet ihr Dashboard (gleiche uid wie das Label app).",
+      "description": "Jede App aus prometheus/targets/ und der Proxmox-Exporter. Ein Klick öffnet ihr Dashboard (gleiche uid wie das Label app; oi-o-mat und proxmox führen zu Hosts).",
       "id": 2
     },
     {

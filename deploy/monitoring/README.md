@@ -21,6 +21,12 @@ TONWERK_TARGET=mac-mini.tail1234.ts.net:8443 /root/monitoring/proxmox-lxc.sh
 
 Ohne `TS_AUTHKEY` zeigt Tailscale einen Link, mit dem man den Container im Browser (auch auf dem Handy) anmeldet. Am Ende stehen Adresse und Passwort von Grafana und die Zeile für Tonwerks `appsettings.Production.json` (Schritt 3 unten). Speicher, Bridge, Größe und Name lassen sich über Umgebungsvariablen ändern (`proxmox-lxc.sh --help`). Ein zweiter Lauf findet den Container wieder, kopiert nur die Dateien neu und startet den Stack neu; `.env` und die Targets bleiben.
 
+Mit `PVE_EXPORTER=1` beobachtet der Stack auch den Proxmox-Host und alle seine LXCs und VMs (siehe [Hosts](#hosts)):
+
+```sh
+PVE_EXPORTER=1 /root/monitoring/proxmox-lxc.sh
+```
+
 ## Einrichten von Hand
 
 1. Auf dem Proxmox einen Debian-LXC anlegen (2 GB RAM, 2 Kerne, 20 GB Platte reichen; für Docker im LXC unter *Optionen → Features* „Nesting“ und „keyctl“ einschalten), darin Docker und Tailscale installieren und `tailscale up` ausführen. Im Folgenden heißt er im Tailnet `monitoring`.
@@ -70,6 +76,9 @@ GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 | Logs erreichen Loki nicht | eine App hat in 30 min Zeilen verworfen | 15 min |
 | Website nicht erreichbar | `probe_success` ist 0 | 15 min |
 | Zertifikat läuft ab | in weniger als 14 Tagen | 1 h |
+| oi-o-mat swappt | über 4 GB Swap | 10 min |
+| Platte von oi-o-mat fast voll | intern oder ein externes Laufwerk (T7) unter 10 % frei | 30 min |
+| Proxmox-Gast läuft nicht | ein LXC oder eine VM mit Autostart (`onboot`) läuft nicht | 10 min |
 
 Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **ntfy** auf *Test*.
 
@@ -99,6 +108,17 @@ Prometheus behält 90 Tage (`PROMETHEUS_RETENTION`), Loki 30 Tage (`loki/loki.ym
 ## Wie viel ist das?
 
 Für eine Handvoll Apps (Tonwerk, eine Buchhaltung, eine Reise-App) braucht der Stack zusammen etwa 600 MB bis 1 GB Arbeitsspeicher und wenig CPU; Prometheus und Loki sind für Tausende Ziele gebaut. Jede App kostet nur ihre Zeilen und ein paar hundert Messreihen. 2 GB RAM für den Container lassen Luft.
+
+## Hosts
+
+Das Dashboard **Hosts** (`grafana/dashboards/hosts.json`) zeigt oi-o-mat und den Proxmox; ein Klick auf `oi-o-mat` oder `proxmox` in der Übersicht führt dorthin.
+
+- **oi-o-mat:** Speicher (belegt laut macOS, fest, komprimiert, Swap) mit einem Band darunter, wer ihn hält (Tonwerks `tonwerk_memory_holder` und die Modelle, die die LLM-Schranke für Apps geladen hat), Speicherdruck, CPU, Platten (intern und T7), Netz. Die Zahlen liefert node_exporter, den `bin/node-exporter on` im scripts-Repo auf oi-o-mat einrichtet (nur `127.0.0.1:9100`, ins Tailnet per `tailscale serve --https=9100`); Ziel nach `prometheus/targets/oi-o-mat.yml.example`.
+- **Proxmox:** Host, Speicher, CPU und Platte je Gast, Speicherpools, eine Tabelle der Gäste mit Autostart. Die Zahlen liefert der pve-Exporter im Stack (Dienst `pve-exporter`, Profil `pve`, Job `proxmox`). `proxmox-lxc.sh` legt dafür mit `PVE_EXPORTER=1` auf dem Host den Benutzer `monitoring@pve` an, gibt ihm und seinem Token `exporter` (privilege separated) nur die Rolle `PVEAuditor` (lesen), schreibt das Token in `pve.yml` im Container (Modus 600, in `.gitignore`, nie ausgegeben, auf dem Host nicht aufbewahrt), trägt den Host in `prometheus/pve/proxmox.yml` ein und schaltet das Profil in `.env` ein (`COMPOSE_PROFILES=pve`). Der Exporter hat keinen Port nach außen, nur Prometheus erreicht ihn; er fragt den Host im Heimnetz (Proxmox' eigenes Zertifikat, daher `verify_ssl: false`). Widerrufen: in Proxmox unter *Datacenter → Permissions → API Tokens*, danach `pve.yml` im Container löschen.
+
+## LLM-Schranke
+
+Das Dashboard **LLM-Schranke** (`grafana/dashboards/llm-gate.json`) zeigt die gemeinsame Warteschlange vor LM Studio auf oi-o-mat (scripts-Repo, `lib/llm-gate`): was wartet und warum (Tonwerk arbeitet, kein Speicher, angehalten, andere davor), Wartezeit und Dauer je App, Ergebnisse, geladene Modelle mit RAM, Laden und Entladen mit Grund, darüber Tonwerks Speicherhalter, und ihr Protokoll aus Loki. Die App steht in den Messwerten der Schranke im Label `client`, weil `app` das Label des Targets ist (`llm-gate`). Ziel nach `prometheus/targets/llm-gate.yml.example`, Logs über `loki.url` in der Konfiguration der Schranke (scripts, `docs/llm-gate.md`).
 
 ## Weitere Apps anbinden
 

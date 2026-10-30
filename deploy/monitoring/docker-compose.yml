@@ -63,6 +63,16 @@ services:
     volumes:
       - ./blackbox:/etc/blackbox:ro
 
+  # Proxmox: every LXC's and VM's CPU, memory and disk through the host's API (job proxmox). Its read-only token
+  # (PVEAuditor) is in pve.yml beside .env, mode 600, never in git; proxmox-lxc.sh with PVE_EXPORTER=1 makes both and
+  # turns the profile on (COMPOSE_PROFILES=pve in .env). No published port: only Prometheus reaches it.
+  pve-exporter:
+    image: prompve/prometheus-pve-exporter:3.10.1
+    restart: unless-stopped
+    profiles: [pve]
+    volumes:
+      - ./pve.yml:/etc/prometheus/pve.yml:ro
+
 volumes:
   prometheus:
   loki:

@@ -17,7 +17,7 @@ groups:
             datasourceUid: prometheus
             model:
               refId: A
-              expr: 'up{job=~"apps|stack"}'
+              expr: 'up{job=~"apps|stack|proxmox"}'
               instant: true
           - refId: C
             datasourceUid: __expr__
@@ -31,7 +31,7 @@ groups:
         for: 10m
         annotations:
           summary: '{{ $labels.app }} ist seit 10 Minuten nicht erreichbar.'
-          description: 'Jede App in prometheus/targets/ und der Stack selbst; eine neue App ist ohne Änderung dabei.'
+          description: 'Jede App in prometheus/targets/, der pve-Exporter und der Stack selbst; eine neue App ist ohne Änderung dabei.'
         isPaused: false
       - uid: backup-old
         title: Sicherung zu alt
@@ -81,7 +81,7 @@ groups:
         for: 30m
         annotations:
           summary: '{{ $labels.app }}: auf {{ $labels.volume }} sind nur noch {{ with $values.A }}{{ humanize .Value }}{{ end }} % frei.'
-          description: 'Tonwerks Volumes (Songs, Daten); die Hosts kommen mit node_exporter dazu.'
+          description: 'Tonwerks Volumes (Songs, Daten); die Platten von oi-o-mat stehen unter Hosts.'
         isPaused: false
       - uid: loki-dropping
         title: Logs erreichen Loki nicht
@@ -162,4 +162,84 @@ groups:
         annotations:
           summary: 'Das Zertifikat von {{ $labels.instance }} läuft in {{ with $values.A }}{{ humanize .Value }}{{ end }} Tagen ab.'
           description: 'Ziele in prometheus/probes/ mit HTTPS.'
+        isPaused: false
+  - orgId: 1
+    name: hosts
+    folder: Alarme
+    interval: 1m
+    rules:
+      - uid: host-swap
+        title: oi-o-mat swappt
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'node_memory_swap_used_bytes{app="oi-o-mat"} / 1e9'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [4] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: 'oi-o-mat hat seit 10 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} GB im Swap.'
+          description: 'Über 4 GB Swap: so fing das Einfrieren an, vor dem Tonwerk seinen Speicher so streng hält (node_exporter, scripts bin/node-exporter).'
+        isPaused: false
+      - uid: host-disk
+        title: Platte von oi-o-mat fast voll
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '100 * node_filesystem_avail_bytes{app="oi-o-mat",mountpoint=~"/System/Volumes/Data|/Volumes/.+"} / node_filesystem_size_bytes{app="oi-o-mat",mountpoint=~"/System/Volumes/Data|/Volumes/.+"}'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: lt, params: [10] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 30m
+        annotations:
+          summary: 'oi-o-mat: auf {{ $labels.mountpoint }} sind nur noch {{ with $values.A }}{{ humanize .Value }}{{ end }} % frei.'
+          description: 'Die interne Platte (/System/Volumes/Data) und die externen unter /Volumes, etwa die T7 mit den Modellen.'
+        isPaused: false
+      - uid: guest-down
+        title: Proxmox-Gast läuft nicht
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '((1 - pve_up{id=~"(lxc|qemu)/.+"}) * on (id) pve_onboot_status) * on (id) group_left (name) pve_guest_info'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: '{{ $labels.name }} ({{ $labels.id }}) startet mit dem Host, läuft aber seit 10 Minuten nicht.'
+          description: 'Nur Gäste mit onboot=1; ein von Hand gestoppter Gast ohne Autostart bleibt still (pve-Exporter).'
         isPaused: false

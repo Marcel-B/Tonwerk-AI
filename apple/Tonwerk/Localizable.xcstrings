@@ -16763,6 +16763,23 @@
         }
       }
     },
+    "Speicherplatz" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicherplatz"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Storage"
+          }
+        }
+      }
+    },
     "Speichert" : {
       "extractionState" : "manual",
       "localizations" : {

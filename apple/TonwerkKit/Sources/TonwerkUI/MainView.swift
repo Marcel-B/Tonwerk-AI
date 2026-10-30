@@ -81,7 +81,7 @@ struct MainView: View {
                     Label("Ausarbeitung", systemImage: "pencil.and.scribble").tag(Page.sketch)
                     Label("Begleitstimmen", systemImage: "person.3").tag(Page.harmony)
                     Label("Protokoll", systemImage: "doc.text.magnifyingglass").tag(Page.log)
-                    Label("Speicher", systemImage: "internaldrive").tag(Page.storage)
+                    Label("Speicherplatz", systemImage: "internaldrive").tag(Page.storage)
                     Label("Vorlagen", systemImage: "bookmark").tag(Page.templates)
                     Label("Cover-Stile", systemImage: "paintpalette").tag(Page.coverStyles)
                 }

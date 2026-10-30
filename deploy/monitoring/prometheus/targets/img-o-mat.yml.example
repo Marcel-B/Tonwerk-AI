@@ -1,0 +1,7 @@
+# Copy to img-o-mat.yml and put in the Tailscale name of img-o-mat's Proxmox container. img-o-mat
+# (github.com/Marcel-B/img-o-mat) answers /metrics on its own port 1236, plain http.
+- targets: [img-o-mat.example.ts.net:1236]
+  labels:
+    app: img-o-mat
+    __scheme__: http
+    __metrics_path__: /metrics

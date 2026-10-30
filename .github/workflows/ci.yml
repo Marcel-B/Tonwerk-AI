@@ -158,11 +158,8 @@ jobs:
 
       - name: Check English translations
         run: |
-          find "$RUNNER_TEMP/strings" .build -name '*.stringsdata' | head -5
-          python3 ../Support/localizations.py dump "$RUNNER_TEMP/strings" > "$RUNNER_TEMP/keys.json" || true
-          python3 ../Support/localizations.py dump .build > "$RUNNER_TEMP/keys-build.json" || true
-          wc -c "$RUNNER_TEMP"/keys*.json
-          cat "$RUNNER_TEMP/keys.json"
+          find "$RUNNER_TEMP/strings" -name '*.stringsdata' | wc -l
+          python3 ../Support/localizations.py places "$RUNNER_TEMP/strings"
 
   frontend-tests:
     name: Frontend tests

@@ -13,7 +13,7 @@ import os
 import sys
 
 
-def extracted(folder):
+def extracted(folder, every_place=None):
     keys = {}
     for root, _, files in os.walk(folder):
         for name in files:
@@ -28,6 +28,8 @@ def extracted(folder):
                 for entry in entries:
                     line = entry.get("location", {}).get("startingLine", 0)
                     keys.setdefault(entry["key"], f"{source}:{line}")
+                    if every_place is not None:
+                        every_place.setdefault(source, set()).add(line)
     return keys
 
 
@@ -45,6 +47,15 @@ def translated(catalog_path):
 
 
 def main(argv):
+    if len(argv) == 3 and argv[1] == "places":
+        places = {}
+        keys = extracted(argv[2], places)
+        for source in sorted(places):
+            print(source, ",".join(str(n) for n in sorted(places[source])))
+        for key in sorted(keys):
+            if "%" in key:
+                print("FMT", json.dumps(key, ensure_ascii=False))
+        return 0
     if len(argv) == 3 and argv[1] == "dump":
         json.dump(extracted(argv[2]), sys.stdout, ensure_ascii=False, indent=1, sort_keys=True)
         print()

@@ -13,7 +13,7 @@ import os
 import sys
 
 
-def extracted(folder, every_place=None):
+def extracted(folder):
     keys = {}
     for root, _, files in os.walk(folder):
         for name in files:
@@ -28,8 +28,6 @@ def extracted(folder, every_place=None):
                 for entry in entries:
                     line = entry.get("location", {}).get("startingLine", 0)
                     keys.setdefault(entry["key"], f"{source}:{line}")
-                    if every_place is not None:
-                        every_place.setdefault(source, set()).add(line)
     return keys
 
 
@@ -47,15 +45,6 @@ def translated(catalog_path):
 
 
 def main(argv):
-    if len(argv) == 3 and argv[1] == "places":
-        places = {}
-        keys = extracted(argv[2], places)
-        for source in sorted(places):
-            print(source, ",".join(str(n) for n in sorted(places[source])))
-        for key in sorted(keys):
-            if "%" in key:
-                print("FMT", json.dumps(key, ensure_ascii=False))
-        return 0
     if len(argv) == 3 and argv[1] == "dump":
         json.dump(extracted(argv[2]), sys.stdout, ensure_ascii=False, indent=1, sort_keys=True)
         print()
@@ -71,11 +60,9 @@ def main(argv):
         for key in missing:
             print(f"::error file=apple/TonwerkKit/Sources/TonwerkUI/{keys[key].split(':')[0]},"
                   f"line={keys[key].split(':')[1]}::No English translation: {json.dumps(key, ensure_ascii=False)}")
-        unused = sorted(k for k in known if k not in keys)
-        if unused:
-            print(f"{len(unused)} catalog entries are no longer in the app (harmless; remove when convenient):")
-            for key in unused:
-                print("  " + json.dumps(key, ensure_ascii=False))
+        unused = sum(1 for k in known if k not in keys)
+        # Texts looked up at run time (String.LocalizationValue of a variable) and the iOS-only ones are among these.
+        print(f"{unused} catalog entries the compiler did not see (looked up at run time, iOS only, or no longer used).")
         return 1 if missing else 0
     print(__doc__)
     return 2

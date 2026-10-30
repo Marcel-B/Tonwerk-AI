@@ -18,40 +18,6 @@
         }
       }
     },
-    " " : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : " "
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : " "
-          }
-        }
-      }
-    },
-    " · " : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : " · "
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : " · "
-          }
-        }
-      }
-    },
     " · nicht erreichbar" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1514,23 +1480,6 @@
         }
       }
     },
-    "2-3" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "2-3"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "2-3"
-          }
-        }
-      }
-    },
     "23 Sprachen, auch Deutsch; klont aus wenigen Sekunden." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1565,23 +1514,6 @@
         }
       }
     },
-    "3-4" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "3-4"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "3-4"
-          }
-        }
-      }
-    },
     "3D-Render" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1595,23 +1527,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "3D render"
-          }
-        }
-      }
-    },
-    "4+" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "4+"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "4+"
           }
         }
       }
@@ -1697,23 +1612,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "90s rave flyer"
-          }
-        }
-      }
-    },
-    "<2" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "<2"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "<2"
           }
         }
       }
@@ -2581,23 +2479,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alto: the low female voice type."
-          }
-        }
-      }
-    },
-    "Alto" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alto"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alto"
           }
         }
       }
@@ -4026,23 +3907,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Backbeat"
-          }
-        }
-      }
-    },
-    "Backup" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup"
           }
         }
       }
@@ -7324,40 +7188,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Triangle"
-          }
-        }
-      }
-    },
-    "Drone" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drone"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drone"
-          }
-        }
-      }
-    },
-    "DroneHeld" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "DroneHeld"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Held drone"
           }
         }
       }
@@ -12220,23 +12050,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Turns a recording into a melody score (ABC) that can serve as the score of a new song, for a cover say. SheetSage2 runs on the CPU and takes a few minutes."
-          }
-        }
-      }
-    },
-    "Macs" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Macs"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Macs"
           }
         }
       }
@@ -18497,23 +18310,6 @@
         }
       }
     },
-    "Tenor" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tenor"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tenor"
-          }
-        }
-      }
-    },
     "Tenor (Chorsatz)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21183,23 +20979,6 @@
         }
       }
     },
-    "YuE2" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "YuE2"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "YuE2"
-          }
-        }
-      }
-    },
     "YuE2-Modelle" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21676,6 +21455,57 @@
         }
       }
     },
+    "deploy/install-ace.sh" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deploy/install-ace.sh"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deploy/install-ace.sh"
+          }
+        }
+      }
+    },
+    "deploy/install-singing.sh" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deploy/install-singing.sh"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deploy/install-singing.sh"
+          }
+        }
+      }
+    },
+    "deploy/install-speech.sh" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deploy/install-speech.sh"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deploy/install-speech.sh"
+          }
+        }
+      }
+    },
     "dieses Bildmodell" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21825,23 +21655,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "in the background"
-          }
-        }
-      }
-    },
-    "images:" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "images:"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "images:"
           }
         }
       }

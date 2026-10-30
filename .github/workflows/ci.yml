@@ -170,7 +170,6 @@ jobs:
 
       - name: Check English translations
         run: |
-          python3 ../Support/localizations.py places "$RUNNER_TEMP/strings"
           python3 ../Support/localizations.py check "$RUNNER_TEMP/strings" ../Tonwerk/Localizable.xcstrings
 
   frontend-tests:

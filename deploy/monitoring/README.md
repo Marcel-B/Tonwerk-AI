@@ -120,6 +120,10 @@ Das Dashboard **Hosts** (`grafana/dashboards/hosts.json`) zeigt oi-o-mat und den
 
 Das Dashboard **LLM-Schranke** (`grafana/dashboards/llm-gate.json`) zeigt die gemeinsame Warteschlange vor LM Studio auf oi-o-mat (scripts-Repo, `lib/llm-gate`): was wartet und warum (Tonwerk arbeitet, kein Speicher, angehalten, andere davor), Wartezeit und Dauer je App, Ergebnisse, geladene Modelle mit RAM, Laden und Entladen mit Grund, darüber Tonwerks Speicherhalter, und ihr Protokoll aus Loki. Die App steht in den Messwerten der Schranke im Label `client`, weil `app` das Label des Targets ist (`llm-gate`). Ziel nach `prometheus/targets/llm-gate.yml.example`, Logs über `loki.url` in der Konfiguration der Schranke (scripts, `docs/llm-gate.md`).
 
+## img-o-mat
+
+Das Dashboard **img-o-mat** (`grafana/dashboards/img-o-mat.json`) zeigt den Bilddienst im Proxmox-Container (Repository Marcel-B/img-o-mat), der auf oi-o-mat malen lässt: ob er und oi-o-mat antworten, was gerade malt und wartet, Bilder je App und Modell, Mal- und Wartezeit, Ergebnisse außer fertig (gescheitert, vom Inhaltsfilter zurückgehalten, abgebrochen), Fehler auf dem Weg zu oi-o-mat, Downloads, Anfragen je Route, daneben was vor der LLM-Schranke wartet, und sein Protokoll aus Loki. Wie bei der Schranke steht die App im Label `client`. Ziel nach `prometheus/targets/img-o-mat.yml.example`; die Logs schickt img-o-mat, wenn es mit `LOKI_URL=http://monitoring:3100 deploy/to-proxmox.sh` eingerichtet ist. Alarme braucht es keine eigenen: „App nicht erreichbar“ und „Logs erreichen Loki nicht“ gelten für jedes Ziel.
+
 ## Weitere Apps anbinden
 
 Jede App, die einen Endpunkt im Prometheus-Format hat, ist eine Datei in `prometheus/targets/`; Prometheus liest neue Dateien innerhalb einer Minute ohne Neustart:

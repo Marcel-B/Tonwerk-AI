@@ -44,16 +44,49 @@ Ohne `TS_AUTHKEY` zeigt Tailscale einen Link, mit dem man den Container im Brows
 
    und neu starten: `launchctl kickstart -k gui/$(id -u)/de.bvelop.yueui`. Der LaunchAgent erreicht keine Adressen im Heimnetz (`192.168.…`), nur Tailscale-Namen und 100.x-Adressen.
 
-4. Grafana öffnen: `http://monitoring:3000`, Anmeldung mit `admin` und dem Passwort aus `.env`. Das Dashboard **Tonwerk** ist die Startseite.
+4. Grafana öffnen: `http://monitoring:3000`, Anmeldung mit `admin` und dem Passwort aus `.env`. Das Dashboard **Übersicht** ist die Startseite.
 
 Ob Prometheus den Mac erreicht, zeigt `http://monitoring:9090/targets`. Löst der Container den Tailscale-Namen nicht auf (MagicDNS im LXC aus), im Target die 100.x-Adresse des Macs eintragen und in `prometheus.yml` beim Job `apps` `tls_config: { server_name: <Mac>.<tailnet>.ts.net }` ergänzen, weil das Zertifikat auf den Namen ausgestellt ist.
 
-## Was das Dashboard zeigt
+## Alarme
+
+Grafana schickt Alarme an ntfy, und zwar an den Server von Slipways auf slipways-1. Regeln, Kontaktpunkt und Richtlinie liegen als Dateien in `grafana/provisioning/alerting/` und sind damit versioniert; in der Oberfläche stehen sie im Ordner **Alarme** und lassen sich dort nicht ändern.
+
+In `.env`:
+
+```sh
+NTFY_URL=https://slipways-1.<tailnet>.ts.net:2586
+NTFY_TOPIC=alarme-<zufall>        # mit zufälligem Teil: wer im Tailnet den Namen kennt, kann mitlesen
+GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
+```
+
+`proxmox-lxc.sh` fragt beim ersten Lauf danach. Fehlt `NTFY_URL`, geht der Kontaktpunkt ins Leere; Grafana zeigt das unter *Alerting → Contact points*. In der ntfy-App das Topic auf diesem Server abonnieren (wie bei Slipways' Benachrichtigungen). Alarme kommen rund um die Uhr; Ruhezeiten regelt das Telefon. Die Nachricht nennt die Regel, betroffene App oder Seite und einen Link zu Grafana; ein Alarm, der weiter anliegt, kommt nach 12 Stunden noch einmal, und wenn er vorbei ist, kommt „Wieder gut“.
+
+| Regel | Wann | Für |
+|---|---|---|
+| App nicht erreichbar | `up` ist 0 | 10 min; jede App aus `prometheus/targets/` und der Stack selbst |
+| Sicherung zu alt | letzte erfolgreiche Sicherung über 36 h her | 30 min; jede App mit `<app>_backup_last_success_timestamp_seconds` |
+| Platte fast voll | unter 10 % frei | 30 min; Tonwerks Volumes |
+| Logs erreichen Loki nicht | eine App hat in 30 min Zeilen verworfen | 15 min |
+| Website nicht erreichbar | `probe_success` ist 0 | 15 min |
+| Zertifikat läuft ab | in weniger als 14 Tagen | 1 h |
+
+Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **ntfy** auf *Test*.
+
+## Websites und Health-Endpunkte
+
+Der Blackbox-Exporter fragt Adressen für Prometheus ab (Job `probes`, alle 5 Minuten): ob sie mit 2xx antworten und wann ihr Zertifikat abläuft. Die öffentlichen Seiten stehen in `prometheus/probes/websites.yml`. Apps im Tailnet, die noch kein `/metrics` haben, kommen in eine eigene Datei nach dem Muster `prometheus/probes/health.yml.example`; sie bleibt wie die Targets außerhalb von Git. Prometheus liest neue Dateien binnen einer Minute.
+
+## Was die Übersicht zeigt
+
+Ob jede App, jede Website und der Stack läuft (ein Klick auf eine App öffnet ihr Dashboard), aktive Alarme, die letzte erfolgreiche Sicherung je App, wann die Zertifikate ablaufen, Warnungen und Fehler je App aus Loki, die letzten Fehler, Speicher und CPU der App-Prozesse.
+
+## Was das Dashboard Tonwerk zeigt
 
 - **Jetzt:** Worker, wer den Speicher hält, wartende Aufträge, Fertige und Fehlgeschlagene der letzten 24 Stunden, freier Platz.
 - **Aufträge:** laufend und wartend je Art (Song, Render, Transkription, Songtext, Fassung, Stems, Stimmentausch, Video, Cover, ACE-Step, Sprachlabor), fertig pro Stunde, mittlere Dauer (Arbeitszeit ohne Warten auf den Speicher), Fehlschläge.
 - **Speicher und Server:** wer wann den Speicher hielt, freier Platz über die Zeit, Speicher des Server-Prozesses (nicht der Modelle).
-- **Protokoll:** Warnungen und Fehler je Quelle über die Zeit, darunter das Protokoll aus Loki mit Filtern für Quelle, Stufe und Text.
+- **Protokoll:** Warnungen und Fehler je Quelle über die Zeit, darunter das Protokoll aus Loki mit Filtern für Quelle, Stufe und Text. Die Quelle `update` ist das Log von `deploy/update.sh`.
 
 Das Dashboard **Finanz-O-Mat** (`grafana/dashboards/finanzomat.json`) zeigt Erreichbarkeit, Kontoumsätze ohne Beleg, Belege mit Prüfhinweis, Alter des letzten Backups, Updates, Anfragen und Antwortzeiten, eingelesene Belege, Anmeldungen, Speicher und CPU sowie das Protokoll. Die App meldet sich mit `finanz-o-mat-lxc.sh monitoring <CTID>` auf dem Proxmox-Host selbst an (Ziel `prometheus/targets/finanzomat.yml`, siehe README von [finanz-O-mat](https://github.com/Marcel-B/finanz-O-mat/blob/main/deploy/proxmox/README.md#monitoring)).
 
@@ -80,8 +113,8 @@ Jede App, die einen Endpunkt im Prometheus-Format hat, ist eine Datei in `promet
     __metrics_path__: /metrics
 ```
 
-Für .NET-Apps ist das am einfachsten mit [prometheus-net](https://github.com/prometheus-net/prometheus-net) oder dem Prometheus-Exporter von OpenTelemetry. Logs schickt eine App an `http://monitoring:3100/loki/api/v1/push`, am besten mit dem Label `app` wie im Target, damit Messwerte und Zeilen in Grafana zusammenpassen; für .NET etwa mit Serilog und `Serilog.Sinks.Grafana.Loki`. Ein eigenes Dashboard ist eine weitere JSON-Datei in `grafana/dashboards/`.
+Für .NET-Apps ist das am einfachsten mit [prometheus-net](https://github.com/prometheus-net/prometheus-net) oder dem Prometheus-Exporter von OpenTelemetry. Logs schickt eine App an `http://monitoring:3100/loki/api/v1/push`, am besten mit dem Label `app` wie im Target, damit Messwerte und Zeilen in Grafana zusammenpassen; für .NET etwa mit Serilog und `Serilog.Sinks.Grafana.Loki`. Ein eigenes Dashboard ist eine weitere JSON-Datei in `grafana/dashboards/`; seine `uid` ist der Wert des Labels `app`, dann führt die Übersicht dorthin. Meldet die App `<app>_backup_last_success_timestamp_seconds` (Unixzeit der letzten erfolgreichen Sicherung), wacht der Alarm „Sicherung zu alt“ auch über sie.
 
 ## Sicherheit
 
-Prometheus, Loki und Grafana haben außer dem Grafana-Login keine Anmeldung. Im Heimnetz und Tailnet ist das in Ordnung; wer die Ports nur im Tailnet will, setzt in `.env` `BIND_ADDRESS` auf die Tailscale-Adresse des Containers. Tonwerks `/metrics` ist wie der Rest von Tonwerk ohne Login im Tailnet erreichbar; es enthält keine Titel, Texte oder Schlüssel, nur Zahlen.
+Prometheus, Loki und Grafana haben außer dem Grafana-Login keine Anmeldung. Der Blackbox-Exporter hat keinen eigenen Port nach außen, nur Prometheus erreicht ihn. Im Heimnetz und Tailnet ist das in Ordnung; wer die Ports nur im Tailnet will, setzt in `.env` `BIND_ADDRESS` auf die Tailscale-Adresse des Containers. Tonwerks `/metrics` ist wie der Rest von Tonwerk ohne Login im Tailnet erreichbar; es enthält keine Titel, Texte oder Schlüssel, nur Zahlen.

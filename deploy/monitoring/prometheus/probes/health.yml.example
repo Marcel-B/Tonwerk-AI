@@ -1,0 +1,8 @@
+# Copy to health.yml (only *.yml is read) and put in the apps' addresses. Health endpoints of apps that have no
+# /metrics of their own yet; Prometheus' up already covers those that do. Remove an entry once its app exports metrics.
+- targets: [https://identity.example.ts.net/health]
+  labels: { module: http_2xx, kind: health, app: identity }
+- targets: [http://fil-o-mat.example.ts.net:8080/health]
+  labels: { module: http_2xx, kind: health, app: filomat }
+- targets: [http://192.168.2.130:8080/api/health]
+  labels: { module: http_2xx, kind: health, app: ohmventory }

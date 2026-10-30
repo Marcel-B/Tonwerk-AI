@@ -1321,7 +1321,7 @@
         "multi": true,
         "includeAll": true,
         "allValue": ".+",
-        "query": "server,worker,queue,lyrics,voices,speech,singing,images,ace,sketch,analysis,machines,video,export,logic,backup,push",
+        "query": "server,worker,queue,lyrics,voices,speech,singing,images,ace,sketch,analysis,machines,video,export,logic,backup,push,update",
         "current": {
           "text": "All",
           "value": "$__all"

@@ -1,0 +1,23 @@
+apiVersion: 1
+# ntfy (Slipways' server) through ntfy's own Grafana template, which takes title and message from the webhook's JSON.
+# Address and topic come from the container's environment (.env: NTFY_URL, NTFY_TOPIC).
+contactPoints:
+  - orgId: 1
+    name: ntfy
+    receivers:
+      - uid: ntfy
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: ${NTFY_URL}/${NTFY_TOPIC}?template=grafana
+          httpMethod: POST
+          title: '{{ template "ntfy.title" . }}'
+          message: '{{ template "ntfy.message" . }}'
+
+templates:
+  - orgId: 1
+    name: ntfy
+    template: |
+      {{ define "ntfy.title" }}{{ if eq .Status "resolved" }}Wieder gut{{ else }}Alarm{{ end }}: {{ .CommonLabels.alertname }}{{ end }}
+      {{ define "ntfy.message" }}{{ range .Alerts }}{{ .Annotations.summary }}
+      {{ end }}{{ .ExternalURL }}{{ end }}

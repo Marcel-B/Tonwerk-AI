@@ -10,6 +10,33 @@ scrape_configs:
       - files: [/etc/prometheus/targets/*.yml]
         refresh_interval: 1m
 
-  - job_name: prometheus
+  # Websites and health endpoints, asked through the blackbox exporter: one file per group in probes/, each target an
+  # address and the label module (blackbox/blackbox.yml). GitHub Pages need not be asked more often than this.
+  - job_name: probes
+    scrape_interval: 5m
+    scrape_timeout: 15s
+    metrics_path: /probe
+    file_sd_configs:
+      - files: [/etc/prometheus/probes/*.yml]
+        refresh_interval: 1m
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [module]
+        target_label: __param_module
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  # The stack itself: what Loki takes and drops, Grafana's alerting and its own health.
+  - job_name: stack
     static_configs:
       - targets: [localhost:9090]
+        labels: { app: prometheus }
+      - targets: [loki:3100]
+        labels: { app: loki }
+      - targets: [grafana:3000]
+        labels: { app: grafana }
+      - targets: [blackbox:9115]
+        labels: { app: blackbox }

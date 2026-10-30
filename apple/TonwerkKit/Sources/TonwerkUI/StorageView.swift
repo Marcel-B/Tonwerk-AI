@@ -14,7 +14,7 @@ struct StorageView: View {
                 ProgressView().onAppear { model.openStorage() }
             }
         }
-        .navigationTitle("Speicher")
+        .navigationTitle("Speicherplatz")
     }
 }
 

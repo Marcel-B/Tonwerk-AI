@@ -81,7 +81,7 @@ struct MainView: View {
                     Label("Ausarbeitung", systemImage: "pencil.and.scribble").tag(Page.sketch)
                     Label("Begleitstimmen", systemImage: "person.3").tag(Page.harmony)
                     Label("Protokoll", systemImage: "doc.text.magnifyingglass").tag(Page.log)
-                    Label("Speicher", systemImage: "internaldrive").tag(Page.storage)
+                    Label("Speicherplatz", systemImage: "internaldrive").tag(Page.storage)
                     Label("Vorlagen", systemImage: "bookmark").tag(Page.templates)
                     Label("Cover-Stile", systemImage: "paintpalette").tag(Page.coverStyles)
                 }
@@ -127,9 +127,9 @@ struct MainView: View {
             case .create:
                 CreateView()
             case .library:
-                SongList(title: "Bibliothek", songs: model.songs, reveals: true)
+                SongList(title: String(localized: "Bibliothek"), songs: model.songs, reveals: true)
             case .review:
-                SongList(title: "Zum Anhören", songs: model.unrated, empty: "Alle Songs sind bewertet.")
+                SongList(title: String(localized: "Zum Anhören"), songs: model.unrated, empty: String(localized: "Alle Songs sind bewertet."))
             case .queue:
                 QueueView()
             case .logic:
@@ -166,7 +166,7 @@ struct MainView: View {
                 if let playlist = model.playlists.first(where: { $0.id == id }) {
                     SongList(
                         title: playlist.name, songs: model.songs(of: playlist), playlist: playlist,
-                        empty: "Noch keine Songs. Füge sie in der Bibliothek über das Menü eines Songs hinzu.")
+                        empty: String(localized: "Noch keine Songs. Füge sie in der Bibliothek über das Menü eines Songs hinzu."))
                 } else {
                     ContentUnavailableView("Playlist gelöscht", systemImage: "list.bullet")
                 }

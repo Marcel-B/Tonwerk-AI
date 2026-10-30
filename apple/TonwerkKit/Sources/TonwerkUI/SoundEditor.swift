@@ -102,11 +102,11 @@ struct SoundEditor: View {
 // MARK: Modules
 
 private struct Module<Content: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     let systemImage: String
     @ViewBuilder let content: Content
 
-    init(_ title: String, systemImage: String, @ViewBuilder content: () -> Content) {
+    init(_ title: LocalizedStringKey, systemImage: String, @ViewBuilder content: () -> Content) {
         self.title = title
         self.systemImage = systemImage
         self.content = content()
@@ -128,7 +128,7 @@ private struct Module<Content: View>: View {
 }
 
 private struct OscillatorModule: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var osc: AnalogSound.Oscillator
 
     var body: some View {
@@ -151,11 +151,11 @@ private struct OscillatorModule: View {
 }
 
 private struct EnvelopeModule<Extra: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var env: SoundEnvelope
     @ViewBuilder let extra: Extra
 
-    init(title: String, env: Binding<SoundEnvelope>, @ViewBuilder extra: () -> Extra) {
+    init(title: LocalizedStringKey, env: Binding<SoundEnvelope>, @ViewBuilder extra: () -> Extra) {
         self.title = title
         _env = env
         self.extra = extra()
@@ -176,14 +176,14 @@ private struct EnvelopeModule<Extra: View>: View {
 }
 
 extension EnvelopeModule where Extra == EmptyView {
-    init(title: String, env: Binding<SoundEnvelope>) {
+    init(title: LocalizedStringKey, env: Binding<SoundEnvelope>) {
         self.init(title: title, env: env) { EmptyView() }
     }
 }
 
 private struct LfoModule<Target: RawRepresentable & CaseIterable & Hashable>: View where Target.RawValue == String {
     @Binding var lfo: SoundLfo<Target>
-    let targets: [(Target, String)]
+    let targets: [(Target, LocalizedStringKey)]
 
     var body: some View {
         Module("LFO", systemImage: "waveform.path.ecg") {
@@ -251,7 +251,7 @@ enum ParamFormat {
         case .seconds: value < 1 ? "\(Int((value * 1000).rounded())) ms" : String(format: "%.2f s", value)
         case .hertz: value < 1000 ? String(format: value < 10 ? "%.1f Hz" : "%.0f Hz", value) : String(format: "%.1f kHz", value / 1000)
         case .cents: "\(Int(value.rounded())) ct"
-        case .octaves: String(format: "%+.1f Okt.", value)
+        case .octaves: String(format: String(localized: "%+.1f Okt."), value)
         case .ratio: String(format: "× %.1f", value)
         case .number: String(format: "%.1f", value)
         }
@@ -260,7 +260,7 @@ enum ParamFormat {
 
 /// A labelled slider with its value; logarithmic for frequencies, so the low end gets room.
 struct ParamSlider: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var value: Float
     let range: ClosedRange<Float>
     var step: Float?
@@ -268,7 +268,7 @@ struct ParamSlider: View {
     var logarithmic = false
 
     init(
-        _ title: String, value: Binding<Float>, in range: ClosedRange<Float>, step: Float? = nil,
+        _ title: LocalizedStringKey, value: Binding<Float>, in range: ClosedRange<Float>, step: Float? = nil,
         format: ParamFormat, logarithmic: Bool = false
     ) {
         self.title = title

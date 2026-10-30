@@ -49,7 +49,7 @@ final class TonwerkSynthUnit: AUAudioUnit {
 
         var errorDescription: String? {
             switch self {
-            case .unexpectedUnit(let name): "Statt des Synthesizers kam \(name)."
+            case .unexpectedUnit(let name): String(localized: "Statt des Synthesizers kam \(name).")
             }
         }
     }

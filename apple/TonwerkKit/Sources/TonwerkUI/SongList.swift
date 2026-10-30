@@ -8,7 +8,7 @@ struct SongList: View {
     let title: String
     let songs: [Song]
     var playlist: Components.Schemas.PlaylistInfo?
-    var empty: String = "Noch keine Songs."
+    var empty: String = String(localized: "Noch keine Songs.")
     /// Whether this list answers ``AppModel/revealing``: only the library's does.
     var reveals = false
     @State private var query = ""

@@ -537,7 +537,7 @@ struct PaintCoverView: View {
                 MachinePicker(selection: $machine, engine: modelId.isEmpty ? "images" : "images:\(modelId)")
                 if let chosen {
                     if chosen.available == false {
-                        Text(chosen.unavailable ?? "Kein Mac hier kann mit diesem Modell malen.")
+                        Text(chosen.unavailable ?? String(localized: "Kein Mac hier kann mit diesem Modell malen."))
                             .foregroundStyle(.red)
                     } else if let reason = chosen.unavailable {
                         // This Mac cannot, a helper can: automatic sends it there.

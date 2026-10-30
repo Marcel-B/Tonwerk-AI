@@ -264,8 +264,8 @@ extension Store.Answer {
     /// The real server's error shape, with words the app shows.
     static func problem(_ status: Int) -> Self {
         let detail = status == 404
-            ? "Im Demo-Modus gibt es das nicht."
-            : "Im Demo-Modus nicht möglich: Dafür braucht es deinen eigenen Tonwerk-Server."
+            ? String(localized: "Im Demo-Modus gibt es das nicht.")
+            : String(localized: "Im Demo-Modus nicht möglich: Dafür braucht es deinen eigenen Tonwerk-Server.")
         let body: [String: Any] = ["title": "Demo", "status": status, "detail": detail]
         let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
         return .init(status: status, type: "application/problem+json", body: data)

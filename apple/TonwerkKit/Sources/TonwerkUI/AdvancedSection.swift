@@ -122,7 +122,7 @@ struct AdvancedSection: View {
             Picker("Maximale Länge", selection: $model.form.maxSeconds) {
                 ForEach(CreateForm.lengthChoices, id: \.self) { seconds in
                     let clock = Song.clock(Double(seconds))
-                    Text(seconds == CreateForm.maxSongSeconds ? "\(clock) (Standard)" : clock).tag(seconds)
+                    Text(seconds == CreateForm.maxSongSeconds ? "\(clock) (Standard)" : "\(clock)").tag(seconds)
                 }
             }
         }
@@ -132,7 +132,7 @@ struct AdvancedSection: View {
         @Bindable var model = model
         let available = loras?.loras ?? []
         let chosen = available.first { $0.name == model.form.lora }
-        return LabeledField(hint: loraHint(chosen, available: available)) {
+        return LabeledField(hint: "\(loraHint(chosen, available: available))") {
             VStack(alignment: .leading) {
                 Picker("Klang-LoRA", selection: $model.form.lora) {
                     Text("keine (Standard)").tag("")
@@ -175,7 +175,7 @@ struct AdvancedSection: View {
 
 /// A control with its hint below.
 private struct LabeledField<Content: View>: View {
-    let hint: String
+    let hint: LocalizedStringKey
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -190,8 +190,8 @@ private struct LabeledField<Content: View>: View {
 
 /// One of the model's two sampling settings, with the model's value beside each field.
 private struct SamplingFields: View {
-    let title: String
-    let intro: String
+    let title: LocalizedStringKey
+    let intro: LocalizedStringKey
     @Binding var sampling: CreateForm.Sampling
     let defaults: CreateForm.Sampling
 
@@ -215,7 +215,7 @@ private struct SamplingFields: View {
         }
     }
 
-    private func field(_ label: String, value: Binding<Double>, standard: Double) -> some View {
+    private func field(_ label: LocalizedStringKey, value: Binding<Double>, standard: Double) -> some View {
         LabeledContent {
             HStack {
                 TextField(label, value: value, format: .number)
@@ -232,7 +232,7 @@ private struct SamplingFields: View {
         }
     }
 
-    private func field(_ label: String, value: Binding<Int>, standard: Int) -> some View {
+    private func field(_ label: LocalizedStringKey, value: Binding<Int>, standard: Int) -> some View {
         LabeledContent {
             HStack {
                 TextField(label, value: value, format: .number)

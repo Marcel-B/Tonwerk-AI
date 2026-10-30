@@ -288,7 +288,7 @@ private struct InstrumentRow: View {
     }
 
     private var details: String {
-        var text = "\(instrument.port) · Kanal \(instrument.channel)"
+        var text = String(localized: "\(instrument.port) · Kanal \(instrument.channel)")
         if instrument.kind == .drumMachine {
             text += " · " + String(localized: "Drumcomputer")
             if let drums = instrument.drums {
@@ -317,7 +317,7 @@ private struct InstrumentEditor: View {
     @State private var saving = false
 
     private static let drums: [(key: String, name: String)] = [
-        ("kick", "Kick"), ("snare", "Snare"), ("closedHiHat", "Hi-Hat zu"), ("openHiHat", "Hi-Hat offen"),
+        ("kick", "Kick"), ("snare", "Snare"), ("closedHiHat", String(localized: "Hi-Hat zu")), ("openHiHat", String(localized: "Hi-Hat offen")),
         ("crash", "Crash"), ("clap", "Clap"),
     ]
 

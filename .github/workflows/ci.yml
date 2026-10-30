@@ -129,11 +129,48 @@ jobs:
           test -s "$app/Contents/Resources/AppIcon.icns"
           xcrun assetutil --info "$app/Contents/Resources/Assets.car" | grep -c '"Name" : "AppIcon"'
 
+      # The app speaks German and English: the string catalogs must reach the bundle, and a language it does not have
+      # falls back to English (the development region).
+      - name: Check the Mac app's languages
+        working-directory: apple
+        run: |
+          app=$(find build/Build/Products -maxdepth 2 -name Tonwerk-AI.app -type d | head -1)
+          ls -d "$app"/Contents/Resources/*.lproj
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDevelopmentRegion' "$app/Contents/Info.plist")" = en
+          plutil -p "$app/Contents/Resources/en.lproj/Localizable.strings" | grep -F '"Bibliothek" => "Library"'
+          plutil -p "$app/Contents/Resources/de.lproj/Localizable.strings" | grep -F '"Bibliothek" => "Bibliothek"'
+          plutil -p "$app/Contents/Resources/en.lproj/InfoPlist.strings" | grep -F NSMicrophoneUsageDescription
+
       - name: Build the app for iPhone
         working-directory: apple
         run: >-
           xcodebuild build -project Tonwerk.xcodeproj -scheme Tonwerk -destination 'generic/platform=iOS'
           -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO -quiet
+
+  app-texts:
+    name: App texts (English)
+    # Every text the app's screens look up needs an English translation in apple/Tonwerk/Localizable.xcstrings. The
+    # screens live in the TonwerkUI package, whose texts Xcode does not extract into the app's catalog, so the compiler
+    # writes them here and apple/Support/localizations.py holds the catalog to them. A job of its own keeps its log short.
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: apple/TonwerkKit
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Extract the app's texts
+        run: >-
+          swift build --target TonwerkUI -Xswiftc -emit-localized-strings
+          -Xswiftc -emit-localized-strings-path -Xswiftc "$RUNNER_TEMP/strings" > "$RUNNER_TEMP/build.log" 2>&1
+          || (tail -50 "$RUNNER_TEMP/build.log"; exit 1)
+
+      - name: Check English translations
+        run: |
+          python3 ../Support/localizations.py check "$RUNNER_TEMP/strings" ../Tonwerk/Localizable.xcstrings
 
   frontend-tests:
     name: Frontend tests

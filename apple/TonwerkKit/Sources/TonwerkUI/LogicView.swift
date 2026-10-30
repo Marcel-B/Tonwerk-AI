@@ -568,7 +568,7 @@ private struct LogicSessionView: View {
             DisclosureGroup("\(session.warnings.count) Hinweise zur Umwandlung") {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(session.warnings, id: \.self) { warning in
-                        Text(warning.line.map { "Zeile \($0): \(warning.message)" } ?? warning.message)
+                        Text(warning.line.map { String(localized: "Zeile \($0): \(warning.message)") } ?? warning.message)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -685,7 +685,7 @@ private struct TrackRow: View {
             Button {
                 Task { await session.give(voice.id, sound: nil) }
             } label: {
-                chosen(voice.isDrums ? "Klang der App" : "Standardklang", instrument == nil && preset == nil)
+                chosen(voice.isDrums ? String(localized: "Klang der App") : String(localized: "Standardklang"), instrument == nil && preset == nil)
             }
             if !voice.isDrums, !library.named.isEmpty {
                 Section("Klänge") {
@@ -704,7 +704,7 @@ private struct TrackRow: View {
                         Button {
                             Task { await session.assign(voice.id, to: candidate.id) }
                         } label: {
-                            chosen("\(candidate.name) · Kanal \(candidate.channel)", candidate.id == instrument?.id)
+                            chosen(String(localized: "\(candidate.name) · Kanal \(candidate.channel)"), candidate.id == instrument?.id)
                         }
                     }
                 }

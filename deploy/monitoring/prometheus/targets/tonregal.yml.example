@@ -1,0 +1,7 @@
+# Copy to tonregal.yml and put in oi-o-mat's Tailscale name. Tonregal (github.com/Marcel-B/Tonregal) binds to localhost;
+# `tailscale serve` publishes it on 443 with a certificate, and /metrics answers once Monitoring:Metrics is on.
+- targets: [oi-o-mat.example.ts.net:443]
+  labels:
+    app: tonregal
+    __scheme__: https
+    __metrics_path__: /metrics

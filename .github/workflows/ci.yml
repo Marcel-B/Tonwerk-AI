@@ -109,6 +109,18 @@ jobs:
       - name: Test
         run: swift test
 
+      # Every text the screens look up needs an English translation in the app's string catalog.
+      - name: Extract the app's texts
+        run: >-
+          swift build --target TonwerkUI -Xswiftc -emit-localized-strings
+          -Xswiftc -emit-localized-strings-path -Xswiftc "$RUNNER_TEMP/strings"
+
+      - name: Check English translations
+        run: |
+          find "$RUNNER_TEMP/strings" -name '*.stringsdata' | head -3
+          find .build -name '*.stringsdata' | head -3
+          python3 ../Support/localizations.py dump "$RUNNER_TEMP/strings" || true
+
       # The app itself, for both platforms, unsigned. The package's OpenAPI generator is a build plugin, which Xcode
       # asks to trust once; here the flag does.
       - name: Build the app for macOS

@@ -29,6 +29,27 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox:9115
 
+  # Proxmox through the pve exporter (docker-compose.yml, profile pve): pve/proxmox.yml names the host, which the
+  # exporter asks for its own node and every guest; proxmox-lxc.sh writes it. Without the file the job stays empty.
+  - job_name: proxmox
+    scrape_interval: 1m
+    scrape_timeout: 30s
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ['1']
+      node: ['1']
+    file_sd_configs:
+      - files: [/etc/prometheus/pve/*.yml]
+        refresh_interval: 1m
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: pve-exporter:9221
+
   # The stack itself: what Loki takes and drops, Grafana's alerting and its own health.
   - job_name: stack
     static_configs:

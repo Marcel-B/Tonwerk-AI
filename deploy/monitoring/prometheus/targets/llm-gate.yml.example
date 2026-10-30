@@ -1,0 +1,7 @@
+# Copy to llm-gate.yml and put in oi-o-mat's Tailscale name. The LLM gate (scripts, lib/llm-gate) answers /metrics on
+# its own port 1235, plain http, like its /gate page.
+- targets: [oi-o-mat.example.ts.net:1235]
+  labels:
+    app: llm-gate
+    __scheme__: http
+    __metrics_path__: /metrics

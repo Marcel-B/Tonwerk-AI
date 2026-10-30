@@ -1,0 +1,7 @@
+# Copy to oi-o-mat.yml and put in oi-o-mat's Tailscale name. node_exporter (scripts, bin/node-exporter on) listens on
+# 127.0.0.1:9100 only; `tailscale serve --https=9100` brings it into the tailnet with a certificate for that name.
+- targets: [oi-o-mat.example.ts.net:9100]
+  labels:
+    app: oi-o-mat
+    __scheme__: https
+    __metrics_path__: /metrics

@@ -1,0 +1,10 @@
+# Public websites, asked every 5 minutes by the blackbox exporter (job probes in prometheus.yml). Addresses in the
+# tailnet go into a file of their own here (see health.yml.example), which stays out of git.
+- targets:
+    - https://marcelbenders.com/
+    - https://tonwerk.studio/
+    - https://b-velop.com/
+    - https://slipways.de/
+  labels:
+    module: http_2xx
+    kind: website

@@ -7,6 +7,8 @@
 #
 # Settings through the environment, all optional:
 #   TONWERK_TARGET   the Mac's Tailscale name with port, e.g. mac-mini.tail1234.ts.net:8443 (asked for if empty)
+#   NTFY_URL         where alarms go, e.g. https://slipways-1.tail1234.ts.net:2586 (asked for if empty)
+#   NTFY_TOPIC       their topic (a random alarme-… if empty)
 #   TS_AUTHKEY       a Tailscale auth key; without one, tailscale up prints a link to sign the container in
 #   CT_HOSTNAME      container name, also its Tailscale name (monitoring)
 #   CTID             container id (the next free one)
@@ -26,6 +28,8 @@ CORES="${CORES:-2}"
 DISK="${DISK:-20}"
 TS_AUTHKEY="${TS_AUTHKEY:-}"
 TONWERK_TARGET="${TONWERK_TARGET:-}"
+NTFY_URL="${NTFY_URL:-}"
+NTFY_TOPIC="${NTFY_TOPIC:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET_DIR=/opt/monitoring
 
@@ -111,6 +115,18 @@ if ! in_ct "test -f '$TARGET_DIR/.env'"; then
   in_ct "umask 077 && printf 'GF_SECURITY_ADMIN_USER=admin\nGF_SECURITY_ADMIN_PASSWORD=%s\n' '$PASSWORD' > '$TARGET_DIR/.env'"
 fi
 
+# Alarms (grafana/provisioning/alerting/) go to ntfy; asked once, kept in .env like the password.
+if ! in_ct "grep -q '^NTFY_URL=' '$TARGET_DIR/.env'"; then
+  if [ -z "$NTFY_URL" ] && [ -t 0 ]; then
+    read -r -p "ntfy server for alarms (e.g. https://slipways-1.tail1234.ts.net:2586, empty to skip): " NTFY_URL
+  fi
+  if [ -n "$NTFY_URL" ]; then
+    NTFY_TOPIC="${NTFY_TOPIC:-alarme-$(openssl rand -hex 4)}"
+    in_ct "printf 'NTFY_URL=%s\nNTFY_TOPIC=%s\n' '${NTFY_URL%/}' '$NTFY_TOPIC' >> '$TARGET_DIR/.env'"
+  fi
+fi
+NTFY_TOPIC="$(in_ct "sed -n 's/^NTFY_TOPIC=//p' '$TARGET_DIR/.env'" || true)"
+
 if ! in_ct "test -f '$TARGET_DIR/prometheus/targets/tonwerk.yml'"; then
   if [ -z "$TONWERK_TARGET" ] && [ -t 0 ]; then
     read -r -p "Tailscale name of the Mac with port (e.g. mac-mini.tail1234.ts.net:8443, empty to skip): " TONWERK_TARGET
@@ -126,7 +142,7 @@ YAML"
   fi
 fi
 
-echo "Starting Prometheus, Loki and Grafana ..."
+echo "Starting Prometheus, Loki, Grafana and the blackbox exporter ..."
 in_ct "cd '$TARGET_DIR' && docker compose pull -q && docker compose up -d --remove-orphans"
 
 NAME="$(in_ct "tailscale status --json 2>/dev/null | sed -n 's/.*\"DNSName\": *\"\\([^\"]*\\)\\.\".*/\\1/p' | head -n 1" || true)"
@@ -138,6 +154,11 @@ echo "  Grafana:    http://$NAME:3000  (user admin)"
 echo "  Prometheus: http://$NAME:9090/targets"
 echo "  For Tonwerk, in appsettings.Production.json on the Mac:"
 echo "    \"Monitoring\": { \"Loki\": { \"Url\": \"http://$CT_HOSTNAME:3100\", \"Host\": \"mac-mini\" } }"
+if [ -n "$NTFY_TOPIC" ]; then
+  echo "  Alarms:     ntfy topic $NTFY_TOPIC; subscribe to it in the ntfy app on that server."
+else
+  echo "  Alarms:     no ntfy server yet: run again with NTFY_URL=https://<server>:<port>."
+fi
 [ -z "$TONWERK_TARGET" ] && ! in_ct "test -f '$TARGET_DIR/prometheus/targets/tonwerk.yml'" && \
   echo "  No target for Tonwerk yet: run again with TONWERK_TARGET=<Mac>.<tailnet>.ts.net:8443."
 exit 0

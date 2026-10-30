@@ -132,6 +132,31 @@ public sealed class MonitoringTests : IDisposable
     }
 
     [Fact]
+    public async Task The_updaters_log_goes_to_loki_once_and_only_from_the_last_day_on_the_first_start()
+    {
+        static string At(TimeSpan ago) => (DateTime.Now - ago).ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        await File.WriteAllLinesAsync(Path.Combine(_app.Root, "tonwerk-update.log"),
+        [
+            $"{At(TimeSpan.FromDays(3))} Deploying 0000001 -> 0000002:",
+            $"{At(TimeSpan.FromHours(2))} Deploying abc1234 -> def5678:",
+            "    def5678 Protokoll sammeln",
+            $"{At(TimeSpan.FromHours(1))} Deploying def5678 failed; the next commit tries again.",
+        ]);
+        _app.LokiUrl = "http://loki.test:3100";
+        await Client.GetAsync("/api/health");
+
+        await TestApp.WaitUntil(() => _app.Loki.Lines().Any(line => line.Line.StartsWith("Deploying def5678 failed", StringComparison.Ordinal)));
+        // A few more rounds of reading, which must not send anything again.
+        await Task.Delay(300);
+
+        var update = _app.Loki.Lines().Where(line => line.Labels["source"]!.GetValue<string>() == "update").ToList();
+        Assert.Equal(2, update.Count);
+        Assert.Equal("Deploying abc1234 -> def5678:\n    def5678 Protokoll sammeln", update[0].Line);
+        Assert.Equal("error", update[1].Labels["level"]!.GetValue<string>());
+        Assert.DoesNotContain(update, line => line.Line.Contains("0000001", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_batch_loki_refuses_for_the_moment_is_sent_again()
     {
         _app.LokiUrl = "http://loki.test:3100";

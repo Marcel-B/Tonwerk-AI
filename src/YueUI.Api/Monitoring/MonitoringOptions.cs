@@ -41,5 +41,11 @@ public sealed class LokiOptions
     /// <summary>Lines kept while Loki does not answer; beyond this the oldest are dropped.</summary>
     public int Capacity { get; set; } = 20_000;
 
+    /// <summary>How often <c>deploy/update.sh</c>'s log is read for new lines to send (<see cref="UpdateLogShipper"/>).</summary>
+    public TimeSpan UpdateLogInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long the update log must be still before its newest entry goes out, since it may still grow.</summary>
+    public TimeSpan UpdateLogSettle { get; set; } = TimeSpan.FromMinutes(1);
+
     public bool Enabled => !string.IsNullOrWhiteSpace(Url);
 }

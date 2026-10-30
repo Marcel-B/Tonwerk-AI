@@ -1,0 +1,10 @@
+# Modules of the blackbox exporter. Each file in prometheus/probes/ names the addresses and the module.
+modules:
+  # A page or health endpoint answers 2xx within 10 s, following redirects; also reports the certificate's expiry.
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+      valid_status_codes: []

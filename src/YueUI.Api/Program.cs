@@ -233,6 +233,7 @@ builder.Services.AddHostedService(services => services.GetRequiredService<JobMet
 builder.Services.AddSingleton<YueUI.Api.Status.IdleClock>();
 builder.Services.AddHostedService(services => services.GetRequiredService<YueUI.Api.Status.IdleClock>());
 builder.Services.AddHostedService<LokiShipper>();
+builder.Services.AddHostedService<UpdateLogShipper>();
 // Without its loggers: each push would log four lines of its own, which the next push would send, forever.
 builder.Services.AddHttpClient(LokiShipper.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30)).RemoveAllLoggers();
 

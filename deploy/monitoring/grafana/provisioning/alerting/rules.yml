@@ -1,0 +1,165 @@
+apiVersion: 1
+# Alarm rules. Each asks Prometheus once a minute; an alarm goes out (policies.yml) once its condition held for `for`.
+# A rule whose series is missing stays quiet (noDataState OK): an app without a backup metric is not alarmed.
+# Templates use $labels and $values as they are: Grafana interpolates the environment into contact points, not rules.
+groups:
+  - orgId: 1
+    name: apps
+    folder: Alarme
+    interval: 1m
+    rules:
+      - uid: app-down
+        title: App nicht erreichbar
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'up{job=~"apps|stack"}'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: lt, params: [1] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: '{{ $labels.app }} ist seit 10 Minuten nicht erreichbar.'
+          description: 'Jede App in prometheus/targets/ und der Stack selbst; eine neue App ist ohne Änderung dabei.'
+        isPaused: false
+      - uid: backup-old
+        title: Sicherung zu alt
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '(time() - {__name__=~".+_backup_last_success_timestamp_seconds"}) / 3600'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [36] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 30m
+        annotations:
+          summary: 'Die letzte erfolgreiche Sicherung von {{ $labels.app }} ist {{ with $values.A }}{{ humanize .Value }}{{ end }} Stunden her.'
+          description: 'Jede App, die <app>_backup_last_success_timestamp_seconds meldet (scripts, docs/monitoring.md).'
+        isPaused: false
+      - uid: disk-full
+        title: Platte fast voll
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '100 * tonwerk_disk_free_bytes / tonwerk_disk_size_bytes'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: lt, params: [10] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 30m
+        annotations:
+          summary: '{{ $labels.app }}: auf {{ $labels.volume }} sind nur noch {{ with $values.A }}{{ humanize .Value }}{{ end }} % frei.'
+          description: 'Tonwerks Volumes (Songs, Daten); die Hosts kommen mit node_exporter dazu.'
+        isPaused: false
+      - uid: loki-dropping
+        title: Logs erreichen Loki nicht
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum by (app) (increase({__name__=~".+_loki_(lines_)?dropped_total"}[30m]))'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        annotations:
+          summary: '{{ $labels.app }} hat in 30 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} Logzeilen verworfen, weil Loki sie nicht nahm.'
+          description: 'Bei Tonwerk lief das 2026-10-15 bis 10-20 unbemerkt.'
+        isPaused: false
+  - orgId: 1
+    name: websites
+    folder: Alarme
+    interval: 1m
+    rules:
+      - uid: website-down
+        title: Website nicht erreichbar
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'probe_success'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: lt, params: [1] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        annotations:
+          summary: '{{ $labels.instance }} antwortet seit 15 Minuten nicht.'
+          description: 'Ziele in prometheus/probes/.'
+        isPaused: false
+      - uid: certificate-expiring
+        title: Zertifikat läuft ab
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '(probe_ssl_earliest_cert_expiry - time()) / 86400'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: lt, params: [14] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 1h
+        annotations:
+          summary: 'Das Zertifikat von {{ $labels.instance }} läuft in {{ with $values.A }}{{ humanize .Value }}{{ end }} Tagen ab.'
+          description: 'Ziele in prometheus/probes/ mit HTTPS.'
+        isPaused: false

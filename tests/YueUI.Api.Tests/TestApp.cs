@@ -336,6 +336,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.Loki.Url = LokiUrl;
                 options.Loki.Host = "mini";
                 options.Loki.BatchDelay = TimeSpan.FromMilliseconds(10);
+                options.Loki.UpdateLogInterval = TimeSpan.FromMilliseconds(50);
+                options.Loki.UpdateLogSettle = TimeSpan.Zero;
             });
             services.AddHttpClient(Monitoring.LokiShipper.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeLoki.Handler(Loki));
             services.Configure<Api.Lyrics.LlmGateOptions>(options =>

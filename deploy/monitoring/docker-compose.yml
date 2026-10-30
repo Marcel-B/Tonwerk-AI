@@ -36,7 +36,15 @@ services:
     environment:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_USERS_DEFAULT_LANGUAGE: de-DE
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/tonwerk.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/uebersicht.json
+      # /metrics for the job stack in prometheus.yml; only reachable inside this compose network and on the port above.
+      GF_METRICS_ENABLED: "true"
+      # The address in alarm messages; the tailnet name of this container.
+      GF_SERVER_ROOT_URL: ${GRAFANA_URL:-http://monitoring:3000/}
+      # Alarms go to ntfy (grafana/provisioning/alerting/); the address and topic come from .env. Without them the
+      # contact point points nowhere and Grafana shows its failed deliveries under Alerting > Contact points.
+      NTFY_URL: ${NTFY_URL:-http://ntfy.invalid}
+      NTFY_TOPIC: ${NTFY_TOPIC:-alarme}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -46,6 +54,14 @@ services:
     depends_on:
       - prometheus
       - loki
+
+  # Asks websites and health endpoints on Prometheus' behalf (job probes). No published port: only Prometheus needs it.
+  blackbox:
+    image: prom/blackbox-exporter:v0.27.0
+    restart: unless-stopped
+    command: --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./blackbox:/etc/blackbox:ro
 
 volumes:
   prometheus:

@@ -166,6 +166,9 @@ if [ "$PVE_EXPORTER" = 1 ]; then
     pct push "$CTID" "$PVE_FILE" "$TARGET_DIR/pve.yml" --perms 600
     rm -f "$PVE_FILE"
   fi
+  # The exporter's image runs as prometheus (uid 101), not root: mode 600 stays, the owner is that user. Done on every
+  # run so a pve.yml written by an earlier version of this script is fixed too.
+  in_ct "chown 101:101 '$TARGET_DIR/pve.yml'"
   in_ct "grep -q '^COMPOSE_PROFILES=' '$TARGET_DIR/.env' || echo COMPOSE_PROFILES=pve >> '$TARGET_DIR/.env'"
   if ! in_ct "test -f '$TARGET_DIR/prometheus/pve/proxmox.yml'"; then
     HOST_IP="$(ip -4 -o addr show "$BRIDGE" | awk '{ print $4 }' | cut -d/ -f1 | head -n 1)"
@@ -176,6 +179,10 @@ fi
 
 echo "Starting Prometheus, Loki, Grafana, the blackbox exporter$( [ "$PVE_EXPORTER" = 1 ] && echo ' and the pve exporter') ..."
 in_ct "cd '$TARGET_DIR' && docker compose pull -q && docker compose up -d --remove-orphans"
+# `up -d` leaves a container whose image and settings did not change running, but the files copied above are its
+# configuration: Prometheus reads prometheus.yml, the blackbox exporter its modules and Grafana its alert rules only at
+# start. A second run would otherwise copy the new files and keep the old ones in use.
+in_ct "cd '$TARGET_DIR' && docker compose restart prometheus grafana blackbox"
 
 NAME="$(in_ct "tailscale status --json 2>/dev/null | sed -n 's/.*\"DNSName\": *\"\\([^\"]*\\)\\.\".*/\\1/p' | head -n 1" || true)"
 NAME="${NAME:-$CT_HOSTNAME}"

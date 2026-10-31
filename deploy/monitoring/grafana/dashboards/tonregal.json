@@ -907,7 +907,7 @@
           "range": true
         },
         {
-          "expr": "max(navidrome_db_model_totals{app=\"navidrome\", model=\"media\"})",
+          "expr": "max(db_model_totals{app=\"navidrome\", model=\"media\"})",
           "refId": "B",
           "datasource": {
             "type": "prometheus",
@@ -1038,7 +1038,7 @@
       },
       "targets": [
         {
-          "expr": "max(navidrome_db_model_totals{app=\"navidrome\", model=\"album\"})",
+          "expr": "max(db_model_totals{app=\"navidrome\", model=\"album\"})",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -1099,7 +1099,7 @@
       },
       "targets": [
         {
-          "expr": "max(navidrome_db_model_totals{app=\"navidrome\", model=\"artist\"})",
+          "expr": "max(db_model_totals{app=\"navidrome\", model=\"artist\"})",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -1160,7 +1160,7 @@
       },
       "targets": [
         {
-          "expr": "time() - max(navidrome_media_scan_last{app=\"navidrome\", success=\"true\"})",
+          "expr": "time() - max(media_scan_last{app=\"navidrome\", success=\"true\"})",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -1221,7 +1221,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(navidrome_media_scans{app=\"navidrome\", success=\"false\"}[24h]))",
+          "expr": "sum(increase(media_scans{app=\"navidrome\", success=\"false\"}[24h]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -1272,7 +1272,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Anfragen an Navidrome je Client",
+      "title": "Speicher von Navidrome",
       "id": 23,
       "datasource": {
         "type": "prometheus",
@@ -1286,13 +1286,64 @@
       },
       "targets": [
         {
-          "expr": "sum by (client) (rate(navidrome_http_request_count{app=\"navidrome\"}[5m])) * 60",
+          "expr": "max(process_resident_memory_bytes{app=\"navidrome\"})",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{client}}",
+          "legendFormat": "belegt",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1
+          },
+          "unit": "bytes",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Navidrome 0.64 meldet keine Anfragen, nur Bestand, Scans und den Prozess."
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU von Navidrome",
+      "id": 24,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 44
+      },
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total{app=\"navidrome\"}[5m])",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "Kerne",
           "instant": false,
           "range": true
         }
@@ -1319,58 +1370,7 @@
           "sort": "desc"
         }
       },
-      "description": "Anfragen pro Minute, nach Client (Amperfy, play:Sub, Tonregal, …)."
-    },
-    {
-      "type": "timeseries",
-      "title": "Antwortzeit (Median)",
-      "id": 24,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 44
-      },
-      "targets": [
-        {
-          "expr": "max by (endpoint) (navidrome_http_request_latency{app=\"navidrome\", quantile=\"0.5\"})",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "legendFormat": "{{endpoint}}",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 1
-          },
-          "unit": "ms",
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "description": "Navidrome misst in Millisekunden."
+      "description": ""
     },
     {
       "type": "row",

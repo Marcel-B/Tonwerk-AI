@@ -79,6 +79,7 @@ GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 | oi-o-mat swappt | über 4 GB Swap | 10 min |
 | Platte von oi-o-mat fast voll | intern oder ein externes Laufwerk (T7) unter 10 % frei | 30 min |
 | Proxmox-Gast läuft nicht | ein LXC oder eine VM mit Autostart (`onboot`) läuft nicht | 10 min |
+| Platte eines Proxmox-Gasts fast voll | ein LXC unter 15 % frei, auch dieser Container | 30 min |
 
 Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **ntfy** auf *Test*.
 
@@ -103,7 +104,7 @@ Das Dashboard **MyJourney** (`grafana/dashboards/myjourney.json`) zeigt Erreichb
 
 Das Dashboard **Slipways** (`grafana/dashboards/slipways.json`) zeigt Erreichbarkeit, den Bestand an Slipanlagen, Marinas und Pegeln (nach Quelle: eigene Daten oder OpenStreetMap), die Hintergrund-Jobs (Pegelstände, Gewässerverläufe, OSM-Import: letzter Erfolg, Läufe, Dauer, Änderungen, ausgelastetes Overpass), Anfragen und Antwortzeiten, Größe der Datenbank, Speicher, CPU und Logversand sowie das Protokoll mit Filtern für Stufe, Quelle und Text. Angebunden ist nur die Produktion slipways.de (`slipways-1`). Das Ziel legt `deploy/monitoring/add-prometheus-target.sh` an, die Logs richtet `deploy/lxc/setup-loki.sh` ein, beide im [Slipways-Repo](https://github.com/Marcel-B/Slipways/blob/master/deploy/README.md#überwachung).
 
-Prometheus behält 90 Tage (`PROMETHEUS_RETENTION`), Loki 30 Tage (`loki/loki.yml`).
+Prometheus behält 90 Tage (`PROMETHEUS_RETENTION`), Loki 30 Tage (`loki/loki.yml`), die Ausgabe jedes Containers höchstens dreimal 10 MB (`x-logging` in `docker-compose.yml`).
 
 ## Wie viel ist das?
 

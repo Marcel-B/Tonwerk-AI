@@ -243,3 +243,29 @@ groups:
           summary: '{{ $labels.name }} ({{ $labels.id }}) startet mit dem Host, läuft aber seit 10 Minuten nicht.'
           description: 'Nur Gäste mit onboot=1; ein von Hand gestoppter Gast ohne Autostart bleibt still (pve-Exporter).'
         isPaused: false
+      - uid: guest-disk
+        title: Platte eines Proxmox-Gasts fast voll
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # Only containers: Proxmox reports a VM's disk use as 0 without the guest agent.
+              expr: '(100 * (1 - pve_disk_usage_bytes{id=~"lxc/.+"} / pve_disk_size_bytes{id=~"lxc/.+"})) * on (id) group_left (name) pve_guest_info'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: lt, params: [15] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 30m
+        annotations:
+          summary: '{{ $labels.name }} ({{ $labels.id }}): nur noch {{ with $values.A }}{{ humanize .Value }}{{ end }} % der Platte frei.'
+          description: 'Jeder LXC auf dem Proxmox, auch der Monitoring-Container selbst (Prometheus 90 Tage, Loki 30 Tage; pve-Exporter).'
+        isPaused: false

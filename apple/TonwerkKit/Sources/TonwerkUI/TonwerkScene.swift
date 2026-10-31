@@ -16,6 +16,7 @@ public struct TonwerkScene: Scene {
         #if os(macOS)
         .defaultSize(width: 1000, height: 700)
         .commands {
+            AboutCommands()
             PlayerCommands(player: model.player, model: model)
             #if canImport(Sparkle)
             UpdateCommands(updates: AppUpdates.shared)
@@ -24,6 +25,14 @@ public struct TonwerkScene: Scene {
         #endif
 
         #if os(macOS)
+        Window("Über Tonwerk-AI", id: AboutWindow.id) {
+            AboutView()
+                .environment(model.player)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
         Settings {
             SettingsView()
                 .environment(model)

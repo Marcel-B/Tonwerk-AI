@@ -16593,6 +16593,23 @@
         }
       }
     },
+    "Songs, Stimmen und Klänge mit KI, auf dem eigenen Mac." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs, Stimmen und Klänge mit KI, auf dem eigenen Mac."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs, voices and sounds with AI, on your own Mac."
+          }
+        }
+      }
+    },
     "Songtext" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -19483,6 +19500,23 @@
         }
       }
     },
+    "Version %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %@"
+          }
+        }
+      }
+    },
     "Version abbrechen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20397,6 +20431,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "What it contains"
+          }
+        }
+      }
+    },
+    "Website" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Website"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Website"
           }
         }
       }

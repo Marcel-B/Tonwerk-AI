@@ -9,6 +9,9 @@
 #   TONWERK_TARGET   the Mac's Tailscale name with port, e.g. mac-mini.tail1234.ts.net:8443 (asked for if empty)
 #   NTFY_URL         where alarms go, e.g. https://slipways-1.tail1234.ts.net:2586 (asked for if empty)
 #   NTFY_TOPIC       their topic (a random alarme-… if empty)
+#   APP_TARGETS      further apps to scrape, as app=host:port separated by spaces, e.g.
+#                    "tonregal=oi-o-mat.tail1234.ts.net:443 navidrome=oi-o-mat.tail1234.ts.net:4533": each is written
+#                    from prometheus/targets/<app>.yml.example with that address (an existing <app>.yml is replaced)
 #   PVE_EXPORTER     1: watch this Proxmox host and all its guests too, through a read-only user monitoring@pve whose
 #                    token (role PVEAuditor) goes only into the container's pve.yml (mode 600)
 #   TS_AUTHKEY       a Tailscale auth key; without one, tailscale up prints a link to sign the container in
@@ -33,11 +36,12 @@ TONWERK_TARGET="${TONWERK_TARGET:-}"
 NTFY_URL="${NTFY_URL:-}"
 NTFY_TOPIC="${NTFY_TOPIC:-}"
 PVE_EXPORTER="${PVE_EXPORTER:-}"
+APP_TARGETS="${APP_TARGETS:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET_DIR=/opt/monitoring
 
 case "${1:-}" in
-  -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   "") ;;
   *) echo "Unknown argument: $1" >&2; exit 2 ;;
 esac
@@ -45,6 +49,16 @@ esac
 command -v pct >/dev/null || { echo "pct not found: run this on the Proxmox host." >&2; exit 1; }
 [ "$(id -u)" = 0 ] || { echo "Run this as root." >&2; exit 1; }
 [ -f "$HERE/docker-compose.yml" ] || { echo "docker-compose.yml is missing next to this script." >&2; exit 1; }
+
+# Checked before anything is created, so a typo stops the run instead of half of it. The address goes into a sed
+# expression inside the container: only host names, IPv4 and a port.
+for entry in $APP_TARGETS; do
+  app="${entry%%=*}" address="${entry#*=}"
+  if [ "$app" = "$entry" ] || ! printf '%s' "$address" | grep -Eq '^[A-Za-z0-9.-]+:[0-9]+$'; then
+    echo "APP_TARGETS: expected app=host:port, got $entry" >&2; exit 2
+  fi
+  [ -f "$HERE/prometheus/targets/$app.yml.example" ] || { echo "APP_TARGETS: no prometheus/targets/$app.yml.example" >&2; exit 2; }
+done
 
 in_ct() { pct exec "$CTID" -- bash -c "$1"; }
 
@@ -144,6 +158,12 @@ if ! in_ct "test -f '$TARGET_DIR/prometheus/targets/tonwerk.yml'"; then
 YAML"
   fi
 fi
+
+for entry in $APP_TARGETS; do
+  app="${entry%%=*}" address="${entry#*=}"
+  echo "Target $app: $address"
+  in_ct "cd '$TARGET_DIR/prometheus/targets' && sed '/^#/d; s|^- targets: \\[.*\\]|- targets: [$address]|' '$app.yml.example' > '$app.yml'"
+done
 
 # Proxmox: a read-only user and token, made here on the host. The token's value is written only into the container's
 # pve.yml (through a file of mode 600 that is deleted at once), never printed or kept on the host.

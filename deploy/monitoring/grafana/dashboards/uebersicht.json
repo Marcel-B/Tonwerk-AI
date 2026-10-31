@@ -115,6 +115,23 @@
                 ]
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^navidrome$"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Dashboard öffnen",
+                    "url": "/d/tonregal"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },

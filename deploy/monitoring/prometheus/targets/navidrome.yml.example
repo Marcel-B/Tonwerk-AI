@@ -1,0 +1,7 @@
+# Copy to navidrome.yml and put in oi-o-mat's Tailscale name. Navidrome listens on the Tailscale address itself, plain
+# http; Tonregal's navidrome.toml switches its /metrics on ([Prometheus] Enabled).
+- targets: [oi-o-mat.example.ts.net:4533]
+  labels:
+    app: navidrome
+    __scheme__: http
+    __metrics_path__: /metrics

@@ -1,0 +1,8 @@
+# Copy to filomat.yml (or let proxmox-lxc.sh write it: APP_TARGETS="filomat=<name>:8080") and put in the Tailscale
+# name of fil-o-mat's Proxmox container. fil-o-mat (github.com/Marcel-B/fil-o-mat) answers /metrics on its own port
+# 8080, plain http, once Monitoring__Metrics is on (deploy/proxmox/monitoring-einrichten.sh there).
+- targets: [fil-o-mat.example.ts.net:8080]
+  labels:
+    app: filomat
+    __scheme__: http
+    __metrics_path__: /metrics

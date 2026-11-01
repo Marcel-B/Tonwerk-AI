@@ -1,0 +1,8 @@
+# Copy to identity.yml (or let proxmox-lxc.sh write it: APP_TARGETS="identity=<name>:9464") and put in the Tailscale
+# name of the identity server's Proxmox container. Identity (github.com/Marcel-B/Identity) answers /metrics only on its
+# own port 9464, plain http and only in the tailnet (deploy/proxmox/monitoring-einrichten.sh there); Funnel stays on 443.
+- targets: [identity.example.ts.net:9464]
+  labels:
+    app: identity
+    __scheme__: http
+    __metrics_path__: /metrics

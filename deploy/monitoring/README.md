@@ -80,6 +80,8 @@ GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 | Platte von oi-o-mat fast voll | intern oder ein externes Laufwerk (T7) unter 10 % frei | 30 min |
 | Proxmox-Gast läuft nicht | ein LXC oder eine VM mit Autostart (`onboot`) läuft nicht | 10 min |
 | Platte eines Proxmox-Gasts fast voll | ein LXC unter 15 % frei, auch dieser Container | 30 min |
+| Viele fehlgeschlagene Anmeldungen | beim Anmeldeserver (Identity) über 20 in 15 min | sofort |
+| Viele gesperrte Konten | beim Anmeldeserver über 3 Sperren in 1 h | sofort |
 
 Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **ntfy** auf *Test*.
 
@@ -101,6 +103,8 @@ Ob jede App, jede Website und der Stack läuft (ein Klick auf eine App öffnet i
 Das Dashboard **Finanz-O-Mat** (`grafana/dashboards/finanzomat.json`) zeigt Erreichbarkeit, Kontoumsätze ohne Beleg, Belege mit Prüfhinweis, Alter des letzten Backups, Updates, Anfragen und Antwortzeiten, eingelesene Belege, Anmeldungen, Speicher und CPU sowie das Protokoll. Die App meldet sich mit `finanz-o-mat-lxc.sh monitoring <CTID>` auf dem Proxmox-Host selbst an (Ziel `prometheus/targets/finanzomat.yml`, siehe README von [finanz-O-mat](https://github.com/Marcel-B/finanz-O-mat/blob/main/deploy/proxmox/README.md#monitoring)).
 
 Das Dashboard **fil-o-mat** (`grafana/dashboards/filomat.json`) zeigt Erreichbarkeit, Drucker je Typ und Zustand, Abgleiche mit Ergebnis und Dauer, Verbrauch und Drucke pro Tag, Spulen nach Zustand (voll, angebrochen, fast leer), Sicherung, ntfy-Meldungen, Anfragen, abgewiesene API-Schlüssel und Speicher sowie das Protokoll mit Filtern für Stufe, Quelle und Text. Drucker heißen in den Messwerten nur nach ihrem Typ. Kein Alarm für nicht erreichbare Drucker, die sind oft einfach aus. Angebunden wird es mit `deploy/proxmox/monitoring-einrichten.sh` auf dem Proxmox-Host (siehe README von [fil-o-mat](https://github.com/Marcel-B/fil-o-mat/blob/main/backend/README.md#überwachung)), das am Ende die Zeile mit `APP_TARGETS` für `proxmox-lxc.sh` nennt; danach kann sein Eintrag aus `prometheus/probes/health.yml` weg.
+
+Das Dashboard **Identity** (`grafana/dashboards/identity.json`) zeigt den Anmeldeserver: Erreichbarkeit und `/health`, Anmeldungen nach Methode und Ergebnis, Fehlversuche und Sperren, zweiten Faktor, Registrierungen, Benutzer und Clients, Tokens nach Grant und Token-Fehler, Sicherung, Anfragen und Antwortzeiten sowie das Protokoll. Es sind nur Anzahlen, keine Konten, Adressen oder Client-IDs. Identity beantwortet `/metrics` nur auf dem eigenen Port 9464, der allein im Tailnet freigegeben ist; über Funnel kommt er nicht ins Internet (`prometheus/targets/identity.yml.example`). Angebunden wird es mit `deploy/proxmox/monitoring-einrichten.sh` aus dem Identity-Repository auf dem Proxmox-Host (siehe dessen README, Abschnitt „Überwachung“), das am Ende die `APP_TARGETS`-Zeile nennt. Der Eintrag in `prometheus/probes/health.yml` bleibt, er prüft die öffentliche Adresse.
 
 Das Dashboard **MyJourney** (`grafana/dashboards/myjourney.json`) zeigt Erreichbarkeit, den Bestand an Orten und Reisen, offene Live-Verbindungen, Anfragen und Antwortzeiten, Datenänderungen, Nextcloud-Backups, Speicher und CPU sowie das Protokoll. Die App bindet sich über ihre Env-Variablen an (`MYJOURNEY_METRICS_ENABLED`, `MYJOURNEY_LOKI_URL`; Ziel `prometheus/targets/myjourney.yml`, siehe DEPLOY.md §8 von [MyJourney](https://github.com/Marcel-B/MyJourney/blob/main/DEPLOY.md)).
 

@@ -76,7 +76,7 @@ GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 | Logs erreichen Loki nicht | eine App hat in 30 min Zeilen verworfen | 15 min |
 | Website nicht erreichbar | `probe_success` ist 0 | 15 min |
 | Zertifikat läuft ab | in weniger als 14 Tagen | 1 h |
-| oi-o-mat swappt | über 4 GB Swap | 10 min |
+| oi-o-mat unter Speicherdruck | macOS meldet Stufe Warnung oder kritisch, oder über 0,5 GB in 10 min neu ausgelagert (belegter Swap allein nicht: macOS hält ihn tagelang) | 10 min |
 | Platte von oi-o-mat fast voll | intern oder ein externes Laufwerk (T7) unter 10 % frei | 30 min |
 | Proxmox-Gast läuft nicht | ein LXC oder eine VM mit Autostart (`onboot`) läuft nicht | 10 min |
 | Platte eines Proxmox-Gasts fast voll | ein LXC unter 15 % frei, auch dieser Container | 30 min |

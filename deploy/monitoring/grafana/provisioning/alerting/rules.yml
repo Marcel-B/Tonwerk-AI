@@ -169,29 +169,40 @@ groups:
     interval: 1m
     rules:
       - uid: host-swap
-        title: oi-o-mat swappt
+        title: oi-o-mat unter Speicherdruck
         condition: C
         data:
+          # macOS keeps swapped pages allocated long after the pressure that
+          # wrote them is gone (7 GB with 25 GB free after five days up), so
+          # the amount of swap says nothing. What matters is macOS' own
+          # pressure level and whether it is paging out right now (node_exporter
+          # counts vm_stat's pageouts as swapped_out_bytes_total).
           - refId: A
             relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus
             model:
               refId: A
-              expr: 'node_memory_swap_used_bytes{app="oi-o-mat"} / 1e9'
+              expr: 'max(oiomat_memory_pressure_level{app="oi-o-mat"})'
+              instant: true
+          - refId: B
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: B
+              expr: 'sum(increase(node_memory_swapped_out_bytes_total{app="oi-o-mat"}[10m])) / 1e9'
               instant: true
           - refId: C
             datasourceUid: __expr__
             model:
               refId: C
-              type: threshold
-              expression: A
-              conditions: [{ evaluator: { type: gt, params: [4] } }]
+              type: math
+              expression: '$A >= 2 || $B > 0.5'
         noDataState: OK
         execErrState: Error
         for: 10m
         annotations:
-          summary: 'oi-o-mat hat seit 10 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} GB im Swap.'
-          description: 'Über 4 GB Swap: so fing das Einfrieren an, vor dem Tonwerk seinen Speicher so streng hält (node_exporter, scripts bin/node-exporter).'
+          summary: 'oi-o-mat steht seit 10 Minuten unter Speicherdruck (Stufe {{ with $values.A }}{{ .Value }}{{ end }}, {{ with $values.B }}{{ humanize .Value }}{{ end }} GB in 10 min ausgelagert).'
+          description: 'Stufe 2 (Warnung) oder 4 (kritisch) laut macOS, oder über 0,5 GB in 10 Minuten neu in den Swap geschrieben: so fing das Einfrieren an. Belegter Swap allein zählt nicht, macOS gibt ihn erst frei, wenn der Prozess ihn wieder anfasst oder endet (node_exporter, scripts bin/node-exporter).'
         isPaused: false
       - uid: host-disk
         title: Platte von oi-o-mat fast voll

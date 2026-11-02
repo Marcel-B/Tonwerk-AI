@@ -87,7 +87,7 @@ Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *
 
 ## Websites und Health-Endpunkte
 
-Der Blackbox-Exporter fragt Adressen für Prometheus ab (Job `probes`, alle 5 Minuten): ob sie mit 2xx antworten und wann ihr Zertifikat abläuft. Die öffentlichen Seiten stehen in `prometheus/probes/websites.yml`. Apps im Tailnet, die noch kein `/metrics` haben, kommen in eine eigene Datei nach dem Muster `prometheus/probes/health.yml.example`; sie bleibt wie die Targets außerhalb von Git. Prometheus liest neue Dateien binnen einer Minute.
+Der Blackbox-Exporter fragt Adressen für Prometheus ab (Job `probes`, alle 5 Minuten): ob sie mit 2xx antworten und wann ihr Zertifikat abläuft. Die öffentlichen Seiten stehen in `prometheus/probes/websites.yml`. Apps im Tailnet, die noch kein `/metrics` haben, kommen in `prometheus/probes/health.yml` nach dem Muster von `health.yml.example`; sie bleibt wie die Targets außerhalb von Git. `proxmox-lxc.sh` schreibt sie mit `HEALTH_PROBES="identity=https://identity.<tailnet>.ts.net/health ohmventory=http://<adresse>:8080/api/health"` (die Liste ersetzt die Datei). Ohne die Datei zeigt das Feld „Health-Endpunkte“ der Übersicht „keine eingetragen“. Prometheus liest neue Dateien binnen einer Minute.
 
 ## Was die Übersicht zeigt
 

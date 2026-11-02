@@ -12,6 +12,9 @@
 #   APP_TARGETS      further apps to scrape, as app=host:port separated by spaces, e.g.
 #                    "tonregal=oi-o-mat.tail1234.ts.net:443 navidrome=oi-o-mat.tail1234.ts.net:4533": each is written
 #                    from prometheus/targets/<app>.yml.example with that address (an existing <app>.yml is replaced)
+#   HEALTH_PROBES    health endpoints of apps without /metrics yet, as app=url separated by spaces, e.g.
+#                    "identity=https://identity.tail1234.ts.net/health": written as prometheus/probes/health.yml
+#                    (replaced as a whole; the dashboard's field Health-Endpunkte shows them)
 #   PVE_EXPORTER     1: watch this Proxmox host and all its guests too, through a read-only user monitoring@pve whose
 #                    token (role PVEAuditor) goes only into the container's pve.yml (mode 600)
 #   TS_AUTHKEY       a Tailscale auth key; without one, tailscale up prints a link to sign the container in
@@ -37,11 +40,12 @@ NTFY_URL="${NTFY_URL:-}"
 NTFY_TOPIC="${NTFY_TOPIC:-}"
 PVE_EXPORTER="${PVE_EXPORTER:-}"
 APP_TARGETS="${APP_TARGETS:-}"
+HEALTH_PROBES="${HEALTH_PROBES:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET_DIR=/opt/monitoring
 
 case "${1:-}" in
-  -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   "") ;;
   *) echo "Unknown argument: $1" >&2; exit 2 ;;
 esac
@@ -58,6 +62,14 @@ for entry in $APP_TARGETS; do
     echo "APP_TARGETS: expected app=host:port, got $entry" >&2; exit 2
   fi
   [ -f "$HERE/prometheus/targets/$app.yml.example" ] || { echo "APP_TARGETS: no prometheus/targets/$app.yml.example" >&2; exit 2; }
+done
+
+for entry in $HEALTH_PROBES; do
+  app="${entry%%=*}" url="${entry#*=}"
+  if [ "$app" = "$entry" ] || ! printf '%s' "$app" | grep -Eq '^[a-z0-9-]+$' \
+    || ! printf '%s' "$url" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._/-]*)?$'; then
+    echo "HEALTH_PROBES: expected app=http(s)://host[:port]/path, got $entry" >&2; exit 2
+  fi
 done
 
 in_ct() { pct exec "$CTID" -- bash -c "$1"; }
@@ -165,6 +177,18 @@ for entry in $APP_TARGETS; do
   in_ct "cd '$TARGET_DIR/prometheus/targets' && sed '/^#/d; s|^- targets: \\[.*\\]|- targets: [$address]|' '$app.yml.example' > '$app.yml'"
 done
 
+if [ -n "$HEALTH_PROBES" ]; then
+  lines="# Written by proxmox-lxc.sh from HEALTH_PROBES; run it again to change the list."
+  for entry in $HEALTH_PROBES; do
+    app="${entry%%=*}" url="${entry#*=}"
+    echo "Health probe $app: $url"
+    lines="$lines
+- targets: [$url]
+  labels: { module: http_2xx, kind: health, app: $app }"
+  done
+  printf '%s\n' "$lines" | pct exec "$CTID" -- tee "$TARGET_DIR/prometheus/probes/health.yml" >/dev/null
+fi
+
 # Proxmox: a read-only user and token, made here on the host. The token's value is written only into the container's
 # pve.yml (through a file of mode 600 that is deleted at once), never printed or kept on the host.
 if [ "$PVE_EXPORTER" = 1 ]; then
@@ -223,6 +247,8 @@ if in_ct "test -s '$TARGET_DIR/pve.yml'"; then
 else
   echo "  Proxmox:    not watched yet: run again with PVE_EXPORTER=1."
 fi
+in_ct "test -f '$TARGET_DIR/prometheus/probes/health.yml'" || \
+  echo "  Health:     no health probes yet: run again with HEALTH_PROBES=\"identity=https://<name>/health ...\"."
 [ -z "$TONWERK_TARGET" ] && ! in_ct "test -f '$TARGET_DIR/prometheus/targets/tonwerk.yml'" && \
   echo "  No target for Tonwerk yet: run again with TONWERK_TARGET=<Mac>.<tailnet>.ts.net:8443."
 exit 0

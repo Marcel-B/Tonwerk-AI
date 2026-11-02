@@ -269,3 +269,58 @@ groups:
           summary: '{{ $labels.name }} ({{ $labels.id }}): nur noch {{ with $values.A }}{{ humanize .Value }}{{ end }} % der Platte frei.'
           description: 'Jeder LXC auf dem Proxmox, auch der Monitoring-Container selbst (Prometheus 90 Tage, Loki 30 Tage; pve-Exporter).'
         isPaused: false
+  - orgId: 1
+    name: identity
+    folder: Alarme
+    interval: 1m
+    rules:
+      - uid: identity-sign-in-failures
+        title: Viele fehlgeschlagene Anmeldungen
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum by (app) (increase(identity_sign_ins_total{result="failed"}[15m]))'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [20] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: 'Beim Anmeldeserver sind in 15 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} Anmeldungen fehlgeschlagen.'
+          description: 'Falsches Passwort, unbekannter Benutzer, gescheiterter Passkey oder externer Login; mit Funnel steht der Server im Internet. Dashboard Identity, Protokoll Quelle account.'
+        isPaused: false
+      - uid: identity-lockouts
+        title: Viele gesperrte Konten
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum by (app) (increase(identity_lockouts_total[1h]))'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [3] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: 'Beim Anmeldeserver wurden in einer Stunde {{ with $values.A }}{{ humanize .Value }}{{ end }} Konten nach fünf Fehlversuchen gesperrt.'
+          description: 'Eine Sperre dauert 5 Minuten. Mehrere in kurzer Zeit heißt meist, dass jemand Passwörter rät.'
+        isPaused: false

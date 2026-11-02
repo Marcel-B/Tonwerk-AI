@@ -246,7 +246,7 @@
         "justifyMode": "center",
         "orientation": "auto"
       },
-      "description": "Ab 4 GB kommt der Alarm „oi-o-mat swappt“."
+      "description": "macOS gibt Swap erst frei, wenn der Prozess die Seiten wieder anfasst oder endet; der Alarm „oi-o-mat unter Speicherdruck“ geht deshalb nach dem Speicherdruck und neu Ausgelagertem, nicht nach dieser Zahl."
     },
     {
       "type": "stat",

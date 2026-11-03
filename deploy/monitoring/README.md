@@ -80,6 +80,8 @@ GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 | Platte von oi-o-mat fast voll | intern oder ein externes Laufwerk (T7) unter 10 % frei | 30 min |
 | Proxmox-Gast läuft nicht | ein LXC oder eine VM mit Autostart (`onboot`) läuft nicht | 10 min |
 | Platte eines Proxmox-Gasts fast voll | ein LXC unter 15 % frei, auch dieser Container | 30 min |
+| Desk Buddy meldet sich nicht | 15 min keine Zustandszeile in Loki | 5 min |
+| Desk Buddy mit Unterspannung | „Unterspannung!“ oder „Undervoltage detected“ in den letzten 10 min | sofort |
 
 Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **ntfy** auf *Test*.
 
@@ -131,6 +133,28 @@ Das Dashboard **img-o-mat** (`grafana/dashboards/img-o-mat.json`) zeigt den Bild
 
 Das Dashboard **Tonregal** (`grafana/dashboards/tonregal.json`) zeigt die Musikbibliothek auf oi-o-mat (Repository Marcel-B/Tonregal) und das Navidrome daneben: ob beide antworten, ob die T7 eingehängt ist, Titel und Größe der Library, die Inbox (wartend und je Ergebnis), Übergaben von Tonwerk, MusicBrainz-Anfragen und Drosselung, den Rückstand der Analyse, Scans, Backups, Navidromes Bestand, Scans, Speicher und CPU (Navidrome 0.64 meldet keine Anfragen), und Tonregals Protokoll aus Loki. Navidrome hat kein eigenes Dashboard; in der Übersicht führt es hierher. Ziele nach `prometheus/targets/tonregal.yml.example` (über Tailscale Serve, https) und `navidrome.yml.example` (Port 4533, http). Tonregal schaltet `/metrics` und den Versand an Loki in seiner `appsettings.Production.json` ein (Tonregal-README, „Überwachung“), Navidrome über `[Prometheus]` in der `navidrome.toml`, die `setup-navidrome.sh` schreibt. Tonregals `deploy/monitoring-einrichten.sh` erledigt die Seite auf oi-o-mat und nennt am Ende den Aufruf von `proxmox-lxc.sh` mit beiden Zielen. Navidromes eigenes Log bleibt auf oi-o-mat. Eigene Alarme braucht es keine: „App nicht erreichbar“, „Backup zu alt“ (`tonregal_backup_last_success_timestamp_seconds`) und „Logs erreichen Loki nicht“ gelten schon.
 
+## Desk Buddy und andere Geräte im Heimnetz
+
+Der Desk Buddy (ein Raspberry Pi am Schreibtisch, im WLAN, nicht im Tailnet) schickt sein Log an Loki: eigene Meldungen, Kernel-Warnungen, Unterspannung und alle 5 Minuten eine Zustandszeile mit Temperatur, Kernspannung, WLAN und Last. Er hat kein `/metrics`; das Dashboard **Desk Buddy** (`grafana/dashboards/deskbuddy.json`) liest alles aus diesen Zeilen: ob er lebt, Temperatur, Spannung, WLAN und Last über die Zeit, Unterspannung und Starts der letzten 24 Stunden, Warnungen und Fehler und das Protokoll mit Filtern für Stufe, Quelle (`app`, `kernel`) und Text. Dazu kommen die Alarme „Desk Buddy meldet sich nicht“ und „Desk Buddy mit Unterspannung“.
+
+Geräte außerhalb des Tailnets kommen nicht über Lokis Port 3100, sondern über das **Push-Tor** `loki-push` (nginx, Port 3101): es lässt nur `POST /loki/api/v1/push` durch und nur mit Passwort (Basic Auth); lesen geht weiter nur über Grafana. Es hat seine eigene Bindeadresse `LOKI_PUSH_BIND` (Vorgabe alle Schnittstellen), bleibt also im Heimnetz erreichbar, auch wenn `BIND_ADDRESS` den Rest aufs Tailnet beschränkt. Ein Passwort für ein Gerät legt `loki-push-user.sh` im Container an, auf dem Proxmox-Host etwa:
+
+```sh
+pct exec <CTID> -- /opt/monitoring/loki-push-user.sh deskbuddy      # neues Passwort, nur jetzt angezeigt
+pct exec <CTID> -- /opt/monitoring/loki-push-user.sh --remove deskbuddy
+```
+
+Es steht nur als Hash in `loki-push/htpasswd` (außerhalb von Git; `proxmox-lxc.sh` lässt die Datei bei einem neuen Lauf stehen). nginx liest sie bei jeder Anfrage, ein neues Passwort braucht keinen Neustart. Beim Desk Buddy in der `config.toml`:
+
+```toml
+[loki]
+url = "http://<LAN-IP des Containers>:3101"
+user = "deskbuddy"
+password = "…"      # auf dem Pi eintragen
+```
+
+Im Heimnetz geht das Passwort unverschlüsselt über das WLAN. Wer TLS will, leitet einen Namen im eigenen Reverse-Proxy (etwa `loki.idsrv.info`) auf `http://<Container>:3101` weiter; das Tor bleibt dasselbe. Zeitstempel bis 7 Tage zurück nimmt Loki an (`reject_old_samples_max_age`), so kommt ein Puffer nach einem Ausfall noch an.
+
 ## Weitere Apps anbinden
 
 Jede App, die einen Endpunkt im Prometheus-Format hat, ist eine Datei in `prometheus/targets/`; Prometheus liest neue Dateien innerhalb einer Minute ohne Neustart:
@@ -148,4 +172,4 @@ Für .NET-Apps ist das am einfachsten mit [prometheus-net](https://github.com/pr
 
 ## Sicherheit
 
-Prometheus, Loki und Grafana haben außer dem Grafana-Login keine Anmeldung. Der Blackbox-Exporter hat keinen eigenen Port nach außen, nur Prometheus erreicht ihn. Im Heimnetz und Tailnet ist das in Ordnung; wer die Ports nur im Tailnet will, setzt in `.env` `BIND_ADDRESS` auf die Tailscale-Adresse des Containers. Tonwerks `/metrics` ist wie der Rest von Tonwerk ohne Login im Tailnet erreichbar; es enthält keine Titel, Texte oder Schlüssel, nur Zahlen.
+Prometheus, Loki und Grafana haben außer dem Grafana-Login keine Anmeldung; nur das Push-Tor für Geräte im Heimnetz (Port 3101) verlangt ein Passwort. Der Blackbox-Exporter hat keinen eigenen Port nach außen, nur Prometheus erreicht ihn. Im Heimnetz und Tailnet ist das in Ordnung; wer die Ports nur im Tailnet will, setzt in `.env` `BIND_ADDRESS` auf die Tailscale-Adresse des Containers. Tonwerks `/metrics` ist wie der Rest von Tonwerk ohne Login im Tailnet erreichbar; es enthält keine Titel, Texte oder Schlüssel, nur Zahlen.

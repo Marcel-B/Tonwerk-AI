@@ -280,3 +280,55 @@ groups:
           summary: '{{ $labels.name }} ({{ $labels.id }}): nur noch {{ with $values.A }}{{ humanize .Value }}{{ end }} % der Platte frei.'
           description: 'Jeder LXC auf dem Proxmox, auch der Monitoring-Container selbst (Prometheus 90 Tage, Loki 30 Tage; pve-Exporter).'
         isPaused: false
+      - uid: deskbuddy-silent
+        title: Desk Buddy meldet sich nicht
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              # 1 when no state line came in 15 minutes (it sends one every 5); nothing while it does, so the rule
+              # needs no "no data → alerting" and stays quiet while Loki answers nothing at all.
+              expr: 'absent_over_time({app="deskbuddy"} |= "Zustand:" [15m])'
+              queryType: instant
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'Der Desk Buddy hat seit 20 Minuten keine Zustandszeile an Loki geschickt.'
+          description: 'Er schickt alle 5 Minuten eine über das Push-Tor (loki-push, Port 3101). Weg ist der Pi, sein WLAN oder sein Passwort.'
+        isPaused: false
+      - uid: deskbuddy-undervoltage
+        title: Desk Buddy mit Unterspannung
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              expr: 'sum(count_over_time({app="deskbuddy"} |~ "Unterspannung!|Undervoltage detected" [10m]))'
+              queryType: instant
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: 'Der Desk Buddy meldet Unterspannung ({{ with $values.A }}{{ humanize .Value }}{{ end }}-mal in 10 Minuten).'
+          description: 'Vom Dienst (Unterspannung!) oder vom Kernel (Undervoltage detected); Netzteil oder Kabel prüfen.'
+        isPaused: false

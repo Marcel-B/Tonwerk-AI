@@ -4,3 +4,4 @@ prometheus/probes/*.yml
 !prometheus/probes/websites.yml
 pve.yml
 prometheus/pve/*.yml
+loki-push/htpasswd

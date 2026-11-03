@@ -593,7 +593,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (app) (count_over_time({level=~\"warning|error\"}[$__interval]))",
+          "expr": "sum by (app) (count_over_time({level=~\"warning|error|critical\"}[$__interval]))",
           "refId": "A",
           "datasource": {
             "type": "loki",
@@ -646,7 +646,7 @@
       },
       "targets": [
         {
-          "expr": "{level=\"error\"}",
+          "expr": "{level=~\"error|critical\"}",
           "refId": "A",
           "datasource": {
             "type": "loki",

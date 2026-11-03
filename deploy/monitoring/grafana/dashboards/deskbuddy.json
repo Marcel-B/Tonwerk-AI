@@ -84,7 +84,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"deskbuddy\"} |= \"Zustand:\" [15m]))",
+          "expr": "sum(count_over_time({app=\"deskbuddy\"} |= \" °C, Kern \" [15m]))",
           "refId": "A",
           "datasource": {
             "type": "loki",
@@ -130,7 +130,7 @@
         "justifyMode": "center",
         "orientation": "auto"
       },
-      "description": "Zustandszeilen der letzten 15 Minuten; der Desk Buddy schickt alle 5 Minuten eine. 0 heißt: er ist weg (Alarm „Desk Buddy meldet sich nicht“)."
+      "description": "Zustandszeilen der letzten 15 Minuten (auch die beim Start); der Desk Buddy schickt alle 5 Minuten eine. 0 heißt: er ist weg (Alarm „Desk Buddy meldet sich nicht“)."
     },
     {
       "type": "stat",

@@ -80,7 +80,7 @@ GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 | Platte von oi-o-mat fast voll | intern oder ein externes Laufwerk (T7) unter 10 % frei | 30 min |
 | Proxmox-Gast läuft nicht | ein LXC oder eine VM mit Autostart (`onboot`) läuft nicht | 10 min |
 | Platte eines Proxmox-Gasts fast voll | ein LXC unter 15 % frei, auch dieser Container | 30 min |
-| Desk Buddy meldet sich nicht | 15 min keine Zustandszeile in Loki | 5 min |
+| Desk Buddy meldet sich nicht | 15 min keine Zustandszeile in Loki (auch die beim Start zählt) | 5 min |
 | Desk Buddy mit Unterspannung | „Unterspannung!“ oder „Undervoltage detected“ in den letzten 10 min | sofort |
 
 Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **ntfy** auf *Test*.

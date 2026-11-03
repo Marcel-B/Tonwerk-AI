@@ -121,7 +121,7 @@ fi
 
 echo "Copying the stack to $TARGET_DIR ..."
 ARCHIVE="$(mktemp)"
-tar -C "$HERE" --exclude=.env --exclude=pve.yml --exclude='prometheus/targets/*.yml' --exclude='prometheus/pve/*.yml' -czf "$ARCHIVE" .
+tar -C "$HERE" --exclude=.env --exclude=pve.yml --exclude=loki-push/htpasswd --exclude='prometheus/targets/*.yml' --exclude='prometheus/pve/*.yml' -czf "$ARCHIVE" .
 pct push "$CTID" "$ARCHIVE" /tmp/monitoring.tgz
 rm -f "$ARCHIVE"
 in_ct "mkdir -p '$TARGET_DIR' && tar -C '$TARGET_DIR' -xzf /tmp/monitoring.tgz && rm /tmp/monitoring.tgz"

@@ -1,0 +1,8 @@
+# Copy to onkelbummel.yml (or let proxmox-lxc.sh write it: APP_TARGETS="onkelbummel=<name>:9464") and put in the
+# Tailscale name of Onkel Bummel's Proxmox container. Onkel Bummel (github.com/Marcel-B/onkel-bummel) answers /metrics
+# only on port 9464, published by tailscale serve with https inside the tailnet, never through Funnel.
+- targets: [onkel-bummel.example.ts.net:9464]
+  labels:
+    app: onkelbummel
+    __scheme__: https
+    __metrics_path__: /metrics

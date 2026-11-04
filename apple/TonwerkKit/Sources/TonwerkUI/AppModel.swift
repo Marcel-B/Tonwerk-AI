@@ -38,6 +38,9 @@ public final class AppModel {
     var revealing: String?
     /// The song the share dialog is open for, from a song's menu.
     var sharing: Song?
+    /// The playlist being renamed or asked about deleting, from its page's toolbar or its row in the sidebar.
+    var renamingPlaylist: Components.Schemas.PlaylistInfo?
+    var deletingPlaylist: Components.Schemas.PlaylistInfo?
     /// The song the Tonregal dialog is open for, from a song's menu (``tonregalReady`` only).
     var handingOver: Song?
     /// The server hands songs to Tonregal (`GET api/tonregal`), so the menus offer it.

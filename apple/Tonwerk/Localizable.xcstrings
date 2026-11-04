@@ -11867,6 +11867,40 @@
         }
       }
     },
+    "Löschen (letzte Playlist)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Löschen (letzte Playlist)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete (last playlist)"
+          }
+        }
+      }
+    },
+    "Löschen …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Löschen …"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete …"
+          }
+        }
+      }
+    },
     "MIDI" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13890,6 +13924,23 @@
         }
       }
     },
+    "Nur die Liste wird gelöscht, ihre %lld Songs bleiben in der Bibliothek." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur die Liste wird gelöscht, ihre %lld Songs bleiben in der Bibliothek."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only the list is deleted; its %lld songs stay in the library."
+          }
+        }
+      }
+    },
     "Nur im Refrain (Abschnitt „chorus“)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14804,6 +14855,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Playlist deleted"
+          }
+        }
+      }
+    },
+    "Playlist löschen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlist löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete playlist"
+          }
+        }
+      }
+    },
+    "Playlist nicht gelöscht" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlist nicht gelöscht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlist not deleted"
+          }
+        }
+      }
+    },
+    "Playlist umbenennen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlist umbenennen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rename playlist"
+          }
+        }
+      }
+    },
+    "Playlist „%@“ löschen?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlist „%@“ löschen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete playlist “%@”?"
           }
         }
       }

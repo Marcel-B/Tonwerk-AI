@@ -499,6 +499,30 @@ public final class AppModel {
         }
     }
 
+    /// Renames a playlist; an empty name changes nothing, as the server would refuse it.
+    func renamePlaylist(_ playlist: Components.Schemas.PlaylistInfo, to name: String) async {
+        guard let tonwerk else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != playlist.name else { return }
+        if let renamed = try? await tonwerk.api.renamePlaylist(
+            path: .init(id: playlist.id), body: .json(.init(name: trimmed))
+        ).ok.body.json,
+            let index = playlists.firstIndex(where: { $0.id == renamed.id })
+        {
+            playlists[index] = renamed
+        }
+    }
+
+    /// Deletes the list only: its songs stay in the library. The server keeps the last playlist (409), so "add to
+    /// playlist" always has somewhere to go; its problem comes back as the error's text.
+    func deletePlaylist(_ playlist: Components.Schemas.PlaylistInfo) async throws {
+        _ = try await call("DELETE", address("api/playlists", String(playlist.id)), accept: [204, 404])
+        playlists.removeAll { $0.id == playlist.id }
+        if page == .playlist(playlist.id) {
+            page = .library
+        }
+    }
+
     /// The finished songs the queue still knows, in the order they were made, as the web queue page's "Als Playlist":
     /// YuE2's ready songs and ACE-Step's finished runs, only those the library lists.
     public var readySongIds: [String] {

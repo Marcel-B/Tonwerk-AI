@@ -108,6 +108,32 @@ groups:
           summary: '{{ $labels.app }} hat in 30 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} Logzeilen verworfen, weil Loki sie nicht nahm.'
           description: 'Bei Tonwerk lief das 2026-10-15 bis 10-20 unbemerkt.'
         isPaused: false
+      - uid: push-failing
+        title: Push schlägt fehl
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # Only failed: invalid_token is a device that was removed, and Onkel Bummel forgets it by itself.
+              expr: 'sum by (app) (increase(onkelbummel_push_sent_total{result="failed"}[30m]))'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        annotations:
+          summary: 'Onkel Bummel konnte in 30 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} Pushes nicht an APNs zustellen.'
+          description: 'Dieser Alarm kommt dann selbst nicht als Push an, steht aber im Topic alarme in der App und der Web-Oberfläche. Meist ist der APNs-Schlüssel abgelaufen oder widerrufen (Apns__KeyId in onkel-bummel.env, Protokoll mit Quelle push).'
+        isPaused: false
   - orgId: 1
     name: websites
     folder: Alarme

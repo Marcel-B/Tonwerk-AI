@@ -56,17 +56,24 @@ Ob Prometheus den Mac erreicht, zeigt `http://monitoring:9090/targets`. Löst de
 
 ## Alarme
 
-Grafana schickt Alarme an ntfy, und zwar an den Server von Slipways auf slipways-1. Regeln, Kontaktpunkt und Richtlinie liegen als Dateien in `grafana/provisioning/alerting/` und sind damit versioniert; in der Oberfläche stehen sie im Ordner **Alarme** und lassen sich dort nicht ändern.
+Grafana schickt Alarme an [Onkel Bummel](https://github.com/Marcel-B/onkel-bummel), Marcels eigenen Push-Dienst (bis November 2026 an ntfy auf slipways-1), ins Topic `alarme`. Der Kontaktpunkt **onkelbummel** ist ein Webhook an `/api/v1/webhooks/grafana?topic=alarme` mit einem Publish-Token als Bearer. Onkel Bummel liest Grafanas JSON selbst: Ein feuernder Alarm wird „Alarm: <Regel>“ mit Priorität 4 (auf dem iPhone „time-sensitive“), ein vorbeigegangener „Wieder gut: <Regel>“ mit Priorität 2. Der Text sind die `summary`-Zeilen, ein Tipp öffnet Grafana. Regeln, Kontaktpunkt und Richtlinie liegen als Dateien in `grafana/provisioning/alerting/` und sind damit versioniert; in der Oberfläche stehen sie im Ordner **Alarme** und lassen sich dort nicht ändern.
 
 In `.env`:
 
 ```sh
-NTFY_URL=https://slipways-1.<tailnet>.ts.net:2586
-NTFY_TOPIC=alarme-<zufall>        # mit zufälligem Teil: wer im Tailnet den Namen kennt, kann mitlesen
+ONKELBUMMEL_URL=https://onkel-bummel.<tailnet>.ts.net
+ONKELBUMMEL_TOKEN=ob_…               # nur für das Topic alarme
 GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 ```
 
-`proxmox-lxc.sh` fragt beim ersten Lauf danach. Fehlt `NTFY_URL`, geht der Kontaktpunkt ins Leere; Grafana zeigt das unter *Alerting → Contact points*. In der ntfy-App das Topic auf diesem Server abonnieren (wie bei Slipways' Benachrichtigungen). Alarme kommen rund um die Uhr; Ruhezeiten regelt das Telefon. Die Nachricht nennt die Regel, betroffene App oder Seite und einen Link zu Grafana; ein Alarm, der weiter anliegt, kommt nach 12 Stunden noch einmal, und wenn er vorbei ist, kommt „Wieder gut“.
+Den Token legt man in Onkel Bummels Container an (Proxmox-CT `onkel-bummel`); er wird nur einmal angezeigt:
+
+```sh
+cd /opt/onkel-bummel/deploy
+docker compose exec onkel-bummel dotnet OnkelBummel.Api.dll --create-token grafana alarme
+```
+
+`proxmox-lxc.sh` fragt beim ersten Lauf nach Adresse und Token (den Token ohne Echo) oder nimmt `ONKELBUMMEL_URL` und `ONKELBUMMEL_TOKEN` aus der Umgebung; alte `NTFY_*`-Zeilen fallen dabei weg. Fehlt eins, geht der Kontaktpunkt ins Leere; Grafana zeigt das unter *Alerting → Contact points*. In der Onkel-Bummel-App das Topic `alarme` abonnieren. Alarme kommen rund um die Uhr; Ruhezeiten regelt das Telefon. Die Nachricht nennt die Regel, die betroffene App oder Seite und einen Link zu Grafana. Ein Alarm, der weiter anliegt, kommt nach 12 Stunden noch einmal, und wenn er vorbei ist, kommt „Wieder gut“.
 
 | Regel | Wann | Für |
 |---|---|---|
@@ -83,7 +90,7 @@ GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 | Desk Buddy meldet sich nicht | 15 min keine Zustandszeile in Loki | 5 min |
 | Desk Buddy mit Unterspannung | „Unterspannung!“ oder „Undervoltage detected“ in den letzten 10 min | sofort |
 
-Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **ntfy** auf *Test*.
+Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **onkelbummel** auf *Test*. Das kommt als „Alarm: TestAlert“ im Topic `alarme` an.
 
 ## Websites und Health-Endpunkte
 

@@ -7,8 +7,9 @@
 #
 # Settings through the environment, all optional:
 #   TONWERK_TARGET   the Mac's Tailscale name with port, e.g. mac-mini.tail1234.ts.net:8443 (asked for if empty)
-#   NTFY_URL         where alarms go, e.g. https://slipways-1.tail1234.ts.net:2586 (asked for if empty)
-#   NTFY_TOPIC       their topic (a random alarme-… if empty)
+#   ONKELBUMMEL_URL  where alarms go, Onkel Bummel, e.g. https://onkel-bummel.tail1234.ts.net (asked for if empty)
+#   ONKELBUMMEL_TOKEN  its publish token for the topic alarme (asked for if empty, without echo); made in Onkel
+#                    Bummel's container: docker compose exec onkel-bummel dotnet OnkelBummel.Api.dll --create-token grafana alarme
 #   APP_TARGETS      further apps to scrape, as app=host:port separated by spaces, e.g.
 #                    "tonregal=oi-o-mat.tail1234.ts.net:443 navidrome=oi-o-mat.tail1234.ts.net:4533": each is written
 #                    from prometheus/targets/<app>.yml.example with that address (an existing <app>.yml is replaced)
@@ -33,8 +34,8 @@ CORES="${CORES:-2}"
 DISK="${DISK:-20}"
 TS_AUTHKEY="${TS_AUTHKEY:-}"
 TONWERK_TARGET="${TONWERK_TARGET:-}"
-NTFY_URL="${NTFY_URL:-}"
-NTFY_TOPIC="${NTFY_TOPIC:-}"
+ONKELBUMMEL_URL="${ONKELBUMMEL_URL:-}"
+ONKELBUMMEL_TOKEN="${ONKELBUMMEL_TOKEN:-}"
 PVE_EXPORTER="${PVE_EXPORTER:-}"
 APP_TARGETS="${APP_TARGETS:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -132,17 +133,24 @@ if ! in_ct "test -f '$TARGET_DIR/.env'"; then
   in_ct "umask 077 && printf 'GF_SECURITY_ADMIN_USER=admin\nGF_SECURITY_ADMIN_PASSWORD=%s\n' '$PASSWORD' > '$TARGET_DIR/.env'"
 fi
 
-# Alarms (grafana/provisioning/alerting/) go to ntfy; asked once, kept in .env like the password.
-if ! in_ct "grep -q '^NTFY_URL=' '$TARGET_DIR/.env'"; then
-  if [ -z "$NTFY_URL" ] && [ -t 0 ]; then
-    read -r -p "ntfy server for alarms (e.g. https://slipways-1.tail1234.ts.net:2586, empty to skip): " NTFY_URL
+# Alarms (grafana/provisioning/alerting/) go to Onkel Bummel; asked once, kept in .env like the password. The token is
+# read without echo and goes into the container through stdin, so it shows up neither on screen nor in a process list.
+# ntfy's NTFY_URL and NTFY_TOPIC, where alarms went until 2026-11, are dropped then.
+if ! in_ct "grep -q '^ONKELBUMMEL_TOKEN=.' '$TARGET_DIR/.env'"; then
+  if [ -z "$ONKELBUMMEL_URL" ] && [ -t 0 ]; then
+    read -r -p "Onkel Bummel for alarms (e.g. https://onkel-bummel.tail1234.ts.net, empty to skip): " ONKELBUMMEL_URL
   fi
-  if [ -n "$NTFY_URL" ]; then
-    NTFY_TOPIC="${NTFY_TOPIC:-alarme-$(openssl rand -hex 4)}"
-    in_ct "printf 'NTFY_URL=%s\nNTFY_TOPIC=%s\n' '${NTFY_URL%/}' '$NTFY_TOPIC' >> '$TARGET_DIR/.env'"
+  if [ -n "$ONKELBUMMEL_URL" ] && [ -z "$ONKELBUMMEL_TOKEN" ] && [ -t 0 ]; then
+    read -r -s -p "Its publish token for the topic alarme (ob_…): " ONKELBUMMEL_TOKEN
+    echo
   fi
+  if [ -n "$ONKELBUMMEL_URL" ] && [ -n "$ONKELBUMMEL_TOKEN" ]; then
+    printf 'ONKELBUMMEL_URL=%s\nONKELBUMMEL_TOKEN=%s\n' "${ONKELBUMMEL_URL%/}" "$ONKELBUMMEL_TOKEN" \
+      | pct exec "$CTID" -- sh -c "sed -i '/^\(ONKELBUMMEL_URL\|ONKELBUMMEL_TOKEN\|NTFY_URL\|NTFY_TOPIC\)=/d' '$TARGET_DIR/.env' && cat >> '$TARGET_DIR/.env'"
+  fi
+  unset ONKELBUMMEL_TOKEN
 fi
-NTFY_TOPIC="$(in_ct "sed -n 's/^NTFY_TOPIC=//p' '$TARGET_DIR/.env'" || true)"
+ALARMS="$(in_ct "sed -n 's/^ONKELBUMMEL_URL=//p' '$TARGET_DIR/.env'" || true)"
 
 if ! in_ct "test -f '$TARGET_DIR/prometheus/targets/tonwerk.yml'"; then
   if [ -z "$TONWERK_TARGET" ] && [ -t 0 ]; then
@@ -213,10 +221,10 @@ echo "  Grafana:    http://$NAME:3000  (user admin)"
 echo "  Prometheus: http://$NAME:9090/targets"
 echo "  For Tonwerk, in appsettings.Production.json on the Mac:"
 echo "    \"Monitoring\": { \"Loki\": { \"Url\": \"http://$CT_HOSTNAME:3100\", \"Host\": \"mac-mini\" } }"
-if [ -n "$NTFY_TOPIC" ]; then
-  echo "  Alarms:     ntfy topic $NTFY_TOPIC; subscribe to it in the ntfy app on that server."
+if [ -n "$ALARMS" ] && in_ct "grep -q '^ONKELBUMMEL_TOKEN=.' '$TARGET_DIR/.env'"; then
+  echo "  Alarms:     Onkel Bummel at $ALARMS, topic alarme; subscribe to it in the Onkel Bummel app."
 else
-  echo "  Alarms:     no ntfy server yet: run again with NTFY_URL=https://<server>:<port>."
+  echo "  Alarms:     nowhere yet: run again with ONKELBUMMEL_URL=https://onkel-bummel.<tailnet>.ts.net (asks for the token)."
 fi
 if in_ct "test -s '$TARGET_DIR/pve.yml'"; then
   echo "  Proxmox:    read-only user monitoring@pve (token exporter, PVEAuditor); revoke under Datacenter > Permissions."

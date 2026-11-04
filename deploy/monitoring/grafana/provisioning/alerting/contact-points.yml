@@ -1,23 +1,27 @@
 apiVersion: 1
-# ntfy (Slipways' server) through ntfy's own Grafana template, which takes title and message from the webhook's JSON.
-# Address and topic come from the container's environment (.env: NTFY_URL, NTFY_TOPIC).
+# Onkel Bummel (github.com/Marcel-B/onkel-bummel), Marcel's own push service, through its Grafana webhook: it reads the
+# webhook's JSON itself (firing → "Alarm: <alertname>" at priority 4, resolved → "Wieder gut: …" at 2, the summaries as
+# text, the Grafana link to click), so the contact point needs no templates. Address and publish token (restricted to
+# the topic alarme) come from the container's environment (.env: ONKELBUMMEL_URL, ONKELBUMMEL_TOKEN).
 contactPoints:
   - orgId: 1
-    name: ntfy
+    name: onkelbummel
     receivers:
-      - uid: ntfy
+      - uid: onkelbummel
         type: webhook
         disableResolveMessage: false
         settings:
-          url: ${NTFY_URL}/${NTFY_TOPIC}?template=grafana
+          url: ${ONKELBUMMEL_URL}/api/v1/webhooks/grafana?topic=alarme
           httpMethod: POST
-          title: '{{ template "ntfy.title" . }}'
-          message: '{{ template "ntfy.message" . }}'
+          authorization_scheme: Bearer
+          authorization_credentials: ${ONKELBUMMEL_TOKEN}
 
-templates:
+# The contact point and template that sent alarms to ntfy on slipways-1 until 2026-11; provisioned resources are not
+# removed when their file entry goes, so they are deleted here.
+deleteContactPoints:
+  - orgId: 1
+    uid: ntfy
+
+deleteTemplates:
   - orgId: 1
     name: ntfy
-    template: |
-      {{ define "ntfy.title" }}{{ if eq .Status "resolved" }}Wieder gut{{ else }}Alarm{{ end }}: {{ .CommonLabels.alertname }}{{ end }}
-      {{ define "ntfy.message" }}{{ range .Alerts }}{{ .Annotations.summary }}
-      {{ end }}{{ .ExternalURL }}{{ end }}

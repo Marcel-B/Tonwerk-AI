@@ -208,6 +208,21 @@ final class Store: @unchecked Sendable {
             }
             playlists[index]["songIds"] = request["songIds"] as? [String] ?? []
             return .json(playlists[index])
+        case ("PUT", let r) where r.matches("api/playlists/*/name"):
+            guard let index = playlists.firstIndex(where: { "\($0["id"] ?? "")" == r.parts[2] }) else {
+                return .problem(404)
+            }
+            if let name = (request["name"] as? String)?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
+                playlists[index]["name"] = name
+            }
+            return .json(playlists[index])
+        case ("DELETE", let r) where r.matches("api/playlists/*"):
+            guard let index = playlists.firstIndex(where: { "\($0["id"] ?? "")" == r.parts[2] }) else {
+                return .problem(404)
+            }
+            guard playlists.count > 1 else { return .problem(409) }
+            playlists.remove(at: index)
+            return Answer(status: 204, type: "text/plain", body: Data())
         case ("POST", let r) where r.matches("api/playlists"):
             let id = (playlists.compactMap { $0["id"] as? Int }.max() ?? 0) + 1
             let list: [String: Any] = ["id": id, "name": request["name"] as? String ?? "Playlist", "songIds": [String]()]

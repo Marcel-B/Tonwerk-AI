@@ -90,6 +90,7 @@ struct MainView: View {
                         Label(playlist.name, systemImage: "list.bullet")
                             .badge(model.songs(of: playlist).count)
                             .tag(Page.playlist(playlist.id))
+                            .contextMenu { PlaylistActions(playlist: playlist) }
                     }
                     Button {
                         newName = ""
@@ -246,6 +247,7 @@ private struct Dialogs: ViewModifier {
                 Button("Anlegen") { Task { await model.createPlaylist(named: newName) } }
                 Button("Abbrechen", role: .cancel) {}
             }
+            .modifier(PlaylistDialogs())
     }
 }
 

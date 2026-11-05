@@ -92,6 +92,7 @@ struct SettingsView: View {
             }
             if !model.isDemo {
                 TonregalSettingsSection()
+                OnkelBummelSettingsSection()
             }
             #if os(macOS) && canImport(Sparkle)
             UpdateSection()

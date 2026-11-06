@@ -7,3 +7,9 @@ default:
   token_value: 00000000-0000-0000-0000-000000000000
   # Proxmox' own certificate is self-signed; the exporter only talks to it in the home network.
   verify_ssl: false
+# A second Proxmox host needs its own token and module; its target in prometheus/pve/ names the module.
+# nuc:
+#   user: monitoring@pve
+#   token_name: exporter
+#   token_value: 00000000-0000-0000-0000-000000000000
+#   verify_ssl: false

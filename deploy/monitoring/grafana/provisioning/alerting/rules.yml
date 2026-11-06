@@ -264,7 +264,7 @@ groups:
             datasourceUid: prometheus
             model:
               refId: A
-              expr: '((1 - pve_up{id=~"(lxc|qemu)/.+"}) * on (id) pve_onboot_status) * on (id) group_left (name) pve_guest_info'
+              expr: '((1 - pve_up{id=~"(lxc|qemu)/.+"}) * on (instance, id) pve_onboot_status) * on (instance, id) group_left (name) pve_guest_info'
               instant: true
           - refId: C
             datasourceUid: __expr__
@@ -290,7 +290,7 @@ groups:
             model:
               refId: A
               # Only containers: Proxmox reports a VM's disk use as 0 without the guest agent.
-              expr: '(100 * (1 - pve_disk_usage_bytes{id=~"lxc/.+"} / pve_disk_size_bytes{id=~"lxc/.+"})) * on (id) group_left (name) pve_guest_info'
+              expr: '(100 * (1 - pve_disk_usage_bytes{id=~"lxc/.+"} / pve_disk_size_bytes{id=~"lxc/.+"})) * on (instance, id) group_left (name) pve_guest_info'
               instant: true
           - refId: C
             datasourceUid: __expr__

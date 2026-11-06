@@ -3,3 +3,8 @@
 - targets: [192.168.1.10]
   labels:
     app: proxmox
+# A second host, with its own module in pve.yml (rules and dashboards tell hosts apart by instance):
+# - targets: [192.168.1.11]
+#   labels:
+#     app: proxmox
+#     __param_module: nuc

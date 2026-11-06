@@ -1251,6 +1251,95 @@
         }
       }
     },
+    "/api/onkel-bummel": {
+      "get": {
+        "operationId": "GetOnkelBummelStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnkelBummelStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "SetOnkelBummelSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnkelBummelSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnkelBummelStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/onkel-bummel/test": {
+      "post": {
+        "operationId": "TestOnkelBummel",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnkelBummelCheck"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/songs/{run}/{song}/cover": {
       "get": {
         "operationId": "GetSongCover",
@@ -10287,6 +10376,104 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "OnkelBummelCheck": {
+        "required": [
+          "state",
+          "detail"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "OnkelBummelSettings": {
+        "required": [
+          "url",
+          "token",
+          "topic",
+          "link"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "topic": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "link": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "OnkelBummelStatus": {
+        "required": [
+          "configured",
+          "enabled",
+          "url",
+          "tokenSet",
+          "topic",
+          "link",
+          "editable"
+        ],
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tokenSet": {
+            "type": "boolean"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "link": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "editable": {
+            "type": "boolean"
           }
         }
       },

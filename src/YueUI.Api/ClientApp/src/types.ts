@@ -542,6 +542,35 @@ export interface TonregalCheck {
   detail: string | null
 }
 
+/** Whether finished jobs are sent to Onkel Bummel, the notification service. */
+export interface OnkelBummelStatus {
+  /** Address and token are set. */
+  configured: boolean
+  /** Not switched off; messages go out when this and `configured` hold. */
+  enabled: boolean
+  url: string | null
+  tokenSet: boolean
+  topic: string
+  /** Tonwerk's own address that a message opens. */
+  link: string | null
+  editable: boolean
+}
+
+export interface OnkelBummelSettings {
+  url: string | null
+  /** Empty keeps the token set. */
+  token: string | null
+  /** Empty means `tonwerk`. */
+  topic: string | null
+  link: string | null
+  enabled: boolean
+}
+
+export interface OnkelBummelCheck {
+  state: 'ok' | 'token' | 'topic' | 'unreachable' | 'failed' | 'notConfigured'
+  detail: string | null
+}
+
 /**
  * A song handed to Tonregal: `imported` (filed under `libraryPath`), `matched` (accepted, filed shortly) or
  * `rejected` (the same file is there already, see `error`). `repeated` when Tonregal kept an earlier handover.

@@ -61,7 +61,8 @@ public sealed class CloudBackup(
     PushStore pushStore,
     IPushSender pushSender,
     TimeProvider time,
-    ILogger<CloudBackup> logger) : BackgroundService
+    ILogger<CloudBackup> logger,
+    OnkelBummel.OnkelBummelNotifier? onkelBummel = null) : BackgroundService
 {
     /// <summary>How often the scheduler looks at the clock.</summary>
     public static TimeSpan CheckInterval { get; set; } = TimeSpan.FromMinutes(1);
@@ -487,6 +488,7 @@ public sealed class CloudBackup(
 
     private async Task NotifyAsync(string error)
     {
+        onkelBummel?.Post("backup", false, language => PushTexts.BackupFailed(error, language));
         foreach (var subscription in pushStore.Subscriptions)
         {
             try

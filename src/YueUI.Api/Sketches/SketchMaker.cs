@@ -25,7 +25,8 @@ public sealed partial class SketchMaker(
     IPushSender pushSender,
     TimeProvider time,
     Monitoring.JobMetrics metrics,
-    ILogger<SketchMaker> logger) : BackgroundService
+    ILogger<SketchMaker> logger,
+    OnkelBummel.OnkelBummelNotifier? onkelBummel = null) : BackgroundService
 {
     private readonly Channel<string> _queue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Lock _gate = new();
@@ -286,6 +287,7 @@ public sealed partial class SketchMaker(
 
     private async Task NotifyAsync(SketchJob job)
     {
+        onkelBummel?.Post("sketch", job.Stage == "done", language => PushTexts.Sketch(job, language), "sketch");
         foreach (var subscription in pushStore.Subscriptions)
         {
             try

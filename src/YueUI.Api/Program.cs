@@ -92,6 +92,13 @@ builder.Services.AddSingleton<PushStore>();
 builder.Services.AddSingleton<IPushSender, WebPushSender>();
 builder.Services.AddHttpClient(WebPushSender.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHostedService<PushNotifier>();
+// Onkel Bummel: the same news (a song batch as one message) to Marcel's own notification service, once configured.
+builder.Services.Configure<YueUI.Api.OnkelBummel.OnkelBummelOptions>(
+    builder.Configuration.GetSection(YueUI.Api.OnkelBummel.OnkelBummelOptions.Section));
+builder.Services.AddHttpClient(YueUI.Api.OnkelBummel.OnkelBummelClient.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddSingleton<YueUI.Api.OnkelBummel.OnkelBummelClient>();
+builder.Services.AddSingleton<YueUI.Api.OnkelBummel.OnkelBummelNotifier>();
+builder.Services.AddHostedService(services => services.GetRequiredService<YueUI.Api.OnkelBummel.OnkelBummelNotifier>());
 
 // The app's own state (playlists, titles, ratings, …) in one SQLite file, shared by every browser.
 builder.Services.Configure<DataOptions>(builder.Configuration.GetSection(DataOptions.Section));
@@ -264,6 +271,7 @@ api.MapLibraryEndpoints();
 api.MapTimingEndpoints();
 api.MapExportEndpoints();
 api.MapTonregalEndpoints();
+api.MapOnkelBummelEndpoints();
 api.MapCoverEndpoints();
 api.MapTranscriptionEndpoints();
 api.MapLyricsEndpoints();

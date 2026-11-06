@@ -50,8 +50,13 @@ public sealed class SqlitePlaylistStore(SqliteDatabase database)
     {
         using var connection = database.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "INSERT INTO playlists (name) VALUES ($name) RETURNING id";
+        // Not INSERT ... RETURNING: its row is handed out before the implicit commit, so a commit that finds another
+        // connection reading fails at once with "database is locked" instead of waiting like other statements do.
+        command.CommandText = "INSERT INTO playlists (name) VALUES ($name)";
         command.Parameters.AddWithValue("$name", name);
+        command.ExecuteNonQuery();
+        command.CommandText = "SELECT last_insert_rowid()";
+        command.Parameters.Clear();
         return new StoredPlaylist((long)command.ExecuteScalar()!, name, []);
     }
 

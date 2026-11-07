@@ -315,9 +315,10 @@ groups:
             datasourceUid: loki
             model:
               refId: A
-              # 1 when no state line came in 15 minutes (it sends one every 5); nothing while it does, so the rule
+              # 1 when no health line (Gestartet, Zustand, Unterspannung; all carry " °C, Kern ") came in 15 minutes: it sends
+              # one at its start and every 5 minutes after. Nothing while it does, so the rule
               # needs no "no data → alerting" and stays quiet while Loki answers nothing at all.
-              expr: 'absent_over_time({app="deskbuddy"} |= "Zustand:" [15m])'
+              expr: 'absent_over_time({app="deskbuddy"} |= " °C, Kern " [15m])'
               queryType: instant
           - refId: C
             datasourceUid: __expr__

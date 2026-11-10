@@ -2,6 +2,9 @@ import type {
   AudioMidiInfo,
   AudioMidiSettings,
   BackupStatus,
+  OnkelBummelCheck,
+  OnkelBummelSettings,
+  OnkelBummelStatus,
   TonregalCheck,
   TonregalSettings,
   TonregalStatus,
@@ -415,6 +418,20 @@ export async function setTonregal(settings: TonregalSettings): Promise<TonregalS
 /** Asks Tonregal with the address and key set whether it would take a song. */
 export async function checkTonregal(): Promise<TonregalCheck> {
   return (await send('/api/tonregal/check', { method: 'POST' })).json() as Promise<TonregalCheck>
+}
+
+export async function getOnkelBummel(): Promise<OnkelBummelStatus> {
+  return (await send('/api/onkel-bummel')).json() as Promise<OnkelBummelStatus>
+}
+
+/** Writes Onkel Bummel's address, token, topic and Tonwerk's link into the server's env file; answers the new status. */
+export async function setOnkelBummel(settings: OnkelBummelSettings): Promise<OnkelBummelStatus> {
+  return (await send('/api/onkel-bummel', json('PUT', settings))).json() as Promise<OnkelBummelStatus>
+}
+
+/** Sends a test message to Onkel Bummel with what is set. */
+export async function testOnkelBummel(): Promise<OnkelBummelCheck> {
+  return (await send('/api/onkel-bummel/test', { method: 'POST' })).json() as Promise<OnkelBummelCheck>
 }
 
 /** The song as tagged FLAC into Tonregal; waits until Tonregal has filed it, some seconds at most. */

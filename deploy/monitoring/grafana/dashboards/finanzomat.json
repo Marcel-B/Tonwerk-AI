@@ -6,7 +6,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": {
     "from": "now-7d",
@@ -785,6 +785,486 @@
     },
     {
       "type": "row",
+      "title": "Kontoabruf",
+      "id": 23,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Freigabe läuft ab",
+      "id": 24,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 29
+      },
+      "targets": [
+        {
+          "expr": "min(finanzomat_bankkonto_freigabe_tage{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "noValue": "kein Konto",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 8,
+                "color": "orange"
+              },
+              {
+                "value": 15,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "d"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Tage, bis die erste Freigabe einer Bank abläuft. Erneuern im Container mit finanz-o-mat bank verbinden."
+    },
+    {
+      "type": "stat",
+      "title": "Letzter Abruf",
+      "id": 25,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 29
+      },
+      "targets": [
+        {
+          "expr": "time() - min(finanzomat_bankkonto_letzter_abruf_timestamp_seconds{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "noValue": "kein Konto",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 57600,
+                "color": "orange"
+              },
+              {
+                "value": 93600,
+                "color": "red"
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Wie lange der älteste letzte Abruf eines Kontos her ist. Abrufe um 9:00, 12:30, 16:00 und 19:30, nachts nicht."
+    },
+    {
+      "type": "stat",
+      "title": "Konten mit Fehler",
+      "id": 26,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 29
+      },
+      "targets": [
+        {
+          "expr": "sum(finanzomat_bankkonto_fehler{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "noValue": "kein Konto",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "red"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Konten, bei denen der letzte Abruf fehlgeschlagen ist (Reiter Konten zeigt den Grund)."
+    },
+    {
+      "type": "stat",
+      "title": "Freie Abrufe (min.)",
+      "id": 27,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 29
+      },
+      "targets": [
+        {
+          "expr": "min(finanzomat_bankkonto_abrufe_frei{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "noValue": "kein Konto",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "orange"
+              },
+              {
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "description": "Kleinste Zahl freier Abrufe eines Kontos in den letzten 24 Stunden (PSD2 erlaubt 4)."
+    },
+    {
+      "type": "bargauge",
+      "title": "Freigabe je Konto",
+      "id": 28,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 29
+      },
+      "targets": [
+        {
+          "expr": "min by (konto) (finanzomat_bankkonto_freigabe_tage{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{konto}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 0,
+          "min": 0,
+          "max": 180,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 8,
+                "color": "orange"
+              },
+              {
+                "value": 15,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "description": "Resttage der Freigabe je Konto (Bankname, keine IBAN)."
+    },
+    {
+      "type": "timeseries",
+      "title": "Abrufe",
+      "id": 29,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 33
+      },
+      "targets": [
+        {
+          "expr": "sum by (bank, ergebnis) (increase(finanzomat_kontoabruf_total{app=\"finanzomat\"}[1h])) > 0",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{bank}} {{ergebnis}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Abrufe je Bank pro Stunde: ok, fehler oder uebersprungen (Limit, abgelaufene Freigabe)."
+    },
+    {
+      "type": "timeseries",
+      "title": "Neue Umsätze",
+      "id": 30,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 33
+      },
+      "targets": [
+        {
+          "expr": "sum by (bank, ziel) (increase(finanzomat_kontoabruf_umsaetze_total{app=\"finanzomat\"}[1h])) > 0",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{bank}} {{ziel}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Neu abgerufene Umsätze pro Stunde, in der Kontenübersicht und in der Buchhaltung."
+    },
+    {
+      "type": "timeseries",
+      "title": "Enable Banking API",
+      "id": 31,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 33
+      },
+      "targets": [
+        {
+          "expr": "sum by (endpunkt, status) (increase(finanzomat_enable_banking_requests_total{app=\"finanzomat\"}[1h])) > 0",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{endpunkt}} {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Anfragen an die API von Enable Banking pro Stunde, je Endpunkt und HTTP-Status."
+    },
+    {
+      "type": "row",
       "title": "Server",
       "id": 17,
       "collapsed": false,
@@ -792,7 +1272,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 40
       },
       "panels": []
     },
@@ -808,7 +1288,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 29
+        "y": 41
       },
       "targets": [
         {
@@ -852,7 +1332,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 29
+        "y": 41
       },
       "targets": [
         {
@@ -893,7 +1373,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 48
       },
       "panels": []
     },
@@ -909,7 +1389,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 49
       },
       "targets": [
         {
@@ -954,7 +1434,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 55
       },
       "targets": [
         {
@@ -989,7 +1469,7 @@
         "multi": true,
         "includeAll": true,
         "allValue": ".+",
-        "query": "server,zugriff,web,paperless,verzeichnis,neu_einlesen,einstellungen,belegnummern,aktualisierung,backup",
+        "query": "server,zugriff,web,paperless,verzeichnis,neu_einlesen,einstellungen,belegnummern,aktualisierung,backup,kontoabruf",
         "current": {
           "text": "All",
           "value": "$__all"

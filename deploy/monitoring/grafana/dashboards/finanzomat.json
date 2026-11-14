@@ -1264,6 +1264,244 @@
       "description": "Anfragen an die API von Enable Banking pro Stunde, je Endpunkt und HTTP-Status."
     },
     {
+      "type": "table",
+      "title": "Umsätze je Konto",
+      "id": 32,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "sum by (konto) (finanzomat_bankkonto_umsaetze{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "expr": "sum by (konto) (finanzomat_bankkonto_vorgemerkt{app=\"finanzomat\"})",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "konto": "Konto",
+              "Value #A": "Umsätze",
+              "Value #B": "Vorgemerkt"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Umsätze in der Kontenübersicht und vorgemerkte, noch nicht gebuchte Umsätze je Konto (Anzahlen, keine Beträge)."
+    },
+    {
+      "type": "timeseries",
+      "title": "Kontostand-Verlauf",
+      "id": 33,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "max by (konto) (finanzomat_bankkonto_verlauf_tage{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{konto}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter"
+          },
+          "decimals": 0,
+          "unit": "d"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Tage mit gemerktem Kontostand je Konto. Steigt jeden Tag um 1; bleibt die Linie 2 Tage flach, obwohl das Konto ohne Fehler abgerufen wird, meldet der Alarm „Kontostand-Verlauf steht“."
+    },
+    {
+      "type": "timeseries",
+      "title": "Depotwert-Verlauf",
+      "id": 34,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "max by (depot) (finanzomat_depot_verlauf_tage{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{depot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter"
+          },
+          "decimals": 0,
+          "unit": "d"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Tage mit gemerktem Depotwert je Depot. Am Wochenende kommen keine Kurse, die Linie darf also bis zu 3 Tage flach sein; nach 4 Tagen meldet der Alarm „Depotwert-Verlauf steht“."
+    },
+    {
+      "type": "table",
+      "title": "Depots",
+      "id": 35,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "sum by (depot) (finanzomat_depot_positionen{app=\"finanzomat\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "expr": "max by (depot) (finanzomat_depot_verlauf_tage{app=\"finanzomat\"})",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "depot": "Depot",
+              "Value #A": "Positionen",
+              "Value #B": "Tage im Verlauf"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Wertpapiere je Depot und Tage mit gemerktem Depotwert (keine Werte, keine Depotnummer)."
+    },
+    {
       "type": "row",
       "title": "Server",
       "id": 17,
@@ -1272,7 +1510,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 47
       },
       "panels": []
     },
@@ -1288,7 +1526,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 48
       },
       "targets": [
         {
@@ -1332,7 +1570,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 41
+        "y": 48
       },
       "targets": [
         {
@@ -1373,7 +1611,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 55
       },
       "panels": []
     },
@@ -1389,7 +1627,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 49
+        "y": 56
       },
       "targets": [
         {
@@ -1434,7 +1672,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 62
       },
       "targets": [
         {

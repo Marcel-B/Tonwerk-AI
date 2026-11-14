@@ -33,6 +33,25 @@ final class DemoServerTests: XCTestCase {
         XCTAssertEqual(changed.songIds, [song])
     }
 
+    func testPlaylistsAreRenamedAndDeletedButNeverTheLast() async throws {
+        let list = try await tonwerk.api.createPlaylist(body: .json(.init(name: "Weg"))).created.body.json
+        let renamed = try await tonwerk.api.renamePlaylist(path: .init(id: list.id), body: .json(.init(name: "Anders")))
+            .ok.body.json
+        XCTAssertEqual(renamed.name, "Anders")
+
+        _ = try await tonwerk.api.deletePlaylist(path: .init(id: list.id)).noContent
+        var left = try await tonwerk.api.listPlaylists().ok.body.json
+        XCTAssertFalse(left.contains { $0.id == list.id })
+
+        while left.count > 1 {
+            _ = try await tonwerk.api.deletePlaylist(path: .init(id: left[0].id)).noContent
+            left = try await tonwerk.api.listPlaylists().ok.body.json
+        }
+        guard case .conflict = try await tonwerk.api.deletePlaylist(path: .init(id: left[0].id)) else {
+            return XCTFail("the last playlist was deleted")
+        }
+    }
+
     func testTheStreamStartsWithASnapshot() async throws {
         var events = try await tonwerk.events().makeAsyncIterator()
 

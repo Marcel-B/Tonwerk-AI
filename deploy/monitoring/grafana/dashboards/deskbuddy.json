@@ -1,0 +1,826 @@
+{
+  "title": "Desk Buddy",
+  "uid": "deskbuddy",
+  "tags": [
+    "deskbuddy",
+    "loki"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "editable": true,
+  "templating": {
+    "list": [
+      {
+        "name": "level",
+        "label": "Stufe",
+        "type": "custom",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "query": "debug,info,warning,error,critical",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "source",
+        "label": "Quelle",
+        "type": "custom",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "query": "app,kernel",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "search",
+        "label": "Suche",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Jetzt",
+      "id": 1,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Lebt",
+      "id": 2,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"deskbuddy\"} |= \"Zustand:\" [15m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "weg"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto"
+      },
+      "description": "Zustandszeilen der letzten 15 Minuten; der Desk Buddy schickt alle 5 Minuten eine. 0 heißt: er ist weg (Alarm „Desk Buddy meldet sich nicht“)."
+    },
+    {
+      "type": "stat",
+      "title": "Temperatur",
+      "id": 3,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "max(last_over_time({app=\"deskbuddy\"} |= \" °C, Kern \" | regexp \"(?P<temp>-?[0-9.]+) °C, Kern (?P<volt>[0-9.]+)V, WLAN (?P<wlan>-?[0-9]+) dBm, Last (?P<load>[0-9.]+)\" | unwrap temp [30m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 70,
+                "color": "orange"
+              },
+              {
+                "value": 80,
+                "color": "red"
+              }
+            ]
+          },
+          "unit": "celsius",
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto"
+      },
+      "description": "Aus der letzten Zustandszeile."
+    },
+    {
+      "type": "stat",
+      "title": "WLAN",
+      "id": 4,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "max(last_over_time({app=\"deskbuddy\"} |= \" °C, Kern \" | regexp \"(?P<temp>-?[0-9.]+) °C, Kern (?P<volt>[0-9.]+)V, WLAN (?P<wlan>-?[0-9]+) dBm, Last (?P<load>[0-9.]+)\" | unwrap wlan [30m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": -75,
+                "color": "orange"
+              },
+              {
+                "value": -65,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "dBm",
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto"
+      },
+      "description": "Signalstärke aus der letzten Zustandszeile."
+    },
+    {
+      "type": "stat",
+      "title": "Unterspannung (24 h)",
+      "id": 5,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"deskbuddy\"} |~ \"Unterspannung!|Undervoltage detected\" [24h]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "red"
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto"
+      },
+      "description": "Meldungen des Dienstes (Unterspannung!) und des Kernels (Undervoltage detected)."
+    },
+    {
+      "type": "stat",
+      "title": "Gestartet (24 h)",
+      "id": 6,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"deskbuddy\"} |= \"Gestartet\" [24h]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 2,
+                "color": "orange"
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto"
+      },
+      "description": "Wie oft der Dienst gestartet ist; die Zeile sagt auch, wie lange der Pi schon lief, ein Neustart des Pi zeigt sich so."
+    },
+    {
+      "type": "stat",
+      "title": "Warnungen und Fehler (24 h)",
+      "id": 7,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"deskbuddy\", level=~\"warning|error|critical\"} [24h]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "orange"
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto"
+      },
+      "description": "Zeilen mit Stufe warning, error oder critical."
+    },
+    {
+      "type": "row",
+      "title": "Zustand",
+      "id": 8,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Temperatur",
+      "id": 9,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "max(max_over_time({app=\"deskbuddy\"} |= \" °C, Kern \" | regexp \"(?P<temp>-?[0-9.]+) °C, Kern (?P<volt>[0-9.]+)V, WLAN (?P<wlan>-?[0-9]+) dBm, Last (?P<load>[0-9.]+)\" | unwrap temp [$__interval]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "°C",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "spanNulls": 900000,
+            "showPoints": "never"
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "description": "Alle 5 Minuten aus der Zustandszeile."
+    },
+    {
+      "type": "timeseries",
+      "title": "Kernspannung",
+      "id": 10,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "min(min_over_time({app=\"deskbuddy\"} |= \" °C, Kern \" | regexp \"(?P<temp>-?[0-9.]+) °C, Kern (?P<volt>[0-9.]+)V, WLAN (?P<wlan>-?[0-9]+) dBm, Last (?P<load>[0-9.]+)\" | unwrap volt [$__interval]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "V",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "spanNulls": 900000,
+            "showPoints": "never"
+          },
+          "unit": "volt",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "description": "Die niedrigste Kernspannung im Intervall; bei Unterspannung fällt sie (etwa auf 1,2 V)."
+    },
+    {
+      "type": "timeseries",
+      "title": "WLAN",
+      "id": 11,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "min(min_over_time({app=\"deskbuddy\"} |= \" °C, Kern \" | regexp \"(?P<temp>-?[0-9.]+) °C, Kern (?P<volt>[0-9.]+)V, WLAN (?P<wlan>-?[0-9]+) dBm, Last (?P<load>[0-9.]+)\" | unwrap wlan [$__interval]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "dBm",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "spanNulls": 900000,
+            "showPoints": "never"
+          },
+          "unit": "dBm"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "description": "Signalstärke am Repeater; unter −75 dBm wird es knapp."
+    },
+    {
+      "type": "timeseries",
+      "title": "Last",
+      "id": 12,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "max(max_over_time({app=\"deskbuddy\"} |= \" °C, Kern \" | regexp \"(?P<temp>-?[0-9.]+) °C, Kern (?P<volt>[0-9.]+)V, WLAN (?P<wlan>-?[0-9]+) dBm, Last (?P<load>[0-9.]+)\" | unwrap load [$__interval]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "Last",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "spanNulls": 900000,
+            "showPoints": "never"
+          },
+          "unit": "short",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "description": "Load average aus der Zustandszeile (vier Kerne)."
+    },
+    {
+      "type": "row",
+      "title": "Protokoll",
+      "id": 13,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Zeilen je Stufe",
+      "id": 14,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "targets": [
+        {
+          "expr": "sum by (level) (count_over_time({app=\"deskbuddy\", level=~\"$level\", source=~\"$source\"} |~ \"(?i)$search\" [$__interval]))",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "{{level}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "source app: Meldungen des Dienstes, kernel: Kernel-Warnungen (nach einem Neustart mit ihrer Originalzeit)."
+    },
+    {
+      "type": "logs",
+      "title": "Warnungen und Fehler",
+      "id": 15,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "expr": "{app=\"deskbuddy\", level=~\"warning|error|critical\"}",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false,
+        "showLabels": false,
+        "showCommonLabels": false
+      },
+      "description": "Unterspannung, Kernel-Warnungen, fehlgeschlagene Abrufe."
+    },
+    {
+      "type": "logs",
+      "title": "Protokoll",
+      "id": 16,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "{app=\"deskbuddy\", level=~\"$level\", source=~\"$source\"} |~ \"(?i)$search\"",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false,
+        "showLabels": false,
+        "showCommonLabels": false
+      },
+      "description": "Alles, gefiltert nach Stufe, Quelle und Text."
+    }
+  ]
+}

@@ -38,6 +38,20 @@ services:
       # Tonwerk pushes its log here (Monitoring:Loki:Url).
       - ${BIND_ADDRESS:-0.0.0.0}:3100:3100
 
+  # Push only, with a password, for devices outside the tailnet (the desk buddy on the home Wi-Fi); see loki-push/.
+  # Its own bind address, so it stays reachable in the home network when BIND_ADDRESS keeps the rest to the tailnet.
+  loki-push:
+    logging: *logging
+    image: nginx:1.28.0-alpine
+    restart: unless-stopped
+    command: [nginx, -c, /etc/nginx/loki-push/nginx.conf, -g, "daemon off;"]
+    volumes:
+      - ./loki-push:/etc/nginx/loki-push:ro
+    ports:
+      - ${LOKI_PUSH_BIND:-0.0.0.0}:3101:3101
+    depends_on:
+      - loki
+
   grafana:
     logging: *logging
     image: grafana/grafana:12.1.1
@@ -52,10 +66,11 @@ services:
       GF_METRICS_ENABLED: "true"
       # The address in alarm messages; the tailnet name of this container.
       GF_SERVER_ROOT_URL: ${GRAFANA_URL:-http://monitoring:3000/}
-      # Alarms go to ntfy (grafana/provisioning/alerting/); the address and topic come from .env. Without them the
-      # contact point points nowhere and Grafana shows its failed deliveries under Alerting > Contact points.
-      NTFY_URL: ${NTFY_URL:-http://ntfy.invalid}
-      NTFY_TOPIC: ${NTFY_TOPIC:-alarme}
+      # Alarms go to Onkel Bummel (grafana/provisioning/alerting/); the address and publish token come from .env.
+      # Without them the contact point points nowhere and Grafana shows its failed deliveries under Alerting > Contact
+      # points.
+      ONKELBUMMEL_URL: ${ONKELBUMMEL_URL:-http://onkel-bummel.invalid}
+      ONKELBUMMEL_TOKEN: ${ONKELBUMMEL_TOKEN:-}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

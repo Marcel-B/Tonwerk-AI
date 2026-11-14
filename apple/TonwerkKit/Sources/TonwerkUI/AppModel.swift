@@ -38,6 +38,9 @@ public final class AppModel {
     var revealing: String?
     /// The song the share dialog is open for, from a song's menu.
     var sharing: Song?
+    /// The playlist being renamed or asked about deleting, from its page's toolbar or its row in the sidebar.
+    var renamingPlaylist: Components.Schemas.PlaylistInfo?
+    var deletingPlaylist: Components.Schemas.PlaylistInfo?
     /// The song the Tonregal dialog is open for, from a song's menu (``tonregalReady`` only).
     var handingOver: Song?
     /// The server hands songs to Tonregal (`GET api/tonregal`), so the menus offer it.
@@ -493,6 +496,30 @@ public final class AppModel {
         guard !trimmed.isEmpty else { return }
         if let created = try? await tonwerk.api.createPlaylist(body: .json(.init(name: trimmed))).created.body.json {
             playlists.append(created)
+        }
+    }
+
+    /// Renames a playlist; an empty name changes nothing, as the server would refuse it.
+    func renamePlaylist(_ playlist: Components.Schemas.PlaylistInfo, to name: String) async {
+        guard let tonwerk else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != playlist.name else { return }
+        if let renamed = try? await tonwerk.api.renamePlaylist(
+            path: .init(id: playlist.id), body: .json(.init(name: trimmed))
+        ).ok.body.json,
+            let index = playlists.firstIndex(where: { $0.id == renamed.id })
+        {
+            playlists[index] = renamed
+        }
+    }
+
+    /// Deletes the list only: its songs stay in the library. The server keeps the last playlist (409), so "add to
+    /// playlist" always has somewhere to go; its problem comes back as the error's text.
+    func deletePlaylist(_ playlist: Components.Schemas.PlaylistInfo) async throws {
+        _ = try await call("DELETE", address("api/playlists", String(playlist.id)), accept: [204, 404])
+        playlists.removeAll { $0.id == playlist.id }
+        if page == .playlist(playlist.id) {
+            page = .library
         }
     }
 

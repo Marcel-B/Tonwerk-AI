@@ -108,6 +108,32 @@ groups:
           summary: '{{ $labels.app }} hat in 30 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} Logzeilen verworfen, weil Loki sie nicht nahm.'
           description: 'Bei Tonwerk lief das 2026-10-15 bis 10-20 unbemerkt.'
         isPaused: false
+      - uid: push-failing
+        title: Push schlägt fehl
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # Only failed: invalid_token is a device that was removed, and Onkel Bummel forgets it by itself.
+              expr: 'sum by (app) (increase(onkelbummel_push_sent_total{result="failed"}[30m]))'
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        annotations:
+          summary: 'Onkel Bummel konnte in 30 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} Pushes nicht an APNs zustellen.'
+          description: 'Dieser Alarm kommt dann selbst nicht als Push an, steht aber im Topic alarme in der App und der Web-Oberfläche. Meist ist der APNs-Schlüssel abgelaufen oder widerrufen (Apns__KeyId in onkel-bummel.env, Protokoll mit Quelle push).'
+        isPaused: false
   - orgId: 1
     name: websites
     folder: Alarme
@@ -169,29 +195,40 @@ groups:
     interval: 1m
     rules:
       - uid: host-swap
-        title: oi-o-mat swappt
+        title: oi-o-mat unter Speicherdruck
         condition: C
         data:
+          # macOS keeps swapped pages allocated long after the pressure that
+          # wrote them is gone (7 GB with 25 GB free after five days up), so
+          # the amount of swap says nothing. What matters is macOS' own
+          # pressure level and whether it is paging out right now (node_exporter
+          # counts vm_stat's pageouts as swapped_out_bytes_total).
           - refId: A
             relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus
             model:
               refId: A
-              expr: 'node_memory_swap_used_bytes{app="oi-o-mat"} / 1e9'
+              expr: 'max(oiomat_memory_pressure_level{app="oi-o-mat"})'
+              instant: true
+          - refId: B
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: B
+              expr: 'sum(increase(node_memory_swapped_out_bytes_total{app="oi-o-mat"}[10m])) / 1e9'
               instant: true
           - refId: C
             datasourceUid: __expr__
             model:
               refId: C
-              type: threshold
-              expression: A
-              conditions: [{ evaluator: { type: gt, params: [4] } }]
+              type: math
+              expression: '$A >= 2 || $B > 0.5'
         noDataState: OK
         execErrState: Error
         for: 10m
         annotations:
-          summary: 'oi-o-mat hat seit 10 Minuten {{ with $values.A }}{{ humanize .Value }}{{ end }} GB im Swap.'
-          description: 'Über 4 GB Swap: so fing das Einfrieren an, vor dem Tonwerk seinen Speicher so streng hält (node_exporter, scripts bin/node-exporter).'
+          summary: 'oi-o-mat steht seit 10 Minuten unter Speicherdruck (Stufe {{ with $values.A }}{{ .Value }}{{ end }}, {{ with $values.B }}{{ humanize .Value }}{{ end }} GB in 10 min ausgelagert).'
+          description: 'Stufe 2 (Warnung) oder 4 (kritisch) laut macOS, oder über 0,5 GB in 10 Minuten neu in den Swap geschrieben: so fing das Einfrieren an. Belegter Swap allein zählt nicht, macOS gibt ihn erst frei, wenn der Prozess ihn wieder anfasst oder endet (node_exporter, scripts bin/node-exporter).'
         isPaused: false
       - uid: host-disk
         title: Platte von oi-o-mat fast voll
@@ -227,7 +264,7 @@ groups:
             datasourceUid: prometheus
             model:
               refId: A
-              expr: '((1 - pve_up{id=~"(lxc|qemu)/.+"}) * on (id) pve_onboot_status) * on (id) group_left (name) pve_guest_info'
+              expr: '((1 - pve_up{id=~"(lxc|qemu)/.+"}) * on (instance, id) pve_onboot_status) * on (instance, id) group_left (name) pve_guest_info'
               instant: true
           - refId: C
             datasourceUid: __expr__
@@ -253,7 +290,7 @@ groups:
             model:
               refId: A
               # Only containers: Proxmox reports a VM's disk use as 0 without the guest agent.
-              expr: '(100 * (1 - pve_disk_usage_bytes{id=~"lxc/.+"} / pve_disk_size_bytes{id=~"lxc/.+"})) * on (id) group_left (name) pve_guest_info'
+              expr: '(100 * (1 - pve_disk_usage_bytes{id=~"lxc/.+"} / pve_disk_size_bytes{id=~"lxc/.+"})) * on (instance, id) group_left (name) pve_guest_info'
               instant: true
           - refId: C
             datasourceUid: __expr__
@@ -268,6 +305,58 @@ groups:
         annotations:
           summary: '{{ $labels.name }} ({{ $labels.id }}): nur noch {{ with $values.A }}{{ humanize .Value }}{{ end }} % der Platte frei.'
           description: 'Jeder LXC auf dem Proxmox, auch der Monitoring-Container selbst (Prometheus 90 Tage, Loki 30 Tage; pve-Exporter).'
+        isPaused: false
+      - uid: deskbuddy-silent
+        title: Desk Buddy meldet sich nicht
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              # 1 when no state line came in 15 minutes (it sends one every 5); nothing while it does, so the rule
+              # needs no "no data → alerting" and stays quiet while Loki answers nothing at all.
+              expr: 'absent_over_time({app="deskbuddy"} |= "Zustand:" [15m])'
+              queryType: instant
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'Der Desk Buddy hat seit 20 Minuten keine Zustandszeile an Loki geschickt.'
+          description: 'Er schickt alle 5 Minuten eine über das Push-Tor (loki-push, Port 3101). Weg ist der Pi, sein WLAN oder sein Passwort.'
+        isPaused: false
+      - uid: deskbuddy-undervoltage
+        title: Desk Buddy mit Unterspannung
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              expr: 'sum(count_over_time({app="deskbuddy"} |~ "Unterspannung!|Undervoltage detected" [10m]))'
+              queryType: instant
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: 'Der Desk Buddy meldet Unterspannung ({{ with $values.A }}{{ humanize .Value }}{{ end }}-mal in 10 Minuten).'
+          description: 'Vom Dienst (Unterspannung!) oder vom Kernel (Undervoltage detected); Netzteil oder Kabel prüfen.'
         isPaused: false
   - orgId: 1
     name: identity

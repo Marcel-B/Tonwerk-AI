@@ -137,6 +137,13 @@ struct SongList: View {
                     }
                     .disabled(shown.isEmpty && !picking)
                 }
+                if let playlist {
+                    Menu {
+                        PlaylistActions(playlist: playlist)
+                    } label: {
+                        Label("Playlist", systemImage: "ellipsis.circle")
+                    }
+                }
                 #if os(macOS)
                 Button {
                     details.toggle()

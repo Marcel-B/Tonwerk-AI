@@ -56,17 +56,24 @@ Ob Prometheus den Mac erreicht, zeigt `http://monitoring:9090/targets`. Löst de
 
 ## Alarme
 
-Grafana schickt Alarme an ntfy, und zwar an den Server von Slipways auf slipways-1. Regeln, Kontaktpunkt und Richtlinie liegen als Dateien in `grafana/provisioning/alerting/` und sind damit versioniert; in der Oberfläche stehen sie im Ordner **Alarme** und lassen sich dort nicht ändern.
+Grafana schickt Alarme an [Onkel Bummel](https://github.com/Marcel-B/onkel-bummel), Marcels eigenen Push-Dienst (bis November 2026 an ntfy auf slipways-1), ins Topic `alarme`. Der Kontaktpunkt **onkelbummel** ist ein Webhook an `/api/v1/webhooks/grafana?topic=alarme` mit einem Publish-Token als Bearer. Onkel Bummel liest Grafanas JSON selbst: Ein feuernder Alarm wird „Alarm: <Regel>“ mit Priorität 4 (auf dem iPhone „time-sensitive“), ein vorbeigegangener „Wieder gut: <Regel>“ mit Priorität 2. Der Text sind die `summary`-Zeilen, ein Tipp öffnet Grafana. Regeln, Kontaktpunkt und Richtlinie liegen als Dateien in `grafana/provisioning/alerting/` und sind damit versioniert; in der Oberfläche stehen sie im Ordner **Alarme** und lassen sich dort nicht ändern.
 
 In `.env`:
 
 ```sh
-NTFY_URL=https://slipways-1.<tailnet>.ts.net:2586
-NTFY_TOPIC=alarme-<zufall>        # mit zufälligem Teil: wer im Tailnet den Namen kennt, kann mitlesen
+ONKELBUMMEL_URL=https://onkel-bummel.<tailnet>.ts.net
+ONKELBUMMEL_TOKEN=ob_…               # nur für das Topic alarme
 GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 ```
 
-`proxmox-lxc.sh` fragt beim ersten Lauf danach. Fehlt `NTFY_URL`, geht der Kontaktpunkt ins Leere; Grafana zeigt das unter *Alerting → Contact points*. In der ntfy-App das Topic auf diesem Server abonnieren (wie bei Slipways' Benachrichtigungen). Alarme kommen rund um die Uhr; Ruhezeiten regelt das Telefon. Die Nachricht nennt die Regel, betroffene App oder Seite und einen Link zu Grafana; ein Alarm, der weiter anliegt, kommt nach 12 Stunden noch einmal, und wenn er vorbei ist, kommt „Wieder gut“.
+Den Token legt man in Onkel Bummels Container an (Proxmox-CT `onkel-bummel`); er wird nur einmal angezeigt:
+
+```sh
+cd /opt/onkel-bummel/deploy
+docker compose exec onkel-bummel dotnet OnkelBummel.Api.dll --create-token grafana alarme
+```
+
+`proxmox-lxc.sh` fragt beim ersten Lauf nach Adresse und Token (den Token ohne Echo) oder nimmt `ONKELBUMMEL_URL` und `ONKELBUMMEL_TOKEN` aus der Umgebung; alte `NTFY_*`-Zeilen fallen dabei weg. Fehlt eins, geht der Kontaktpunkt ins Leere; Grafana zeigt das unter *Alerting → Contact points*. In der Onkel-Bummel-App das Topic `alarme` abonnieren. Alarme kommen rund um die Uhr; Ruhezeiten regelt das Telefon. Die Nachricht nennt die Regel, die betroffene App oder Seite und einen Link zu Grafana. Ein Alarm, der weiter anliegt, kommt nach 12 Stunden noch einmal, und wenn er vorbei ist, kommt „Wieder gut“.
 
 | Regel | Wann | Für |
 |---|---|---|
@@ -76,14 +83,16 @@ GRAFANA_URL=http://monitoring:3000/   # optional, die Adresse in den Nachrichten
 | Logs erreichen Loki nicht | eine App hat in 30 min Zeilen verworfen | 15 min |
 | Website nicht erreichbar | `probe_success` ist 0 | 15 min |
 | Zertifikat läuft ab | in weniger als 14 Tagen | 1 h |
-| oi-o-mat swappt | über 4 GB Swap | 10 min |
+| oi-o-mat unter Speicherdruck | macOS meldet Stufe Warnung oder kritisch, oder über 0,5 GB in 10 min neu ausgelagert (belegter Swap allein nicht: macOS hält ihn tagelang) | 10 min |
 | Platte von oi-o-mat fast voll | intern oder ein externes Laufwerk (T7) unter 10 % frei | 30 min |
 | Proxmox-Gast läuft nicht | ein LXC oder eine VM mit Autostart (`onboot`) läuft nicht | 10 min |
 | Platte eines Proxmox-Gasts fast voll | ein LXC unter 15 % frei, auch dieser Container | 30 min |
 | Viele fehlgeschlagene Anmeldungen | beim Anmeldeserver (Identity) über 20 in 15 min | sofort |
 | Viele gesperrte Konten | beim Anmeldeserver über 3 Sperren in 1 h | sofort |
+| Desk Buddy meldet sich nicht | 15 min keine Zustandszeile in Loki | 5 min |
+| Desk Buddy mit Unterspannung | „Unterspannung!“ oder „Undervoltage detected“ in den letzten 10 min | sofort |
 
-Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **ntfy** auf *Test*.
+Fehlt einer App ein Messwert, schweigt die Regel für sie. Ausprobieren: unter *Alerting → Contact points* bei **onkelbummel** auf *Test*. Das kommt als „Alarm: TestAlert“ im Topic `alarme` an.
 
 ## Websites und Health-Endpunkte
 
@@ -100,13 +109,15 @@ Ob jede App, jede Website und der Stack läuft (ein Klick auf eine App öffnet i
 - **Speicher und Server:** wer wann den Speicher hielt, freier Platz über die Zeit, Speicher des Server-Prozesses (nicht der Modelle).
 - **Protokoll:** Warnungen und Fehler je Quelle über die Zeit, darunter das Protokoll aus Loki mit Filtern für Quelle, Stufe und Text. Die Quelle `update` ist das Log von `deploy/update.sh`.
 
-Das Dashboard **Finanz-O-Mat** (`grafana/dashboards/finanzomat.json`) zeigt Erreichbarkeit, Kontoumsätze ohne Beleg, Belege mit Prüfhinweis, Alter des letzten Backups, Updates, Anfragen und Antwortzeiten, eingelesene Belege, Anmeldungen, Speicher und CPU sowie das Protokoll. Die App meldet sich mit `finanz-o-mat-lxc.sh monitoring <CTID>` auf dem Proxmox-Host selbst an (Ziel `prometheus/targets/finanzomat.yml`, siehe README von [finanz-O-mat](https://github.com/Marcel-B/finanz-O-mat/blob/main/deploy/proxmox/README.md#monitoring)).
+Das Dashboard **Finanz-O-Mat** (`grafana/dashboards/finanzomat.json`) zeigt Erreichbarkeit, Kontoumsätze ohne Beleg, Belege mit Prüfhinweis, Alter des letzten Backups, Updates, Anfragen und Antwortzeiten, eingelesene Belege, Anmeldungen, den Kontoabruf über Enable Banking (Resttage der Bankfreigabe, letzter Abruf, Fehler, freie Abrufe, Abrufe und neue Umsätze je Bank, Anfragen an die API; Konten nur nach Bankname, ohne IBAN und Saldo), Speicher und CPU sowie das Protokoll. Die App meldet sich mit `finanz-o-mat-lxc.sh monitoring <CTID>` auf dem Proxmox-Host selbst an (Ziel `prometheus/targets/finanzomat.yml`, siehe README von [finanz-O-mat](https://github.com/Marcel-B/finanz-O-mat/blob/main/deploy/proxmox/README.md#monitoring)).
 
 Das Dashboard **fil-o-mat** (`grafana/dashboards/filomat.json`) zeigt Erreichbarkeit, Drucker je Typ und Zustand, Abgleiche mit Ergebnis und Dauer, Verbrauch und Drucke pro Tag, Spulen nach Zustand (voll, angebrochen, fast leer), Sicherung, ntfy-Meldungen, Anfragen, abgewiesene API-Schlüssel und Speicher sowie das Protokoll mit Filtern für Stufe, Quelle und Text. Drucker heißen in den Messwerten nur nach ihrem Typ. Kein Alarm für nicht erreichbare Drucker, die sind oft einfach aus. Angebunden wird es mit `deploy/proxmox/monitoring-einrichten.sh` auf dem Proxmox-Host (siehe README von [fil-o-mat](https://github.com/Marcel-B/fil-o-mat/blob/main/backend/README.md#überwachung)), das am Ende die Zeile mit `APP_TARGETS` für `proxmox-lxc.sh` nennt; danach kann sein Eintrag aus `prometheus/probes/health.yml` weg.
 
 Das Dashboard **Identity** (`grafana/dashboards/identity.json`) zeigt den Anmeldeserver: Erreichbarkeit und `/health`, Anmeldungen nach Methode und Ergebnis, Fehlversuche und Sperren, zweiten Faktor, Registrierungen, Benutzer und Clients, Tokens nach Grant und Token-Fehler, Sicherung, Anfragen und Antwortzeiten sowie das Protokoll. Es sind nur Anzahlen, keine Konten, Adressen oder Client-IDs. Identity beantwortet `/metrics` nur auf dem eigenen Port 9464, der allein im Tailnet freigegeben ist; über Funnel kommt er nicht ins Internet (`prometheus/targets/identity.yml.example`). Angebunden wird es mit `deploy/proxmox/monitoring-einrichten.sh` aus dem Identity-Repository auf dem Proxmox-Host (siehe dessen README, Abschnitt „Überwachung“), das am Ende die `APP_TARGETS`-Zeile nennt. Der Eintrag in `prometheus/probes/health.yml` bleibt, er prüft die öffentliche Adresse.
 
 Das Dashboard **MyJourney** (`grafana/dashboards/myjourney.json`) zeigt Erreichbarkeit, den Bestand an Orten und Reisen, offene Live-Verbindungen, Anfragen und Antwortzeiten, Datenänderungen, Nextcloud-Backups, Speicher und CPU sowie das Protokoll. Die App bindet sich über ihre Env-Variablen an (`MYJOURNEY_METRICS_ENABLED`, `MYJOURNEY_LOKI_URL`; Ziel `prometheus/targets/myjourney.yml`, siehe DEPLOY.md §8 von [MyJourney](https://github.com/Marcel-B/MyJourney/blob/main/DEPLOY.md)).
+
+Das Dashboard **Onkel Bummel** (`grafana/dashboards/onkelbummel.json`) zeigt Erreichbarkeit, eingegangene Nachrichten nach Herkunft (API, Grafana) und Ergebnis, ungelesene und gespeicherte Nachrichten, Anhänge, Geräte und Publish-Tokens, Pushes an APNs mit Ergebnis und Dauer, wartende Pushes, Live-Verbindungen, Actions, die Hintergrund-Jobs (retention, cleanup, backup), Größe von Datenbank und Anhängen, Sicherung, Anfragen, Antwortzeiten, Serverfehler, verworfene Logzeilen und Speicher sowie das Protokoll mit Filtern für Stufe, Quelle und Text. [Onkel Bummel](https://github.com/Marcel-B/onkel-bummel) beantwortet `/metrics` nur auf Port 9464, den `tailscale serve` mit https ins Tailnet stellt; angebunden wird es mit `APP_TARGETS="onkelbummel=<name>.ts.net:9464"` für `proxmox-lxc.sh`, die Logs mit `LOKI_URL` beim Anlegen seines Containers. Alarme kommen aus den gemeinsamen Regeln (nicht erreichbar, Sicherung zu alt, Logs erreichen Loki nicht) und der eigenen Regel „Push schlägt fehl“ (`onkelbummel_push_sent_total{result="failed"}` in 30 Minuten über 0). Die kommt dann selbst nicht als Push an, steht aber im Topic `alarme`.
 
 Das Dashboard **Slipways** (`grafana/dashboards/slipways.json`) zeigt Erreichbarkeit, den Bestand an Slipanlagen, Marinas und Pegeln (nach Quelle: eigene Daten oder OpenStreetMap), die Hintergrund-Jobs (Pegelstände, Gewässerverläufe, OSM-Import: letzter Erfolg, Läufe, Dauer, Änderungen, ausgelastetes Overpass), Anfragen und Antwortzeiten, Größe der Datenbank, Speicher, CPU und Logversand sowie das Protokoll mit Filtern für Stufe, Quelle und Text. Angebunden ist nur die Produktion slipways.de (`slipways-1`). Das Ziel legt `deploy/monitoring/add-prometheus-target.sh` an, die Logs richtet `deploy/lxc/setup-loki.sh` ein, beide im [Slipways-Repo](https://github.com/Marcel-B/Slipways/blob/master/deploy/README.md#überwachung).
 
@@ -121,7 +132,7 @@ Für eine Handvoll Apps (Tonwerk, eine Buchhaltung, eine Reise-App) braucht der 
 Das Dashboard **Hosts** (`grafana/dashboards/hosts.json`) zeigt oi-o-mat und den Proxmox; ein Klick auf `oi-o-mat` oder `proxmox` in der Übersicht führt dorthin.
 
 - **oi-o-mat:** Speicher (belegt laut macOS, fest, komprimiert, Swap) mit einem Band darunter, wer ihn hält (Tonwerks `tonwerk_memory_holder` und die Modelle, die die LLM-Schranke für Apps geladen hat), Speicherdruck, CPU, Platten (intern und T7), Netz. Die Zahlen liefert node_exporter, den `bin/node-exporter on` im scripts-Repo auf oi-o-mat einrichtet (nur `127.0.0.1:9100`, ins Tailnet per `tailscale serve --https=9100`); Ziel nach `prometheus/targets/oi-o-mat.yml.example`.
-- **Proxmox:** Host, Speicher, CPU und Platte je Gast, Speicherpools, eine Tabelle der Gäste mit Autostart. Die Zahlen liefert der pve-Exporter im Stack (Dienst `pve-exporter`, Profil `pve`, Job `proxmox`). `proxmox-lxc.sh` legt dafür mit `PVE_EXPORTER=1` auf dem Host den Benutzer `monitoring@pve` an, gibt ihm und seinem Token `exporter` (privilege separated) nur die Rolle `PVEAuditor` (lesen), schreibt das Token in `pve.yml` im Container (Modus 600, in `.gitignore`, nie ausgegeben, auf dem Host nicht aufbewahrt), trägt den Host in `prometheus/pve/proxmox.yml` ein und schaltet das Profil in `.env` ein (`COMPOSE_PROFILES=pve`). Der Exporter hat keinen Port nach außen, nur Prometheus erreicht ihn; er fragt den Host im Heimnetz (Proxmox' eigenes Zertifikat, daher `verify_ssl: false`). Widerrufen: in Proxmox unter *Datacenter → Permissions → API Tokens*, danach `pve.yml` im Container löschen.
+- **Proxmox:** Host, Speicher, CPU und Platte je Gast, Speicherpools, eine Tabelle der Gäste mit Autostart. Die Zahlen liefert der pve-Exporter im Stack (Dienst `pve-exporter`, Profil `pve`, Job `proxmox`). `proxmox-lxc.sh` legt dafür mit `PVE_EXPORTER=1` auf dem Host den Benutzer `monitoring@pve` an, gibt ihm und seinem Token `exporter` (privilege separated) nur die Rolle `PVEAuditor` (lesen), schreibt das Token in `pve.yml` im Container (Modus 600, in `.gitignore`, nie ausgegeben, auf dem Host nicht aufbewahrt), trägt den Host in `prometheus/pve/proxmox.yml` ein und schaltet das Profil in `.env` ein (`COMPOSE_PROFILES=pve`). Der Exporter hat keinen Port nach außen, nur Prometheus erreicht ihn; er fragt den Host im Heimnetz (Proxmox' eigenes Zertifikat, daher `verify_ssl: false`). Widerrufen: in Proxmox unter *Datacenter → Permissions → API Tokens*, danach `pve.yml` im Container löschen. Ein zweiter Proxmox-Host bekommt auf seinem System einen eigenen Benutzer und Token, ein eigenes Modul in `pve.yml` und ein zweites Ziel mit `__param_module` in `prometheus/pve/proxmox.yml` (siehe die beiden `.example`-Dateien). Dieselbe Gast-ID darf auf beiden Hosts vorkommen; Regeln und Dashboard trennen sie über `instance`.
 
 ## LLM-Schranke
 
@@ -134,6 +145,28 @@ Das Dashboard **img-o-mat** (`grafana/dashboards/img-o-mat.json`) zeigt den Bild
 ## Tonregal und Navidrome
 
 Das Dashboard **Tonregal** (`grafana/dashboards/tonregal.json`) zeigt die Musikbibliothek auf oi-o-mat (Repository Marcel-B/Tonregal) und das Navidrome daneben: ob beide antworten, ob die T7 eingehängt ist, Titel und Größe der Library, die Inbox (wartend und je Ergebnis), Übergaben von Tonwerk, MusicBrainz-Anfragen und Drosselung, den Rückstand der Analyse, Scans, Backups, Navidromes Bestand, Scans, Speicher und CPU (Navidrome 0.64 meldet keine Anfragen), und Tonregals Protokoll aus Loki. Navidrome hat kein eigenes Dashboard; in der Übersicht führt es hierher. Ziele nach `prometheus/targets/tonregal.yml.example` (über Tailscale Serve, https) und `navidrome.yml.example` (Port 4533, http). Tonregal schaltet `/metrics` und den Versand an Loki in seiner `appsettings.Production.json` ein (Tonregal-README, „Überwachung“), Navidrome über `[Prometheus]` in der `navidrome.toml`, die `setup-navidrome.sh` schreibt. Tonregals `deploy/monitoring-einrichten.sh` erledigt die Seite auf oi-o-mat und nennt am Ende den Aufruf von `proxmox-lxc.sh` mit beiden Zielen. Navidromes eigenes Log bleibt auf oi-o-mat. Eigene Alarme braucht es keine: „App nicht erreichbar“, „Backup zu alt“ (`tonregal_backup_last_success_timestamp_seconds`) und „Logs erreichen Loki nicht“ gelten schon.
+
+## Desk Buddy und andere Geräte im Heimnetz
+
+Der Desk Buddy (ein Raspberry Pi am Schreibtisch, im WLAN, nicht im Tailnet) schickt sein Log an Loki: eigene Meldungen, Kernel-Warnungen, Unterspannung und alle 5 Minuten eine Zustandszeile mit Temperatur, Kernspannung, WLAN und Last. Er hat kein `/metrics`; das Dashboard **Desk Buddy** (`grafana/dashboards/deskbuddy.json`) liest alles aus diesen Zeilen: ob er lebt, Temperatur, Spannung, WLAN und Last über die Zeit, Unterspannung und Starts der letzten 24 Stunden, Warnungen und Fehler und das Protokoll mit Filtern für Stufe, Quelle (`app`, `kernel`) und Text. Dazu kommen die Alarme „Desk Buddy meldet sich nicht“ und „Desk Buddy mit Unterspannung“.
+
+Geräte außerhalb des Tailnets kommen nicht über Lokis Port 3100, sondern über das **Push-Tor** `loki-push` (nginx, Port 3101): es lässt nur `POST /loki/api/v1/push` durch und nur mit Passwort (Basic Auth); lesen geht weiter nur über Grafana. Es hat seine eigene Bindeadresse `LOKI_PUSH_BIND` (Vorgabe alle Schnittstellen), bleibt also im Heimnetz erreichbar, auch wenn `BIND_ADDRESS` den Rest aufs Tailnet beschränkt. Ein Passwort für ein Gerät legt `loki-push-user.sh` im Container an, auf dem Proxmox-Host etwa:
+
+```sh
+pct exec <CTID> -- /opt/monitoring/loki-push-user.sh deskbuddy      # neues Passwort, nur jetzt angezeigt
+pct exec <CTID> -- /opt/monitoring/loki-push-user.sh --remove deskbuddy
+```
+
+Es steht nur als Hash in `loki-push/htpasswd` (außerhalb von Git; `proxmox-lxc.sh` lässt die Datei bei einem neuen Lauf stehen). nginx liest sie bei jeder Anfrage, ein neues Passwort braucht keinen Neustart. Beim Desk Buddy in der `config.toml`:
+
+```toml
+[loki]
+url = "http://<LAN-IP des Containers>:3101"
+user = "deskbuddy"
+password = "…"      # auf dem Pi eintragen
+```
+
+Im Heimnetz geht das Passwort unverschlüsselt über das WLAN. Wer TLS will, leitet einen Namen im eigenen Reverse-Proxy (etwa `loki.idsrv.info`) auf `http://<Container>:3101` weiter; das Tor bleibt dasselbe. Zeitstempel bis 7 Tage zurück nimmt Loki an (`reject_old_samples_max_age`), so kommt ein Puffer nach einem Ausfall noch an.
 
 ## Weitere Apps anbinden
 
@@ -152,4 +185,4 @@ Für .NET-Apps ist das am einfachsten mit [prometheus-net](https://github.com/pr
 
 ## Sicherheit
 
-Prometheus, Loki und Grafana haben außer dem Grafana-Login keine Anmeldung. Der Blackbox-Exporter hat keinen eigenen Port nach außen, nur Prometheus erreicht ihn. Im Heimnetz und Tailnet ist das in Ordnung; wer die Ports nur im Tailnet will, setzt in `.env` `BIND_ADDRESS` auf die Tailscale-Adresse des Containers. Tonwerks `/metrics` ist wie der Rest von Tonwerk ohne Login im Tailnet erreichbar; es enthält keine Titel, Texte oder Schlüssel, nur Zahlen.
+Prometheus, Loki und Grafana haben außer dem Grafana-Login keine Anmeldung; nur das Push-Tor für Geräte im Heimnetz (Port 3101) verlangt ein Passwort. Der Blackbox-Exporter hat keinen eigenen Port nach außen, nur Prometheus erreicht ihn. Im Heimnetz und Tailnet ist das in Ordnung; wer die Ports nur im Tailnet will, setzt in `.env` `BIND_ADDRESS` auf die Tailscale-Adresse des Containers. Tonwerks `/metrics` ist wie der Rest von Tonwerk ohne Login im Tailnet erreichbar; es enthält keine Titel, Texte oder Schlüssel, nur Zahlen.

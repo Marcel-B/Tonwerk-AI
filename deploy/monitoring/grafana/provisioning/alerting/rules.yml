@@ -413,3 +413,69 @@ groups:
           summary: 'Beim Anmeldeserver wurden in einer Stunde {{ with $values.A }}{{ humanize .Value }}{{ end }} Konten nach fünf Fehlversuchen gesperrt.'
           description: 'Eine Sperre dauert 5 Minuten. Mehrere in kurzer Zeit heißt meist, dass jemand Passwörter rät.'
         isPaused: false
+  - orgId: 1
+    name: finanzomat
+    folder: Alarme
+    interval: 1m
+    rules:
+      - uid: finanzomat-konto-verlauf
+        title: Kontostand-Verlauf steht
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 172800, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # The count of remembered daily balances grows by one a day. Only accounts that existed 48 hours ago
+              # (a new one would otherwise fire on its first day) and whose last fetch did not fail: that has
+              # its own panel, and two alarms for one cause help nobody.
+              expr: >-
+                increase(finanzomat_bankkonto_verlauf_tage{app="finanzomat"}[48h])
+                and on (app, bank, konto) (finanzomat_bankkonto_verlauf_tage{app="finanzomat"} offset 48h)
+                unless on (app, bank, konto) (finanzomat_bankkonto_fehler{app="finanzomat"} == 1)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: lt, params: [0.5] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 1h
+        annotations:
+          summary: 'Finanz-O-Mat: für {{ $labels.konto }} wurde seit 2 Tagen kein Kontostand gemerkt.'
+          description: 'finanzomat_bankkonto_verlauf_tage steigt nicht, obwohl der letzte Abruf ohne Fehler war. Dashboard Finanz-O-Mat, Zeile Kontoabruf; Protokoll der App.'
+        isPaused: false
+      - uid: finanzomat-depot-verlauf
+        title: Depotwert-Verlauf steht
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 345600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # As above, with 4 days since no prices come at the weekend. The depot fetch reports its failure
+              # and a pending approval in the ING app without labels, for all depots at once.
+              expr: >-
+                increase(finanzomat_depot_verlauf_tage{app="finanzomat"}[96h])
+                and on (app, bank, depot) (finanzomat_depot_verlauf_tage{app="finanzomat"} offset 96h)
+                unless on (app) (finanzomat_depot_fehler{app="finanzomat"} == 1 or finanzomat_depot_freigabe_noetig{app="finanzomat"} == 1)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [{ evaluator: { type: lt, params: [0.5] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 1h
+        annotations:
+          summary: 'Finanz-O-Mat: für das Depot {{ $labels.depot }} wurde seit 4 Tagen kein Depotwert gemerkt.'
+          description: 'finanzomat_depot_verlauf_tage steigt nicht, obwohl der Depotabruf weder fehlschlug noch auf eine Freigabe wartet. Dashboard Finanz-O-Mat, Zeile Kontoabruf; Protokoll der App.'
+        isPaused: false

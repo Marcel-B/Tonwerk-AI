@@ -16,7 +16,38 @@
   },
   "editable": true,
   "templating": {
-    "list": []
+    "list": [
+      {
+        "type": "query",
+        "name": "proxmox",
+        "label": "Proxmox-Host",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "query_result(pve_node_info{app=\"proxmox\"})",
+        "query": {
+          "qryType": 3,
+          "query": "query_result(pve_node_info{app=\"proxmox\"})",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "regex": "/instance=\"(?<value>[^\"]+)\".*name=\"(?<text>[^\"]+)\"/",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "description": "Jeder Proxmox-Host in prometheus/pve/ bekommt eine eigene Zeile (Name aus pve_node_info)."
+      }
+    ]
   },
   "panels": [
     {
@@ -920,7 +951,7 @@
     },
     {
       "type": "row",
-      "title": "Proxmox",
+      "title": "Proxmox ${proxmox:text}",
       "id": 14,
       "gridPos": {
         "h": 1,
@@ -929,11 +960,12 @@
         "y": 35
       },
       "collapsed": false,
-      "panels": []
+      "panels": [],
+      "repeat": "proxmox"
     },
     {
       "type": "stat",
-      "title": "pve-Exporter",
+      "title": "Exporter erreichbar",
       "id": 15,
       "datasource": {
         "type": "prometheus",
@@ -947,7 +979,7 @@
       },
       "targets": [
         {
-          "expr": "max(up{app=\"proxmox\"})",
+          "expr": "max(up{app=\"proxmox\",instance=~\"$proxmox\"})",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -1027,7 +1059,7 @@
       },
       "targets": [
         {
-          "expr": "count(pve_up{app=\"proxmox\",id=~\"(lxc|qemu)/.+\"} == 1)",
+          "expr": "count(pve_up{app=\"proxmox\",instance=~\"$proxmox\",id=~\"(lxc|qemu)/.+\"} == 1)",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -1088,7 +1120,7 @@
       },
       "targets": [
         {
-          "expr": "count((pve_up{app=\"proxmox\",id=~\"(lxc|qemu)/.+\"} == 0) * on (instance, id) (pve_onboot_status{app=\"proxmox\"} == 1)) or vector(0)",
+          "expr": "count((pve_up{app=\"proxmox\",instance=~\"$proxmox\",id=~\"(lxc|qemu)/.+\"} == 0) * on (instance, id) (pve_onboot_status{app=\"proxmox\",instance=~\"$proxmox\"} == 1)) or vector(0)",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -1152,7 +1184,7 @@
       },
       "targets": [
         {
-          "expr": "pve_cpu_usage_ratio{app=\"proxmox\",id=~\"node/.+\"} * on (instance, id) group_left (name) pve_node_info{app=\"proxmox\"}",
+          "expr": "pve_cpu_usage_ratio{app=\"proxmox\",instance=~\"$proxmox\",id=~\"node/.+\"} * on (instance, id) group_left (name) pve_node_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "legendFormat": "{{name}}",
           "refId": "A",
           "datasource": {
@@ -1217,7 +1249,7 @@
       },
       "targets": [
         {
-          "expr": "(pve_memory_usage_bytes{app=\"proxmox\",id=~\"node/.+\"} / pve_memory_size_bytes{app=\"proxmox\",id=~\"node/.+\"}) * on (instance, id) group_left (name) pve_node_info{app=\"proxmox\"}",
+          "expr": "(pve_memory_usage_bytes{app=\"proxmox\",instance=~\"$proxmox\",id=~\"node/.+\"} / pve_memory_size_bytes{app=\"proxmox\",instance=~\"$proxmox\",id=~\"node/.+\"}) * on (instance, id) group_left (name) pve_node_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "legendFormat": "{{name}}",
           "refId": "A",
           "datasource": {
@@ -1286,7 +1318,7 @@
       },
       "targets": [
         {
-          "expr": "pve_uptime_seconds{app=\"proxmox\",id=~\"node/.+\"} * on (instance, id) group_left (name) pve_node_info{app=\"proxmox\"}",
+          "expr": "pve_uptime_seconds{app=\"proxmox\",instance=~\"$proxmox\",id=~\"node/.+\"} * on (instance, id) group_left (name) pve_node_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "legendFormat": "{{name}}",
           "refId": "A",
           "datasource": {
@@ -1347,13 +1379,13 @@
       },
       "targets": [
         {
-          "expr": "pve_memory_usage_bytes{app=\"proxmox\",id=~\"(lxc|qemu)/.+\"} * on (instance, id) group_left (name, node) pve_guest_info{app=\"proxmox\"}",
+          "expr": "pve_memory_usage_bytes{app=\"proxmox\",instance=~\"$proxmox\",id=~\"(lxc|qemu)/.+\"} * on (instance, id) group_left (name, node) pve_guest_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{node}}/{{name}}",
+          "legendFormat": "{{name}}",
           "instant": false,
           "range": true
         }
@@ -1402,13 +1434,13 @@
       },
       "targets": [
         {
-          "expr": "pve_cpu_usage_ratio{app=\"proxmox\",id=~\"(lxc|qemu)/.+\"} * on (instance, id) pve_cpu_usage_limit{app=\"proxmox\"} * on (instance, id) group_left (name, node) pve_guest_info{app=\"proxmox\"}",
+          "expr": "pve_cpu_usage_ratio{app=\"proxmox\",instance=~\"$proxmox\",id=~\"(lxc|qemu)/.+\"} * on (instance, id) pve_cpu_usage_limit{app=\"proxmox\",instance=~\"$proxmox\"} * on (instance, id) group_left (name, node) pve_guest_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{node}}/{{name}}",
+          "legendFormat": "{{name}}",
           "instant": false,
           "range": true
         }
@@ -1457,13 +1489,13 @@
       },
       "targets": [
         {
-          "expr": "(pve_memory_usage_bytes{app=\"proxmox\",id=~\"(lxc|qemu)/.+\"} / pve_memory_size_bytes{app=\"proxmox\"}) * on (instance, id) group_left (name, node) pve_guest_info{app=\"proxmox\"}",
+          "expr": "(pve_memory_usage_bytes{app=\"proxmox\",instance=~\"$proxmox\",id=~\"(lxc|qemu)/.+\"} / pve_memory_size_bytes{app=\"proxmox\",instance=~\"$proxmox\"}) * on (instance, id) group_left (name, node) pve_guest_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{node}}/{{name}}",
+          "legendFormat": "{{name}}",
           "instant": true,
           "range": false
         }
@@ -1527,13 +1559,13 @@
       },
       "targets": [
         {
-          "expr": "(pve_disk_usage_bytes{app=\"proxmox\",id=~\"lxc/.+\"} / pve_disk_size_bytes{app=\"proxmox\"}) * on (instance, id) group_left (name, node) pve_guest_info{app=\"proxmox\"}",
+          "expr": "(pve_disk_usage_bytes{app=\"proxmox\",instance=~\"$proxmox\",id=~\"lxc/.+\"} / pve_disk_size_bytes{app=\"proxmox\",instance=~\"$proxmox\"}) * on (instance, id) group_left (name, node) pve_guest_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{node}}/{{name}}",
+          "legendFormat": "{{name}}",
           "instant": true,
           "range": false
         }
@@ -1597,13 +1629,13 @@
       },
       "targets": [
         {
-          "expr": "pve_disk_usage_bytes{app=\"proxmox\",id=~\"storage/.+\"} / pve_disk_size_bytes{app=\"proxmox\",id=~\"storage/.+\"} * on (instance, id) group_left (storage, node) pve_storage_info{app=\"proxmox\"}",
+          "expr": "pve_disk_usage_bytes{app=\"proxmox\",instance=~\"$proxmox\",id=~\"storage/.+\"} / pve_disk_size_bytes{app=\"proxmox\",instance=~\"$proxmox\",id=~\"storage/.+\"} * on (instance, id) group_left (storage, node) pve_storage_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{node}}/{{storage}}",
+          "legendFormat": "{{storage}}",
           "instant": true,
           "range": false
         }
@@ -1667,7 +1699,7 @@
       },
       "targets": [
         {
-          "expr": "pve_guest_info{app=\"proxmox\"}",
+          "expr": "pve_guest_info{app=\"proxmox\",instance=~\"$proxmox\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -1678,7 +1710,7 @@
           "range": false
         },
         {
-          "expr": "pve_up{app=\"proxmox\",id=~\"(lxc|qemu)/.+\"}",
+          "expr": "pve_up{app=\"proxmox\",instance=~\"$proxmox\",id=~\"(lxc|qemu)/.+\"}",
           "refId": "B",
           "datasource": {
             "type": "prometheus",
@@ -1689,7 +1721,7 @@
           "range": false
         },
         {
-          "expr": "pve_onboot_status{app=\"proxmox\"}",
+          "expr": "pve_onboot_status{app=\"proxmox\",instance=~\"$proxmox\"}",
           "refId": "C",
           "datasource": {
             "type": "prometheus",

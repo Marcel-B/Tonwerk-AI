@@ -1973,6 +1973,23 @@
         }
       }
     },
+    "Adresse von Tonwerk-AI für Links" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresse von Tonwerk-AI für Links"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonwerk-AI’s address for links"
+          }
+        }
+      }
+    },
     "Akkorde" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3142,6 +3159,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Environment variables on the server set address and key; nothing can be changed here."
+          }
+        }
+      }
+    },
+    "Auf dem Server setzen Umgebungsvariablen die Werte; hier lässt sich nichts ändern." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf dem Server setzen Umgebungsvariablen die Werte; hier lässt sich nichts ändern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Environment variables on the server set the values; nothing can be changed here."
           }
         }
       }
@@ -6342,6 +6376,23 @@
         }
       }
     },
+    "Der Token darf nicht an dieses Topic senden. Lege ihn mit dem Topic (oder *) neu an." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Token darf nicht an dieses Topic senden. Lege ihn mit dem Topic (oder *) neu an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The token may not send to this topic. Create it again with the topic (or *)."
+          }
+        }
+      }
+    },
     "Derselbe Song aus seinen gespeicherten Tokens, neu synthetisiert; die Datei wird ersetzt." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9147,6 +9198,40 @@
         }
       }
     },
+    "Gespeichert, aber Onkel Bummel antwortete unerwartet: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert, aber Onkel Bummel antwortete unerwartet: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved, but Onkel Bummel answered unexpectedly: %@"
+          }
+        }
+      }
+    },
+    "Gespeichert, aber Onkel Bummel ist nicht erreichbar: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert, aber Onkel Bummel ist nicht erreichbar: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved, but Onkel Bummel cannot be reached: %@"
+          }
+        }
+      }
+    },
     "Gespeichert, aber Tonregal antwortete unerwartet: %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9181,6 +9266,40 @@
         }
       }
     },
+    "Gespeichert. Die Nachrichten sind ausgeschaltet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert. Die Nachrichten sind ausgeschaltet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved. The messages are switched off."
+          }
+        }
+      }
+    },
+    "Gespeichert. Die Testnachricht ist bei Onkel Bummel." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert. Die Testnachricht ist bei Onkel Bummel."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved. The test message is at Onkel Bummel."
+          }
+        }
+      }
+    },
     "Gespeichert. Ohne Adresse ist die Übernahme in Tonregal aus." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9194,6 +9313,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Saved. Without an address the handover to Tonregal is off."
+          }
+        }
+      }
+    },
+    "Gespeichert. Ohne Adresse und Token gehen keine Nachrichten raus." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert. Ohne Adresse und Token gehen keine Nachrichten raus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved. Without address and token no messages go out."
           }
         }
       }
@@ -12768,6 +12904,23 @@
         }
       }
     },
+    "Nachrichten schicken" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachrichten schicken"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send messages"
+          }
+        }
+      }
+    },
     "Nahaufnahme" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14230,6 +14383,23 @@
         }
       }
     },
+    "Onkel Bummel kennt den Token nicht." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onkel Bummel kennt den Token nicht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onkel Bummel does not know the token."
+          }
+        }
+      }
+    },
     "Operator" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15008,6 +15178,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Log"
+          }
+        }
+      }
+    },
+    "Publish-Token" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish-Token"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish token"
           }
         }
       }
@@ -16878,6 +17065,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Save"
+          }
+        }
+      }
+    },
+    "Speichern und Test senden" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speichern und Test senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save and send a test"
           }
         }
       }
@@ -19160,6 +19364,23 @@
         }
       }
     },
+    "Topic" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Topic"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Topic"
+          }
+        }
+      }
+    },
     "Trainiert auf %d Songs (%lld min)." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20652,6 +20873,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A little"
+          }
+        }
+      }
+    },
+    "Wenn ein Song-Stapel oder ein anderer langer Auftrag fertig ist, kommt eine Nachricht, ein Stapel als eine. Den Token (ob_…) in Onkel Bummel unter Verwaltung → Publish-Tokens mit dem Recht für das Topic anlegen. Ohne Adresse ist es aus." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn ein Song-Stapel oder ein anderer langer Auftrag fertig ist, kommt eine Nachricht, ein Stapel als eine. Den Token (ob_…) in Onkel Bummel unter Verwaltung → Publish-Tokens mit dem Recht für das Topic anlegen. Ohne Adresse ist es aus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When a batch of songs or another long job finishes, a message arrives, a batch as one. Create the token (ob_…) in Onkel Bummel under Verwaltung → Publish-Tokens, allowed to send to the topic. Without an address it is off."
           }
         }
       }

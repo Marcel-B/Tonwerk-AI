@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.Data.Sqlite;
 
 namespace YueUI.Api.Tests;
 
@@ -63,6 +64,30 @@ public sealed class PlaylistEndpointTests : IDisposable
         Assert.Equal(["Playlist", "Abends"], playlists.Select(p => p.Name));
         Assert.Equal([$"{Run}/song1"], playlists[0].SongIds);
         Assert.Equal([$"{Run}/song2", $"{Run}/song1"], playlists[1].SongIds);
+    }
+
+    [Fact]
+    public async Task A_playlist_is_created_while_another_connection_reads()
+    {
+        Assert.Single(await Playlists());
+        using var reader = new SqliteConnection($"Data Source={Path.Combine(_app.Root, "yueui.db")};Pooling=False");
+        reader.Open();
+        using var transaction = reader.BeginTransaction(deferred: true);
+        using (var select = reader.CreateCommand())
+        {
+            select.Transaction = transaction;
+            select.CommandText = "SELECT count(*) FROM playlists";
+            select.ExecuteScalar();
+        }
+
+        // The reader keeps the file from being written for a moment. INSERT ... RETURNING failed when it let go
+        // ("database is locked", a 500 seen in CI), since its row was already handed out and could not be retried.
+        var create = _client.PostAsJsonAsync("/api/playlists", new { name = "Später" });
+        await Task.Delay(300);
+        transaction.Commit();
+
+        Assert.Equal(HttpStatusCode.Created, (await create).StatusCode);
+        Assert.Equal(["Playlist", "Später"], (await Playlists()).Select(p => p.Name));
     }
 
     [Theory]

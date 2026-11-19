@@ -45,7 +45,7 @@
       },
       "targets": [
         {
-          "expr": "up{job=~\"apps|proxmox\"}",
+          "expr": "up{job=~\"apps|gitea|proxmox\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -697,7 +697,7 @@
       },
       "targets": [
         {
-          "expr": "process_resident_memory_bytes{job=\"apps\"}",
+          "expr": "process_resident_memory_bytes{job=~\"apps|gitea\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -747,7 +747,7 @@
       },
       "targets": [
         {
-          "expr": "rate(process_cpu_seconds_total{job=\"apps\"}[5m])",
+          "expr": "rate(process_cpu_seconds_total{job=~\"apps|gitea\"}[5m])",
           "refId": "A",
           "datasource": {
             "type": "prometheus",

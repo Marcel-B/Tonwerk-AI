@@ -5,3 +5,5 @@ prometheus/probes/*.yml
 pve.yml
 prometheus/pve/*.yml
 loki-push/htpasswd
+prometheus/gitea/*.yml
+prometheus/gitea.token

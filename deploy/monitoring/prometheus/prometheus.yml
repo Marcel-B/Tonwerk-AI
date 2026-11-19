@@ -10,6 +10,18 @@ scrape_configs:
       - files: [/etc/prometheus/targets/*.yml]
         refresh_interval: 1m
 
+  # Gitea (gitea/gitea.yml, from gitea.yml.example) in a job of its own, since its /metrics wants the bearer token of
+  # [metrics] TOKEN in app.ini, and file_sd cannot carry one per target. The token lies beside this file as gitea.token
+  # (mode 600, owned by nobody, the user Prometheus runs as; never in git), read on every scrape. Gitea counts its rows
+  # in the database for each scrape, so once a minute is plenty.
+  - job_name: gitea
+    scrape_interval: 1m
+    authorization:
+      credentials_file: /etc/prometheus/gitea.token
+    file_sd_configs:
+      - files: [/etc/prometheus/gitea/*.yml]
+        refresh_interval: 1m
+
   # Websites and health endpoints, asked through the blackbox exporter: one file per group in probes/, each target an
   # address and the label module (blackbox/blackbox.yml). GitHub Pages need not be asked more often than this.
   - job_name: probes

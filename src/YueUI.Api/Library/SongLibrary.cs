@@ -359,7 +359,11 @@ public sealed partial class SongLibrary(
         {
             saved.Remove(key);
         }
-        File.WriteAllText(Path.Combine(songDirectory, AppRequestFile), saved.ToJsonString());
+        // Written beside it and moved, so a reader (ReadRequest, a test waiting for the file) never sees it half written.
+        var target = Path.Combine(songDirectory, AppRequestFile);
+        var temporary = target + ".tmp";
+        File.WriteAllText(temporary, saved.ToJsonString());
+        File.Move(temporary, target, overwrite: true);
     }
 
     /// <summary>The song's <c>request.json</c>, or null for an unknown song or one without (readable) request.</summary>

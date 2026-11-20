@@ -167,7 +167,7 @@
       },
       "targets": [
         {
-          "expr": "probe_success{kind=\"website\"}",
+          "expr": "max_over_time(probe_success{kind=\"website\"}[15m])",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -231,7 +231,7 @@
         "justifyMode": "center",
         "orientation": "auto"
       },
-      "description": "Öffentliche Seiten aus prometheus/probes/websites.yml, alle 5 Minuten.",
+      "description": "Öffentliche Seiten aus prometheus/probes/websites.yml, alle 5 Minuten gefragt. Rot erst, wenn 15 Minuten lang keine Antwort kam (wie der Alarm), damit ein einzelner Aussetzer der Abfrage nicht als Ausfall erscheint.",
       "id": 3
     },
     {
@@ -249,7 +249,7 @@
       },
       "targets": [
         {
-          "expr": "probe_success{kind=\"health\"}",
+          "expr": "max_over_time(probe_success{kind=\"health\"}[15m])",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -313,7 +313,7 @@
         "justifyMode": "center",
         "orientation": "auto"
       },
-      "description": "Apps ohne eigene Messwerte, deren /health gefragt wird (prometheus/probes/health.yml).",
+      "description": "Apps ohne eigene Messwerte, deren /health gefragt wird (prometheus/probes/health.yml). Rot erst, wenn 15 Minuten lang keine Antwort kam (wie der Alarm).",
       "id": 4
     },
     {

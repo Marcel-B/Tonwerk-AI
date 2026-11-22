@@ -5,14 +5,15 @@ import type { MenuItem } from 'primevue/menuitem'
 import { disablePush, enablePush, initPush, pushState, updatePushLanguage } from '../push'
 import { formatDateTime, locale, setLocale, t } from '../i18n'
 import { reload, standalone } from '../update'
-import { ApiError, getBackup, getTonregal, startBackup } from '../api'
-import type { BackupStatus, TonregalStatus } from '../types'
+import { ApiError, getBackup, getOnkelBummel, getTonregal, startBackup } from '../api'
+import type { BackupStatus, OnkelBummelStatus, TonregalStatus } from '../types'
 import { tonregalReady } from '../export'
 import TonregalSettings from './TonregalSettings.vue'
+import OnkelBummelSettings from './OnkelBummelSettings.vue'
 
 /**
  * What is set once per device rather than used while working: notifications, the language, the Nextcloud backup (only
- * when the server has one configured), Tonregal's address and key (for the server) and, in the home-screen app, a reload. Behind one button, so the menu bar keeps
+ * when the server has one configured), Tonregal's address and key and Onkel Bummel's messages (for the server) and, in the home-screen app, a reload. Behind one button, so the menu bar keeps
  * its room for the pages.
  */
 const emit = defineEmits<{ notice: [text: string, error: boolean] }>()
@@ -30,6 +31,9 @@ const items = computed<MenuItem[]>(() => [
   ...(tonregal.value
     ? [{ label: `${t('tonregalSettings')} …`, icon: 'pi pi-box', command: () => (tonregalOpen.value = true) }]
     : []),
+  ...(onkelBummel.value
+    ? [{ label: `${t('onkelBummelSettings')} …`, icon: 'pi pi-send', command: () => (onkelBummelOpen.value = true) }]
+    : []),
   ...backupItems.value,
 ])
 
@@ -41,6 +45,10 @@ function tonregalSaved(status: TonregalStatus): void {
   tonregal.value = status
   tonregalReady.value = status.configured
 }
+
+// Null on a server from before it had Onkel Bummel, which leaves the entry out.
+const onkelBummel = ref<OnkelBummelStatus | null>(null)
+const onkelBummelOpen = ref(false)
 
 const backup = ref<BackupStatus | null>(null)
 const backupItems = computed<MenuItem[]>(() => {
@@ -72,11 +80,13 @@ const backupItems = computed<MenuItem[]>(() => {
 
 async function open(event: Event): Promise<void> {
   menu.value?.toggle(event)
-  const [backupStatus, tonregalStatus] = await Promise.all([
+  const [backupStatus, tonregalStatus, onkelBummelStatus] = await Promise.all([
     // An older server without the backup, or no connection: the menu just leaves it out.
     getBackup().catch(() => null),
     getTonregal().catch(() => null),
+    getOnkelBummel().catch(() => null),
   ])
+  onkelBummel.value = onkelBummelStatus && 'editable' in onkelBummelStatus ? onkelBummelStatus : null
   backup.value = backupStatus ?? backup.value
   tonregal.value = tonregalStatus && 'editable' in tonregalStatus ? tonregalStatus : null
 }
@@ -153,4 +163,10 @@ async function toggle(): Promise<void> {
   />
   <Menu ref="menu" :model="items" popup />
   <TonregalSettings v-if="tonregal" v-model:visible="tonregalOpen" :status="tonregal" @saved="tonregalSaved" />
+  <OnkelBummelSettings
+    v-if="onkelBummel"
+    v-model:visible="onkelBummelOpen"
+    :status="onkelBummel"
+    @saved="(status) => (onkelBummel = status)"
+  />
 </template>

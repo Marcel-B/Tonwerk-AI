@@ -120,6 +120,14 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public FakeHuggingFace HuggingFace { get; } = new();
 
+    public FakeOnkelBummel OnkelBummel { get; } = new();
+
+    /// <summary>Where the fake Onkel Bummel is expected; null (the default) leaves the messages off.</summary>
+    public string? OnkelBummelUrl { get; set; }
+
+    /// <summary>Onkel Bummel's env file, which the settings write; null (the default) leaves them unable to.</summary>
+    public string? OnkelBummelEnvFile { get; set; }
+
     /// <summary>Where the fake Loki is expected; null (the default) leaves shipping the log off.</summary>
     public string? LokiUrl { get; set; }
 
@@ -331,6 +339,15 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 options.Wait = TimeSpan.FromSeconds(5);
             });
             services.AddHttpClient(global::YueUI.Api.Tonregal.TonregalClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeTonregal.Handler(Tonregal));
+            services.Configure<global::YueUI.Api.OnkelBummel.OnkelBummelOptions>(options =>
+            {
+                options.Url = OnkelBummelUrl;
+                options.Token = FakeOnkelBummel.Token;
+                options.EnvFile = OnkelBummelEnvFile;
+                options.RetryDelays = [TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10)];
+            });
+            services.AddHttpClient(global::YueUI.Api.OnkelBummel.OnkelBummelClient.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => new FakeOnkelBummel.Handler(OnkelBummel));
             services.Configure<Monitoring.MonitoringOptions>(options =>
             {
                 options.Loki.Url = LokiUrl;
@@ -1111,6 +1128,62 @@ public sealed class FakeSpeech : ISpeechEngine
         var gate = new TaskCompletionSource();
         gate.SetResult();
         return gate;
+    }
+}
+
+/// <summary>
+/// Onkel Bummel's <c>POST /api/v1/messages</c>: takes JSON under its publish token for the topics in
+/// <see cref="Topics"/>, answering 401 for another token and 403 for another topic as the real one does.
+/// </summary>
+public sealed class FakeOnkelBummel
+{
+    public const string Token = "ob_test";
+
+    private readonly Channel<(JsonObject Message, string? IdempotencyKey)> _received =
+        Channel.CreateUnbounded<(JsonObject, string?)>();
+
+    public HashSet<string> Topics { get; } = ["tonwerk"];
+
+    /// <summary>How many requests to answer 503 before taking one.</summary>
+    public int Unavailable { get; set; }
+
+    public int Requests { get; private set; }
+
+    public async Task<(JsonObject Message, string? IdempotencyKey)> Next()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        return await _received.Reader.ReadAsync(timeout.Token);
+    }
+
+    public bool TryNext(out (JsonObject Message, string? IdempotencyKey) received) => _received.Reader.TryRead(out received);
+
+    public sealed class Handler(FakeOnkelBummel bummel) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            bummel.Requests++;
+            if (request.Method != HttpMethod.Post || request.RequestUri!.AbsolutePath != "/api/v1/messages")
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+            if (request.Headers.Authorization is not { Scheme: "Bearer" } auth || auth.Parameter != Token)
+            {
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = JsonContent.Create(new { title = "Unauthorized" }) };
+            }
+            if (bummel.Unavailable > 0)
+            {
+                bummel.Unavailable--;
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            }
+            var message = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
+            if (!bummel.Topics.Contains((string?)message["topic"] ?? ""))
+            {
+                return new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = JsonContent.Create(new { title = "Topic not allowed" }) };
+            }
+            var key = request.Headers.TryGetValues("Idempotency-Key", out var keys) ? keys.Single() : null;
+            bummel._received.Writer.TryWrite((message, key));
+            return new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(new { id = 1 }) };
+        }
     }
 }
 

@@ -48,6 +48,40 @@ public sealed class LlmGateTests : IDisposable
     }
 
     [Fact]
+    public async Task Tonwerk_lists_its_models_outside_lm_studio_as_its_own()
+    {
+        _app.LlmGateUrl = "http://gate.test:1235";
+        // A speech model in its Hugging Face cache, one only half downloaded (no refs/main), and ACE-Step's GGUF files.
+        var voice = Path.Combine(_app.Root, "speech", "models", "hub", "models--acme--Voice-TTS");
+        Directory.CreateDirectory(Path.Combine(voice, "refs"));
+        Directory.CreateDirectory(Path.Combine(voice, "blobs"));
+        File.WriteAllText(Path.Combine(voice, "refs", "main"), "c1");
+        File.WriteAllBytes(Path.Combine(voice, "blobs", "oid"), new byte[20_000_000]);
+        Directory.CreateDirectory(Path.Combine(_app.Root, "speech", "models", "hub", "models--acme--Half", "blobs"));
+        var ace = Path.Combine(_app.Root, "ace", "models");
+        Directory.CreateDirectory(ace);
+        File.WriteAllBytes(Path.Combine(ace, "acestep-v15-turbo-Q8_0.gguf"), new byte[10_000_000]);
+        Start();
+
+        await TestApp.WaitUntil(() => _app.LlmGate.Registrations().Length > 0);
+
+        var own = _app.LlmGate.Registrations()[0].Body["ownModels"]!.AsArray().Select(model => model!.AsObject()).ToList();
+        var names = own.Select(model => model["name"]!.GetValue<string>()).ToList();
+        Assert.Contains("speech/acme/Voice-TTS", names);
+        Assert.Contains("music/ace-step", names);
+        Assert.DoesNotContain("speech/acme/Half", names);
+        Assert.DoesNotContain("singing/soulx-singer", names);
+        var speech = own.Single(model => model["name"]!.GetValue<string>() == "speech/acme/Voice-TTS");
+        Assert.Equal("acme/Voice-TTS", speech["source"]!.GetValue<string>());
+        Assert.Equal("speech", speech["kind"]!.GetValue<string>());
+        Assert.Equal(Path.GetFullPath(voice), speech["path"]!.GetValue<string>());
+        Assert.Equal(0.02, speech["sizeGb"]!.GetValue<double>());
+        var music = own.Single(model => model["name"]!.GetValue<string>() == "music/ace-step");
+        Assert.Equal(LlmGateOwnModels.AceRepository, music["source"]!.GetValue<string>());
+        Assert.Equal(0.01, music["sizeGb"]!.GetValue<double>());
+    }
+
+    [Fact]
     public async Task A_writing_model_too_large_for_the_mac_is_not_listed()
     {
         _app.LlmGateUrl = "http://gate.test:1235";

@@ -70,6 +70,7 @@ builder.Services.AddHttpClient(LyricsWriter.HttpClientName, (services, client) =
 // Tells the LLM gate, the other apps' queue in front of LM Studio, which models are Tonwerk's (LlmGate:Url).
 builder.Services.Configure<LlmGateOptions>(builder.Configuration.GetSection(LlmGateOptions.Section));
 builder.Services.AddHttpClient(LlmGateRegistration.HttpClientName);
+builder.Services.AddSingleton<LlmGateOwnModels>();
 builder.Services.AddSingleton<LlmGateRegistration>();
 builder.Services.AddHostedService(services => services.GetRequiredService<LlmGateRegistration>());
 // Logic Pro projects and MIDI read back into scores, by YueToLogic.Core in this process.

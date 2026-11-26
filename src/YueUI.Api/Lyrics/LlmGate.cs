@@ -42,13 +42,14 @@ public sealed class LlmGateOptions
 public sealed record LlmGateModel(string Model, string? Source = null, int? Context = null, double? RamGb = null, double? SizeGb = null);
 
 /// <summary>What <see cref="LlmGateRegistration"/> sends to <c>PUT /gate/apps/{app}</c>.</summary>
-public sealed record LlmGateApp(bool Direct, int Priority, string Note, IReadOnlyList<LlmGateModel> Models);
+/// <param name="OwnModels">Tonwerk's models outside LM Studio (<see cref="LlmGateOwnModels"/>), which the gate only shows and checks for updates.</param>
+public sealed record LlmGateApp(bool Direct, int Priority, string Note, IReadOnlyList<LlmGateModel> Models, IReadOnlyList<LlmGateOwnModel> OwnModels);
 
 /// <summary>
 /// Lists Tonwerk's LM Studio models at the gate at start and every <see cref="LlmGateOptions.Interval"/>, as a
 /// direct app (<c>direct: true</c>): the default lyrics model, the writing page's, every downloaded model matching
 /// <see cref="LyricsOptions.Roles"/> and <see cref="LlmGateOptions.Models"/>, each with the largest context Tonwerk
-/// loads it with.
+/// loads it with; beside them its models outside LM Studio as <c>ownModels</c> (<see cref="LlmGateOwnModels"/>).
 /// </summary>
 /// <remarks>
 /// The gate may not run at all (it is optional, and Tonwerk starts first after a reboot), so a gate that does not
@@ -62,6 +63,7 @@ public sealed class LlmGateRegistration(
     IOptions<LyricsOptions> lyrics,
     IOptions<WritingOptions> writing,
     IOptions<SketchOptions> sketches,
+    LlmGateOwnModels ownModels,
     ILogger<LlmGateRegistration> logger) : BackgroundService
 {
     public const string HttpClientName = "llm-gate";
@@ -116,8 +118,11 @@ public sealed class LlmGateRegistration(
 
     private async Task RegisterAsync(LlmGateOptions settings, CancellationToken cancellationToken)
     {
-        var app = new LlmGateApp(true, 0, "Tonwerk-AI: Songtexte, Schreiben, Ausarbeitung; lädt und entlädt selbst, hat Vorrang",
-            await ModelsAsync(cancellationToken));
+        var models = await ModelsAsync(cancellationToken);
+        // Measuring the model folders walks tens of gigabytes' worth of files, some on the external drive.
+        var own = await Task.Run(ownModels.List, cancellationToken);
+        var app = new LlmGateApp(true, 0, "Tonwerk-AI: Songtexte, Schreiben, Ausarbeitung, Musik, Sprache, Gesang; lädt und entlädt selbst, hat Vorrang",
+            models, own);
         using var http = clients.CreateClient(HttpClientName);
         http.Timeout = TimeSpan.FromSeconds(15);
         using var response = await http.PutAsJsonAsync(

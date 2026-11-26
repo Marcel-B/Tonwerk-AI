@@ -935,7 +935,7 @@
     },
     {
       "type": "row",
-      "title": "Sicherung und Meldungen",
+      "title": "Meldungen",
       "id": 18,
       "gridPos": {
         "h": 1,
@@ -947,123 +947,6 @@
       "panels": []
     },
     {
-      "type": "stat",
-      "title": "Letzte Sicherung",
-      "id": 19,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 40
-      },
-      "targets": [
-        {
-          "expr": "max(filomat_backup_last_success_timestamp_seconds{app=\"filomat\"}) * 1000",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "text"
-              }
-            ]
-          },
-          "noValue": "noch keine",
-          "unit": "dateTimeFromNow"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "value",
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto"
-      },
-      "description": "Die nächtliche Sicherung in die Nextcloud. Über 36 Stunden löst den Alarm „Sicherung zu alt“ aus."
-    },
-    {
-      "type": "timeseries",
-      "title": "Sicherungen",
-      "id": 20,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 9,
-        "x": 6,
-        "y": 40
-      },
-      "targets": [
-        {
-          "expr": "sum by (result) (increase(filomat_backup_runs_total{app=\"filomat\"}[1d]))",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "legendFormat": "{{result}}",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 70,
-            "lineWidth": 1,
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            }
-          },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "description": ""
-    },
-    {
       "type": "timeseries",
       "title": "Meldungen über ntfy",
       "id": 21,
@@ -1073,8 +956,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
-        "x": 15,
+        "w": 24,
+        "x": 0,
         "y": 40
       },
       "targets": [

@@ -16,6 +16,9 @@
 #   HEALTH_PROBES    health endpoints of apps without /metrics yet, as app=url separated by spaces, e.g.
 #                    "identity=https://identity.tail1234.ts.net/health": written as prometheus/probes/health.yml
 #                    (replaced as a whole; the dashboard's field Health-Endpunkte shows them)
+#   GITEA_TARGET     Gitea's address with port, e.g. 192.168.3.23:3000: written as prometheus/gitea/gitea.yml
+#   GITEA_TOKEN      the token of [metrics] TOKEN in Gitea's app.ini (asked for if empty, without echo, once
+#                    GITEA_TARGET is set and the container has none yet): only into prometheus/gitea.token, mode 600
 #   PVE_EXPORTER     1: watch this Proxmox host and all its guests too, through a read-only user monitoring@pve whose
 #                    token (role PVEAuditor) goes only into the container's pve.yml (mode 600)
 #   TS_AUTHKEY       a Tailscale auth key; without one, tailscale up prints a link to sign the container in
@@ -42,11 +45,13 @@ ONKELBUMMEL_TOKEN="${ONKELBUMMEL_TOKEN:-}"
 PVE_EXPORTER="${PVE_EXPORTER:-}"
 APP_TARGETS="${APP_TARGETS:-}"
 HEALTH_PROBES="${HEALTH_PROBES:-}"
+GITEA_TARGET="${GITEA_TARGET:-}"
+GITEA_TOKEN="${GITEA_TOKEN:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET_DIR=/opt/monitoring
 
 case "${1:-}" in
-  -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   "") ;;
   *) echo "Unknown argument: $1" >&2; exit 2 ;;
 esac
@@ -64,6 +69,10 @@ for entry in $APP_TARGETS; do
   fi
   [ -f "$HERE/prometheus/targets/$app.yml.example" ] || { echo "APP_TARGETS: no prometheus/targets/$app.yml.example" >&2; exit 2; }
 done
+
+if [ -n "$GITEA_TARGET" ] && ! printf '%s' "$GITEA_TARGET" | grep -Eq '^[A-Za-z0-9.-]+:[0-9]+$'; then
+  echo "GITEA_TARGET: expected host:port, got $GITEA_TARGET" >&2; exit 2
+fi
 
 for entry in $HEALTH_PROBES; do
   app="${entry%%=*}" url="${entry#*=}"
@@ -134,7 +143,8 @@ fi
 
 echo "Copying the stack to $TARGET_DIR ..."
 ARCHIVE="$(mktemp)"
-tar -C "$HERE" --exclude=.env --exclude=pve.yml --exclude=loki-push/htpasswd --exclude='prometheus/targets/*.yml' --exclude='prometheus/pve/*.yml' -czf "$ARCHIVE" .
+tar -C "$HERE" --exclude=.env --exclude=pve.yml --exclude=loki-push/htpasswd --exclude='prometheus/targets/*.yml' --exclude='prometheus/pve/*.yml' \
+  --exclude='prometheus/gitea/*.yml' --exclude=prometheus/gitea.token -czf "$ARCHIVE" .
 pct push "$CTID" "$ARCHIVE" /tmp/monitoring.tgz
 rm -f "$ARCHIVE"
 in_ct "mkdir -p '$TARGET_DIR' && tar -C '$TARGET_DIR' -xzf /tmp/monitoring.tgz && rm /tmp/monitoring.tgz"
@@ -197,6 +207,21 @@ if [ -n "$HEALTH_PROBES" ]; then
   printf '%s\n' "$lines" | pct exec "$CTID" -- tee "$TARGET_DIR/prometheus/probes/health.yml" >/dev/null
 fi
 
+# Gitea: its address in gitea/gitea.yml, its metrics token in gitea.token beside prometheus.yml (job gitea). The token
+# is read without echo and goes into the container through stdin, like Onkel Bummel's; Prometheus runs as nobody.
+if [ -n "$GITEA_TARGET" ]; then
+  echo "Target gitea: $GITEA_TARGET"
+  in_ct "mkdir -p '$TARGET_DIR/prometheus/gitea' && cd '$TARGET_DIR/prometheus/gitea' && sed '/^#/d; s|^- targets: \\[.*\\]|- targets: [$GITEA_TARGET]|' gitea.yml.example > gitea.yml"
+  if [ -z "$GITEA_TOKEN" ] && ! in_ct "test -s '$TARGET_DIR/prometheus/gitea.token'" && [ -t 0 ]; then
+    read -r -s -p "Gitea's metrics token ([metrics] TOKEN in app.ini): " GITEA_TOKEN
+    echo
+  fi
+  if [ -n "$GITEA_TOKEN" ]; then
+    printf '%s\n' "$GITEA_TOKEN" | pct exec "$CTID" -- sh -c "umask 077 && cat > '$TARGET_DIR/prometheus/gitea.token' && chown 65534:65534 '$TARGET_DIR/prometheus/gitea.token'"
+  fi
+  unset GITEA_TOKEN
+fi
+
 # Proxmox: a read-only user and token, made here on the host. The token's value is written only into the container's
 # pve.yml (through a file of mode 600 that is deleted at once), never printed or kept on the host.
 if [ "$PVE_EXPORTER" = 1 ]; then
@@ -254,6 +279,9 @@ if in_ct "test -s '$TARGET_DIR/pve.yml'"; then
   echo "  Proxmox:    read-only user monitoring@pve (token exporter, PVEAuditor); revoke under Datacenter > Permissions."
 else
   echo "  Proxmox:    not watched yet: run again with PVE_EXPORTER=1."
+fi
+if in_ct "test -f '$TARGET_DIR/prometheus/gitea/gitea.yml'" && ! in_ct "test -s '$TARGET_DIR/prometheus/gitea.token'"; then
+  echo "  Gitea:      no metrics token yet: run again with GITEA_TARGET=<host>:3000 (asks for it)."
 fi
 in_ct "test -f '$TARGET_DIR/prometheus/probes/health.yml'" || \
   echo "  Health:     no health probes yet: run again with HEALTH_PROBES=\"identity=https://<name>/health ...\"."

@@ -148,6 +148,28 @@ Das Dashboard **img-o-mat** (`grafana/dashboards/img-o-mat.json`) zeigt den Bild
 
 Das Dashboard **Tonregal** (`grafana/dashboards/tonregal.json`) zeigt die Musikbibliothek auf oi-o-mat (Repository Marcel-B/Tonregal) und das Navidrome daneben: ob beide antworten, ob die T7 eingehängt ist, Titel und Größe der Library, die Inbox (wartend und je Ergebnis), Übergaben von Tonwerk, MusicBrainz-Anfragen und Drosselung, den Rückstand der Analyse, Scans, Backups, Navidromes Bestand, Scans, Speicher und CPU (Navidrome 0.64 meldet keine Anfragen), und Tonregals Protokoll aus Loki. Navidrome hat kein eigenes Dashboard; in der Übersicht führt es hierher. Ziele nach `prometheus/targets/tonregal.yml.example` (über Tailscale Serve, https) und `navidrome.yml.example` (Port 4533, http). Tonregal schaltet `/metrics` und den Versand an Loki in seiner `appsettings.Production.json` ein (Tonregal-README, „Überwachung“), Navidrome über `[Prometheus]` in der `navidrome.toml`, die `setup-navidrome.sh` schreibt. Tonregals `deploy/monitoring-einrichten.sh` erledigt die Seite auf oi-o-mat und nennt am Ende den Aufruf von `proxmox-lxc.sh` mit beiden Zielen. Navidromes eigenes Log bleibt auf oi-o-mat. Eigene Alarme braucht es keine: „App nicht erreichbar“, „Backup zu alt“ (`tonregal_backup_last_success_timestamp_seconds`) und „Logs erreichen Loki nicht“ gelten schon.
 
+## Gitea
+
+Das Dashboard **Gitea** (`grafana/dashboards/gitea.json`) zeigt den eigenen Git-Server im Heimnetz: ob er antwortet, Repositories, Spiegel, Benutzer und Organisationen, offene und geschlossene Issues, Releases, Anhänge, Sterne, Webhooks und ihre gespeicherten Auslieferungen, SSH-Schlüssel und OAuth-Anwendungen über die Zeit, Speicher, CPU, Goroutinen und offene Dateien des Prozesses, darunter sein Protokoll, sobald Logs mit `app="gitea"` in Loki ankommen. Gitea zählt seine Zahlen bei jeder Abfrage in der Datenbank nach; Anfragen und Antwortzeiten meldet es nicht.
+
+Gitea hat `/metrics` eingebaut, aber aus. In seiner `app.ini` (bei Docker `/data/gitea/conf/app.ini`, sonst meist `/etc/gitea/app.ini`):
+
+```ini
+[metrics]
+ENABLED = true
+TOKEN = <ein langer Zufallswert, etwa aus openssl rand -hex 32>
+```
+
+und Gitea neu starten. Ohne `TOKEN` sähe jeder im Heimnetz die Zahlen. Weil `file_sd` keinen Token pro Ziel tragen kann, hat Gitea in `prometheus.yml` einen eigenen Job `gitea` (Ziele in `prometheus/gitea/*.yml`, Token in `prometheus/gitea.token`, beide außerhalb von Git); Übersicht und der Alarm „App nicht erreichbar“ schließen ihn ein, eigene Alarme braucht es keine. Auf dem Proxmox-Host schreibt `proxmox-lxc.sh` beides und fragt den Token ohne Echo ab:
+
+```sh
+GITEA_TARGET=<Adresse von Gitea>:3000 /root/monitoring/proxmox-lxc.sh
+```
+
+Ob es klappt, zeigt `http://monitoring:9090/targets` beim Job `gitea`; von Hand im Container: `curl -s -H "Authorization: Bearer $(cat /opt/monitoring/prometheus/gitea.token)" http://<Adresse>:3000/metrics | grep ^gitea_repositories`. Liegt Gitea in einem anderen Subnetz als der Container, muss der Router zwischen beiden vermitteln; antwortet `curl` nicht, liegt es daran oder an einer Firewall, nicht an Gitea.
+
+Logs sind freiwillig: Gitea selbst schickt nichts an Loki. Ein Sammler auf Giteas Rechner (etwa Grafana Alloy oder Promtail) liest sein Log und schickt es wie der Desk Buddy über das Push-Tor (Port 3101, Passwort mit `loki-push-user.sh gitea`), mit den Labels `app="gitea"` und `level`.
+
 ## Desk Buddy und andere Geräte im Heimnetz
 
 Der Desk Buddy (ein Raspberry Pi am Schreibtisch, im WLAN, nicht im Tailnet) schickt sein Log an Loki: eigene Meldungen, Kernel-Warnungen, Unterspannung und alle 5 Minuten eine Zustandszeile mit Temperatur, Kernspannung, WLAN und Last. Er hat kein `/metrics`; das Dashboard **Desk Buddy** (`grafana/dashboards/deskbuddy.json`) liest alles aus diesen Zeilen: ob er lebt, Temperatur, Spannung, WLAN und Last über die Zeit, Unterspannung und Starts der letzten 24 Stunden, Warnungen und Fehler und das Protokoll mit Filtern für Stufe, Quelle (`app`, `kernel`) und Text. Dazu kommen die Alarme „Desk Buddy meldet sich nicht“ und „Desk Buddy mit Unterspannung“.

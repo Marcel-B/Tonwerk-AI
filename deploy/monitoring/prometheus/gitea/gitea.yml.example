@@ -1,0 +1,8 @@
+# Copy to gitea.yml (or let proxmox-lxc.sh write it: GITEA_TARGET=<host>:3000) and put in Gitea's address. Gitea answers
+# /metrics on its own web port once [metrics] ENABLED = true is in its app.ini, with the bearer token of [metrics] TOKEN,
+# which goes into prometheus/gitea.token (job gitea in prometheus.yml). Plain http inside the home network.
+- targets: [gitea.example.lan:3000]
+  labels:
+    app: gitea
+    __scheme__: http
+    __metrics_path__: /metrics

@@ -17,7 +17,7 @@ groups:
             datasourceUid: prometheus
             model:
               refId: A
-              expr: 'up{job=~"apps|stack|proxmox"}'
+              expr: 'up{job=~"apps|gitea|stack|proxmox"}'
               instant: true
           - refId: C
             datasourceUid: __expr__
@@ -31,7 +31,7 @@ groups:
         for: 10m
         annotations:
           summary: '{{ $labels.app }} ist seit 10 Minuten nicht erreichbar.'
-          description: 'Jede App in prometheus/targets/, der pve-Exporter und der Stack selbst; eine neue App ist ohne Änderung dabei.'
+          description: 'Jede App in prometheus/targets/, Gitea, der pve-Exporter und der Stack selbst; eine neue App ist ohne Änderung dabei.'
         isPaused: false
       - uid: backup-old
         title: Sicherung zu alt

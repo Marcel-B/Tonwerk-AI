@@ -1328,7 +1328,7 @@
       },
       "targets": [
         {
-          "expr": "process_working_set_bytes{app=\"filomat\"}",
+          "expr": "process_resident_memory_bytes{app=\"filomat\"} or process_working_set_bytes{app=\"filomat\"}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",

@@ -1,8 +1,8 @@
-# Copy to filomat.yml (or let proxmox-lxc.sh write it: APP_TARGETS="filomat=<name>:8080") and put in the Tailscale
-# name of fil-o-mat's Proxmox container. fil-o-mat (github.com/Marcel-B/fil-o-mat) answers /metrics on its own port
-# 8080, plain http, once Monitoring__Metrics is on (deploy/proxmox/monitoring-einrichten.sh there).
-- targets: [fil-o-mat.example.ts.net:8080]
+# Copy to filomat.yml and put in the Tailscale name of fil-o-mat's container. Since 2026-11-25 that is the Rust
+# backend (gitea.idsrv.info/Marcel/fil-o-mat, LXC filomat-rs) behind tailscale serve: https on 443, /metrics with
+# FILOMAT_METRICS=1. The old .NET backend (port 8080, plain http) is gone.
+- targets: [filomat-rs.example.ts.net]
   labels:
     app: filomat
-    __scheme__: http
+    __scheme__: https
     __metrics_path__: /metrics
